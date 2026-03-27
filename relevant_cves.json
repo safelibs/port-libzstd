@@ -1,0 +1,72 @@
+{
+  "generated_at_utc": "2026-03-27T22:14:41Z",
+  "source_file": "all_cves.json",
+  "analysis_scope": {
+    "goal": "Identify non-memory-corruption CVEs from the libzstd package that may still matter to a Rust reimplementation.",
+    "port_target": "libzstd library",
+    "notes": [
+      "Rust removes the memory-corruption issues in this corpus, but it does not prevent filesystem permission mistakes, race windows, or other non-memory logic flaws.",
+      "The only non-memory-corruption CVEs in the input corpus are both specific to the zstd command-line utility, not the libzstd compression library itself."
+    ]
+  },
+  "summary": {
+    "input_record_count": 4,
+    "non_memory_corruption_record_count": 2,
+    "relevant_to_core_library_count": 0,
+    "conditionally_relevant_count": 2
+  },
+  "relevant_cves": [
+    {
+      "cve_id": "CVE-2021-24031",
+      "relevance": "conditional",
+      "affected_component": "zstd command-line utility",
+      "affects_core_library": false,
+      "affected_versions": "< 1.4.1",
+      "cwe_ids": [
+        "CWE-277",
+        "CWE-276"
+      ],
+      "issue_type": "insecure output file permissions",
+      "description": "In the Zstandard command-line utility prior to v1.4.1, output files were created with default permissions. Correct file permissions (matching the input) would only be set at completion time. Output files could therefore be readable or writable to unintended parties.",
+      "why_it_still_matters_in_rust": "Rust does not automatically preserve secure file creation semantics. A Rust CLI could recreate this bug if it opens output files with default or inherited permissions and only corrects them after writing finishes.",
+      "porting_guidance": "If the Rust port includes a CLI or any file-writing helper, create output files with restrictive permissions at open time and only relax them deliberately after validation.",
+      "source_urls": [
+        "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2021-24031",
+        "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2021/24xxx/CVE-2021-24031.json",
+        "https://security-tracker.debian.org/tracker/CVE-2021-24031"
+      ]
+    },
+    {
+      "cve_id": "CVE-2021-24032",
+      "relevance": "conditional",
+      "affected_component": "zstd command-line utility",
+      "affects_core_library": false,
+      "affected_versions": ">= 1.4.1, < 1.4.9",
+      "cwe_ids": [
+        "CWE-277",
+        "CWE-276"
+      ],
+      "issue_type": "incomplete fix for insecure output file permissions",
+      "description": "Beginning in v1.4.1 and prior to v1.4.9, due to an incomplete fix for CVE-2021-24031, the Zstandard command-line utility created output files with default permissions and restricted those permissions immediately afterwards. Output files could therefore momentarily be readable or writable to unintended parties.",
+      "why_it_still_matters_in_rust": "Rust also does not remove time-of-check/time-of-use exposure around file creation. A Rust CLI could repeat the same flawed fix if it narrows permissions after file creation instead of making creation atomic with the intended mode.",
+      "porting_guidance": "Treat CVE-2021-24031 and CVE-2021-24032 as a pair: the safe design is to create the file with the final restrictive mode, not to create-then-chmod.",
+      "source_urls": [
+        "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2021-24032",
+        "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2021/24xxx/CVE-2021-24032.json",
+        "https://security-tracker.debian.org/tracker/CVE-2021-24032"
+      ]
+    }
+  ],
+  "excluded_cves": [
+    {
+      "cve_id": "CVE-2019-11922",
+      "reason": "Excluded because it is a memory-corruption bug: a race condition in one-pass compression that can write out of bounds.",
+      "note": "The Rust rewrite should still review concurrency logic, but this CVE is not a non-memory-corruption issue."
+    },
+    {
+      "cve_id": "CVE-2022-4899",
+      "reason": "Excluded because it is a memory-corruption bug: a command-line buffer overrun triggered by an empty-string argument.",
+      "note": "It may still be useful as a regression test input for any Rust CLI, but it is not part of the non-memory-corruption set."
+    }
+  ]
+}
