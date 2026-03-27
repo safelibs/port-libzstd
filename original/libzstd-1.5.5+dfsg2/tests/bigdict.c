@@ -14,8 +14,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "datagen.h"
-#include "mem.h"
-#define ZSTD_STATIC_LINKING_ONLY
 #include "zstd.h"
 
 static int

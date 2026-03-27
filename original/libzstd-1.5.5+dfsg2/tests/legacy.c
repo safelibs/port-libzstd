@@ -20,7 +20,6 @@
 #include <stdlib.h>              /* malloc, free */
 #include <stdio.h>               /* fprintf */
 #include <string.h>              /* strlen */
-#define ZSTD_STATIC_LINKING_ONLY /* ZSTD_decompressBound */
 #include "zstd.h"
 #include "zstd_errors.h"
 
@@ -133,27 +132,51 @@ static int testStreamingAPI(void)
 
 static int testFrameDecoding(void)
 {
-    if (strlen(EXPECTED) > ZSTD_decompressBound(COMPRESSED, COMPRESSED_SIZE)) {
-        DISPLAY("ERROR: ZSTD_decompressBound: decompressed bound too small\n");
+    size_t const expectedSize = strlen(EXPECTED);
+    char* const output = malloc(expectedSize);
+    size_t outputPos = 0;
+    if (output == NULL) {
+        DISPLAY("ERROR: Could not allocate frame output buffer\n");
         return 1;
     }
     {   const char* ip = COMPRESSED;
         size_t remainingSize = COMPRESSED_SIZE;
         while (1) {
             size_t frameSize = ZSTD_findFrameCompressedSize(ip, remainingSize);
+            size_t frameResult;
             if (ZSTD_isError(frameSize)) {
                 DISPLAY("ERROR: ZSTD_findFrameCompressedSize: %s\n", ZSTD_getErrorName(frameSize));
+                free(output);
                 return 1;
             }
             if (frameSize > remainingSize) {
                 DISPLAY("ERROR: ZSTD_findFrameCompressedSize: expected frameSize to align with src buffer");
+                free(output);
                 return 1;
             }
+            frameResult = ZSTD_decompress(output + outputPos, expectedSize - outputPos, ip, frameSize);
+            if (ZSTD_isError(frameResult)) {
+                DISPLAY("ERROR: ZSTD_decompress: %s\n", ZSTD_getErrorName(frameResult));
+                free(output);
+                return 1;
+            }
+            if (memcmp(output + outputPos, EXPECTED + outputPos, frameResult) != 0) {
+                DISPLAY("ERROR: Wrong decoded output produced while walking frames\n");
+                free(output);
+                return 1;
+            }
+            outputPos += frameResult;
             ip += frameSize;
             remainingSize -= frameSize;
             if (remainingSize == 0) break;
         }
     }
+    if (outputPos != expectedSize) {
+        DISPLAY("ERROR: frame walk decoded incorrect size\n");
+        free(output);
+        return 1;
+    }
+    free(output);
     DISPLAY("Frame Decoding OK\n");
     return 0;
 }

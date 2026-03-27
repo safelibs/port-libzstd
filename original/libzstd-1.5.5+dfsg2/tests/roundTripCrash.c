@@ -26,7 +26,6 @@
 #include <sys/stat.h>   /* stat */
 #include "xxhash.h"
 
-#define ZSTD_STATIC_LINKING_ONLY
 #include "zstd.h"
 
 /*===========================================
@@ -76,37 +75,36 @@ static size_t roundTripTest(void* resultBuff, size_t resultBuffCapacity,
     return ZSTD_decompress(resultBuff, resultBuffCapacity, compressedBuff, cSize);
 }
 
-/** cctxParamRoundTripTest() :
- *  Same as roundTripTest() except allows experimenting with ZSTD_CCtx_params. */
-static size_t cctxParamRoundTripTest(void* resultBuff, size_t resultBuffCapacity,
-                            void* compressedBuff, size_t compressedBuffCapacity,
-                      const void* srcBuff, size_t srcBuffSize)
+/** advancedParamRoundTripTest() :
+*  Same as roundTripTest() except uses the public advanced parameter setters. */
+static size_t advancedParamRoundTripTest(void* resultBuff, size_t resultBuffCapacity,
+                                   void* compressedBuff, size_t compressedBuffCapacity,
+                             const void* srcBuff, size_t srcBuffSize)
 {
     ZSTD_CCtx* const cctx = ZSTD_createCCtx();
-    ZSTD_CCtx_params* const cctxParams = ZSTD_createCCtxParams();
-    ZSTD_inBuffer inBuffer = { srcBuff, srcBuffSize, 0 };
-    ZSTD_outBuffer outBuffer = { compressedBuff, compressedBuffCapacity, 0 };
-
     static const int maxClevel = 19;
     size_t const hashLength = MIN(128, srcBuffSize);
     unsigned const h32 = XXH32(srcBuff, hashLength, 0);
     int const cLevel = h32 % maxClevel;
+    size_t cSize;
+
+    if (cctx == NULL) {
+        crash(1);
+    }
 
     /* Set parameters */
-    CHECK_Z( ZSTD_CCtxParams_setParameter(cctxParams, ZSTD_c_compressionLevel, cLevel) );
-    CHECK_Z( ZSTD_CCtxParams_setParameter(cctxParams, ZSTD_c_nbWorkers, 2) );
-    CHECK_Z( ZSTD_CCtxParams_setParameter(cctxParams, ZSTD_c_overlapLog, 5) );
+    CHECK_Z( ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, cLevel) );
+    CHECK_Z( ZSTD_CCtx_setParameter(cctx, ZSTD_c_nbWorkers, 2) );
+    CHECK_Z( ZSTD_CCtx_setParameter(cctx, ZSTD_c_overlapLog, 5) );
 
-
-    /* Apply parameters */
-    CHECK_Z( ZSTD_CCtx_setParametersUsingCCtxParams(cctx, cctxParams) );
-
-    CHECK_Z (ZSTD_compressStream2(cctx, &outBuffer, &inBuffer, ZSTD_e_end) );
-
-    ZSTD_freeCCtxParams(cctxParams);
+    cSize = ZSTD_compress2(cctx, compressedBuff, compressedBuffCapacity, srcBuff, srcBuffSize);
+    if (ZSTD_isError(cSize)) {
+        ZSTD_freeCCtx(cctx);
+        return cSize;
+    }
     ZSTD_freeCCtx(cctx);
 
-    return ZSTD_decompress(resultBuff, resultBuffCapacity, compressedBuff, outBuffer.pos);
+    return ZSTD_decompress(resultBuff, resultBuffCapacity, compressedBuff, cSize);
 }
 
 static size_t checkBuffers(const void* buff1, const void* buff2, size_t buffSize)
@@ -134,7 +132,7 @@ static void roundTripCheck(const void* srcBuff, size_t srcBuffSize, int testCCtx
     }
 
     {   size_t const result = testCCtxParams ?
-                  cctxParamRoundTripTest(rBuff, cBuffSize, cBuff, cBuffSize, srcBuff, srcBuffSize)
+                  advancedParamRoundTripTest(rBuff, cBuffSize, cBuff, cBuffSize, srcBuff, srcBuffSize)
                 : roundTripTest(rBuff, cBuffSize, cBuff, cBuffSize, srcBuff, srcBuffSize);
         if (ZSTD_isError(result)) {
             fprintf(stderr, "roundTripTest error : %s \n", ZSTD_getErrorName(result));

@@ -209,7 +209,7 @@ datagen : $(PRGDIR)/datagen.c datagencli.c
 
 CLEAN += roundTripCrash
 roundTripCrash: CFLAGS += $(MULTITHREAD)
-roundTripCrash : $(ZSTD_OBJECTS) roundTripCrash.c
+roundTripCrash : $(ZSTDMT_OBJECTS) roundTripCrash.c
 
 CLEAN += longmatch
 longmatch : $(ZSTD_OBJECTS) longmatch.c
@@ -223,6 +223,7 @@ invalidDictionaries : $(ZSTD_OBJECTS) invalidDictionaries.c
 
 CLEAN += legacy
 legacy : CPPFLAGS += -I$(ZSTDDIR)/legacy -UZSTD_LEGACY_SUPPORT -DZSTD_LEGACY_SUPPORT=4
+legacy : CFLAGS += -Wno-strict-aliasing
 legacy : $(ZSTD_FILES) $(sort $(wildcard $(ZSTDDIR)/legacy/*.c)) legacy.c
 
 CLEAN += decodecorpus
@@ -384,6 +385,12 @@ test-longmatch: longmatch
 
 test-bigdict: bigdict
 	$(QEMU_SYS) ./bigdict
+
+test-roundTripCrash: roundTripCrash datagen
+	./datagen -g256K > roundTripCrash.tmp
+	$(QEMU_SYS) ./roundTripCrash roundTripCrash.tmp
+	$(QEMU_SYS) ./roundTripCrash --cctxParams roundTripCrash.tmp
+	rm -f roundTripCrash.tmp
 
 test-invalidDictionaries: invalidDictionaries
 	$(QEMU_SYS) ./invalidDictionaries

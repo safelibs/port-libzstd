@@ -13,8 +13,6 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include "mem.h"
-#define ZSTD_STATIC_LINKING_ONLY
 #include "zstd.h"
 
 static int
@@ -58,8 +56,8 @@ int main(int argc, const char** argv)
   if (ZSTD_isError(ZSTD_CCtx_setParameter(ctx, ZSTD_c_strategy, ZSTD_fast)))
     return 2;
   {
-    U64 compressed = 0;
-    const U64 toCompress = ((U64)1) << 33;
+    uint64_t compressed = 0;
+    const uint64_t toCompress = ((uint64_t)1) << 33;
     const size_t size = 1 << windowLog;
     size_t pos = 0;
     char *srcBuffer = (char*) malloc(1 << windowLog);
