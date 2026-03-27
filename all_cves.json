@@ -1,0 +1,1884 @@
+{
+  "generated_at_utc": "2026-03-27T22:11:53+00:00",
+  "package": {
+    "source_package": "libzstd",
+    "upstream_project": "facebook/zstd"
+  },
+  "selection": {
+    "debian_source_package_tracker": {
+      "url": "https://security-tracker.debian.org/tracker/source-package/libzstd",
+      "available_versions": [
+        {
+          "Release": "bullseye",
+          "Version": "1.4.8+dfsg-2.1"
+        },
+        {
+          "Release": "bookworm",
+          "Version": "1.5.4+dfsg2-5"
+        },
+        {
+          "Release": "trixie",
+          "Version": "1.5.7+dfsg-1"
+        },
+        {
+          "Release": "forky",
+          "Version": "1.5.7+dfsg-3"
+        },
+        {
+          "Release": "sid",
+          "Version": "1.5.7+dfsg-3"
+        }
+      ],
+      "open_issues": [
+        {
+          "Bug": "CVE-2022-4899",
+          "bullseye": "vulnerable (no DSA)",
+          "bookworm": "fixed",
+          "trixie": "fixed",
+          "forky": "fixed",
+          "sid": "fixed",
+          "Description": "A vulnerability was found in zstd v1.4.10, where an attacker can suppl ..."
+        }
+      ],
+      "resolved_issues": [
+        {
+          "Bug": "CVE-2021-24032",
+          "Description": "Beginning in v1.4.1 and prior to v1.4.9, due to an incomplete fix for  ..."
+        },
+        {
+          "Bug": "CVE-2021-24031",
+          "Description": "In the Zstandard command-line utility prior to v1.4.1, output files we ..."
+        },
+        {
+          "Bug": "CVE-2019-11922",
+          "Description": "A race condition in the one-pass compression functions of Zstandard pr ..."
+        }
+      ],
+      "security_announcements": [
+        {
+          "DSA / DLA": "DSA-4859-1",
+          "Description": "libzstd - security update"
+        },
+        {
+          "DSA / DLA": "DLA-2573-1",
+          "Description": "libzstd - security update"
+        },
+        {
+          "DSA / DLA": "DSA-4850-1",
+          "Description": "libzstd - security update"
+        }
+      ],
+      "tracked_cve_ids": [
+        "CVE-2022-4899",
+        "CVE-2021-24032",
+        "CVE-2021-24031",
+        "CVE-2019-11922"
+      ]
+    },
+    "nvd_cpe_query": {
+      "url": "https://services.nvd.nist.gov/rest/json/cves/2.0?virtualMatchString=cpe:2.3:a:facebook:zstandard:*:*:*:*:*:*:*:*",
+      "total_results": 4,
+      "tracked_cve_ids": [
+        "CVE-2019-11922",
+        "CVE-2021-24031",
+        "CVE-2021-24032",
+        "CVE-2022-4899"
+      ]
+    },
+    "included_cve_ids": [
+      "CVE-2019-11922",
+      "CVE-2021-24031",
+      "CVE-2021-24032",
+      "CVE-2022-4899"
+    ],
+    "source_agreement": true
+  },
+  "records": [
+    {
+      "cve_id": "CVE-2019-11922",
+      "description": "A race condition in the one-pass compression functions of Zstandard prior to version 1.3.8 could allow an attacker to write bytes out of bounds if an output buffer smaller than the recommended size was used.",
+      "sources": {
+        "nvd_api_url": "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2019-11922",
+        "cve_project_record_url": "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2019/11xxx/CVE-2019-11922.json",
+        "debian_tracker_url": "https://security-tracker.debian.org/tracker/CVE-2019-11922"
+      },
+      "debian_tracker": {
+        "description": "A race condition in the one-pass compression functions of Zstandard prior to version 1.3.8 could allow an attacker to write bytes out of bounds if an output buffer smaller than the recommended size was used.",
+        "source_package_statuses": [
+          {
+            "Source Package": "libzstd (PTS)",
+            "Release": "bullseye",
+            "Version": "1.4.8+dfsg-2.1",
+            "Status": "fixed"
+          },
+          {
+            "Source Package": "",
+            "Release": "bookworm",
+            "Version": "1.5.4+dfsg2-5",
+            "Status": "fixed"
+          },
+          {
+            "Source Package": "",
+            "Release": "trixie",
+            "Version": "1.5.7+dfsg-1",
+            "Status": "fixed"
+          },
+          {
+            "Source Package": "",
+            "Release": "forky, sid",
+            "Version": "1.5.7+dfsg-3",
+            "Status": "fixed"
+          }
+        ],
+        "fixed_versions": [
+          {
+            "Package": "libzstd",
+            "Type": "source",
+            "Release": "stretch",
+            "Fixed Version": "(not affected)",
+            "Urgency": "",
+            "Origin": "",
+            "Debian Bugs": ""
+          },
+          {
+            "Package": "libzstd",
+            "Type": "source",
+            "Release": "(unstable)",
+            "Fixed Version": "1.3.8+dfsg-2",
+            "Urgency": "",
+            "Origin": "",
+            "Debian Bugs": ""
+          }
+        ],
+        "notes": [
+          "[stretch] - libzstd <not-affected> (Vulnerable code not present)",
+          "https://github.com/facebook/zstd/commit/3e5cdf1b6a85843e991d7d10f6a2567c15580da0"
+        ]
+      },
+      "nvd": {
+        "cve": {
+          "id": "CVE-2019-11922",
+          "sourceIdentifier": "cve-assign@fb.com",
+          "published": "2019-07-25T21:15:11.600",
+          "lastModified": "2024-11-21T04:21:59.353",
+          "vulnStatus": "Modified",
+          "cveTags": [],
+          "descriptions": [
+            {
+              "lang": "en",
+              "value": "A race condition in the one-pass compression functions of Zstandard prior to version 1.3.8 could allow an attacker to write bytes out of bounds if an output buffer smaller than the recommended size was used."
+            },
+            {
+              "lang": "es",
+              "value": "Una condici\u00f3n de carrera en las funciones de compresi\u00f3n de un paso (one-pass) de Zstandard anterior a versi\u00f3n 1.3.8, podr\u00eda permitir a un atacante escribir bytes fuera de l\u00edmites si es utilizado un b\u00fafer de salida m\u00e1s peque\u00f1o que el tama\u00f1o recomendado ."
+            }
+          ],
+          "metrics": {
+            "cvssMetricV30": [
+              {
+                "source": "nvd@nist.gov",
+                "type": "Primary",
+                "cvssData": {
+                  "version": "3.0",
+                  "vectorString": "CVSS:3.0/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H",
+                  "baseScore": 8.1,
+                  "baseSeverity": "HIGH",
+                  "attackVector": "NETWORK",
+                  "attackComplexity": "HIGH",
+                  "privilegesRequired": "NONE",
+                  "userInteraction": "NONE",
+                  "scope": "UNCHANGED",
+                  "confidentialityImpact": "HIGH",
+                  "integrityImpact": "HIGH",
+                  "availabilityImpact": "HIGH"
+                },
+                "exploitabilityScore": 2.2,
+                "impactScore": 5.9
+              }
+            ],
+            "cvssMetricV2": [
+              {
+                "source": "nvd@nist.gov",
+                "type": "Primary",
+                "cvssData": {
+                  "version": "2.0",
+                  "vectorString": "AV:N/AC:M/Au:N/C:P/I:P/A:P",
+                  "baseScore": 6.8,
+                  "accessVector": "NETWORK",
+                  "accessComplexity": "MEDIUM",
+                  "authentication": "NONE",
+                  "confidentialityImpact": "PARTIAL",
+                  "integrityImpact": "PARTIAL",
+                  "availabilityImpact": "PARTIAL"
+                },
+                "baseSeverity": "MEDIUM",
+                "exploitabilityScore": 8.6,
+                "impactScore": 6.4,
+                "acInsufInfo": false,
+                "obtainAllPrivilege": false,
+                "obtainUserPrivilege": false,
+                "obtainOtherPrivilege": false,
+                "userInteractionRequired": false
+              }
+            ]
+          },
+          "weaknesses": [
+            {
+              "source": "nvd@nist.gov",
+              "type": "Primary",
+              "description": [
+                {
+                  "lang": "en",
+                  "value": "CWE-362"
+                }
+              ]
+            }
+          ],
+          "configurations": [
+            {
+              "nodes": [
+                {
+                  "operator": "OR",
+                  "negate": false,
+                  "cpeMatch": [
+                    {
+                      "vulnerable": true,
+                      "criteria": "cpe:2.3:a:facebook:zstandard:*:*:*:*:*:*:*:*",
+                      "versionEndExcluding": "1.3.8",
+                      "matchCriteriaId": "56E5C2FA-164D-43B1-9658-D71EEE840B0F"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "references": [
+            {
+              "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00008.html",
+              "source": "cve-assign@fb.com"
+            },
+            {
+              "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00062.html",
+              "source": "cve-assign@fb.com"
+            },
+            {
+              "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00078.html",
+              "source": "cve-assign@fb.com"
+            },
+            {
+              "url": "https://github.com/facebook/zstd/pull/1404/commits/3e5cdf1b6a85843e991d7d10f6a2567c15580da0",
+              "source": "cve-assign@fb.com",
+              "tags": [
+                "Patch",
+                "Third Party Advisory"
+              ]
+            },
+            {
+              "url": "https://usn.ubuntu.com/4108-1/",
+              "source": "cve-assign@fb.com"
+            },
+            {
+              "url": "https://www.facebook.com/security/advisories/cve-2019-11922",
+              "source": "cve-assign@fb.com",
+              "tags": [
+                "Vendor Advisory"
+              ]
+            },
+            {
+              "url": "https://www.oracle.com/security-alerts/cpuoct2020.html",
+              "source": "cve-assign@fb.com"
+            },
+            {
+              "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00008.html",
+              "source": "af854a3a-2127-422b-91ae-364da2661108"
+            },
+            {
+              "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00062.html",
+              "source": "af854a3a-2127-422b-91ae-364da2661108"
+            },
+            {
+              "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00078.html",
+              "source": "af854a3a-2127-422b-91ae-364da2661108"
+            },
+            {
+              "url": "https://github.com/facebook/zstd/pull/1404/commits/3e5cdf1b6a85843e991d7d10f6a2567c15580da0",
+              "source": "af854a3a-2127-422b-91ae-364da2661108",
+              "tags": [
+                "Patch",
+                "Third Party Advisory"
+              ]
+            },
+            {
+              "url": "https://usn.ubuntu.com/4108-1/",
+              "source": "af854a3a-2127-422b-91ae-364da2661108"
+            },
+            {
+              "url": "https://www.facebook.com/security/advisories/cve-2019-11922",
+              "source": "af854a3a-2127-422b-91ae-364da2661108",
+              "tags": [
+                "Vendor Advisory"
+              ]
+            },
+            {
+              "url": "https://www.oracle.com/security-alerts/cpuoct2020.html",
+              "source": "af854a3a-2127-422b-91ae-364da2661108"
+            }
+          ]
+        }
+      },
+      "cve_project": {
+        "containers": {
+          "cna": {
+            "affected": [
+              {
+                "product": "Zstandard",
+                "vendor": "Facebook",
+                "versions": [
+                  {
+                    "status": "affected",
+                    "version": "1.3.8"
+                  },
+                  {
+                    "lessThan": "1.3.8",
+                    "status": "affected",
+                    "version": "unspecified",
+                    "versionType": "custom"
+                  }
+                ]
+              }
+            ],
+            "dateAssigned": "2019-07-25T00:00:00.000Z",
+            "descriptions": [
+              {
+                "lang": "en",
+                "value": "A race condition in the one-pass compression functions of Zstandard prior to version 1.3.8 could allow an attacker to write bytes out of bounds if an output buffer smaller than the recommended size was used."
+              }
+            ],
+            "problemTypes": [
+              {
+                "descriptions": [
+                  {
+                    "description": "Out-of-bounds Write (CWE-ID 787)",
+                    "lang": "en",
+                    "type": "text"
+                  }
+                ]
+              }
+            ],
+            "providerMetadata": {
+              "dateUpdated": "2020-10-20T21:14:56.000Z",
+              "orgId": "4fc57720-52fe-4431-a0fb-3d2c8747b827",
+              "shortName": "facebook"
+            },
+            "references": [
+              {
+                "name": "openSUSE-SU-2019:1845",
+                "tags": [
+                  "vendor-advisory",
+                  "x_refsource_SUSE"
+                ],
+                "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00008.html"
+              },
+              {
+                "name": "openSUSE-SU-2019:1952",
+                "tags": [
+                  "vendor-advisory",
+                  "x_refsource_SUSE"
+                ],
+                "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00062.html"
+              },
+              {
+                "name": "USN-4108-1",
+                "tags": [
+                  "vendor-advisory",
+                  "x_refsource_UBUNTU"
+                ],
+                "url": "https://usn.ubuntu.com/4108-1/"
+              },
+              {
+                "name": "openSUSE-SU-2019:2008",
+                "tags": [
+                  "vendor-advisory",
+                  "x_refsource_SUSE"
+                ],
+                "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00078.html"
+              },
+              {
+                "tags": [
+                  "x_refsource_MISC"
+                ],
+                "url": "https://www.oracle.com/security-alerts/cpuoct2020.html"
+              },
+              {
+                "tags": [
+                  "x_refsource_CONFIRM"
+                ],
+                "url": "https://www.facebook.com/security/advisories/cve-2019-11922"
+              },
+              {
+                "tags": [
+                  "x_refsource_MISC"
+                ],
+                "url": "https://github.com/facebook/zstd/pull/1404/commits/3e5cdf1b6a85843e991d7d10f6a2567c15580da0"
+              }
+            ],
+            "x_legacyV4Record": {
+              "CVE_data_meta": {
+                "ASSIGNER": "cve-assign@fb.com",
+                "DATE_ASSIGNED": "2019-07-25",
+                "ID": "CVE-2019-11922",
+                "STATE": "PUBLIC"
+              },
+              "affects": {
+                "vendor": {
+                  "vendor_data": [
+                    {
+                      "product": {
+                        "product_data": [
+                          {
+                            "product_name": "Zstandard",
+                            "version": {
+                              "version_data": [
+                                {
+                                  "version_affected": "!=>",
+                                  "version_value": "1.3.8"
+                                },
+                                {
+                                  "version_affected": "<",
+                                  "version_value": "1.3.8"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "vendor_name": "Facebook"
+                    }
+                  ]
+                }
+              },
+              "data_format": "MITRE",
+              "data_type": "CVE",
+              "data_version": "4.0",
+              "description": {
+                "description_data": [
+                  {
+                    "lang": "eng",
+                    "value": "A race condition in the one-pass compression functions of Zstandard prior to version 1.3.8 could allow an attacker to write bytes out of bounds if an output buffer smaller than the recommended size was used."
+                  }
+                ]
+              },
+              "problemtype": {
+                "problemtype_data": [
+                  {
+                    "description": [
+                      {
+                        "lang": "eng",
+                        "value": "Out-of-bounds Write (CWE-ID 787)"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "references": {
+                "reference_data": [
+                  {
+                    "name": "openSUSE-SU-2019:1845",
+                    "refsource": "SUSE",
+                    "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00008.html"
+                  },
+                  {
+                    "name": "openSUSE-SU-2019:1952",
+                    "refsource": "SUSE",
+                    "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00062.html"
+                  },
+                  {
+                    "name": "USN-4108-1",
+                    "refsource": "UBUNTU",
+                    "url": "https://usn.ubuntu.com/4108-1/"
+                  },
+                  {
+                    "name": "openSUSE-SU-2019:2008",
+                    "refsource": "SUSE",
+                    "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00078.html"
+                  },
+                  {
+                    "name": "https://www.oracle.com/security-alerts/cpuoct2020.html",
+                    "refsource": "MISC",
+                    "url": "https://www.oracle.com/security-alerts/cpuoct2020.html"
+                  },
+                  {
+                    "name": "https://www.facebook.com/security/advisories/cve-2019-11922",
+                    "refsource": "CONFIRM",
+                    "url": "https://www.facebook.com/security/advisories/cve-2019-11922"
+                  },
+                  {
+                    "name": "https://github.com/facebook/zstd/pull/1404/commits/3e5cdf1b6a85843e991d7d10f6a2567c15580da0",
+                    "refsource": "MISC",
+                    "url": "https://github.com/facebook/zstd/pull/1404/commits/3e5cdf1b6a85843e991d7d10f6a2567c15580da0"
+                  }
+                ]
+              }
+            }
+          },
+          "adp": [
+            {
+              "providerMetadata": {
+                "orgId": "af854a3a-2127-422b-91ae-364da2661108",
+                "shortName": "CVE",
+                "dateUpdated": "2024-08-04T23:10:29.677Z"
+              },
+              "title": "CVE Program Container",
+              "references": [
+                {
+                  "name": "openSUSE-SU-2019:1845",
+                  "tags": [
+                    "vendor-advisory",
+                    "x_refsource_SUSE",
+                    "x_transferred"
+                  ],
+                  "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00008.html"
+                },
+                {
+                  "name": "openSUSE-SU-2019:1952",
+                  "tags": [
+                    "vendor-advisory",
+                    "x_refsource_SUSE",
+                    "x_transferred"
+                  ],
+                  "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00062.html"
+                },
+                {
+                  "name": "USN-4108-1",
+                  "tags": [
+                    "vendor-advisory",
+                    "x_refsource_UBUNTU",
+                    "x_transferred"
+                  ],
+                  "url": "https://usn.ubuntu.com/4108-1/"
+                },
+                {
+                  "name": "openSUSE-SU-2019:2008",
+                  "tags": [
+                    "vendor-advisory",
+                    "x_refsource_SUSE",
+                    "x_transferred"
+                  ],
+                  "url": "http://lists.opensuse.org/opensuse-security-announce/2019-08/msg00078.html"
+                },
+                {
+                  "tags": [
+                    "x_refsource_MISC",
+                    "x_transferred"
+                  ],
+                  "url": "https://www.oracle.com/security-alerts/cpuoct2020.html"
+                },
+                {
+                  "tags": [
+                    "x_refsource_CONFIRM",
+                    "x_transferred"
+                  ],
+                  "url": "https://www.facebook.com/security/advisories/cve-2019-11922"
+                },
+                {
+                  "tags": [
+                    "x_refsource_MISC",
+                    "x_transferred"
+                  ],
+                  "url": "https://github.com/facebook/zstd/pull/1404/commits/3e5cdf1b6a85843e991d7d10f6a2567c15580da0"
+                }
+              ]
+            }
+          ]
+        },
+        "cveMetadata": {
+          "assignerOrgId": "4fc57720-52fe-4431-a0fb-3d2c8747b827",
+          "assignerShortName": "facebook",
+          "cveId": "CVE-2019-11922",
+          "datePublished": "2019-07-25T20:32:44.000Z",
+          "dateReserved": "2019-05-13T00:00:00.000Z",
+          "dateUpdated": "2024-08-04T23:10:29.677Z",
+          "state": "PUBLISHED"
+        },
+        "dataType": "CVE_RECORD",
+        "dataVersion": "5.1"
+      }
+    },
+    {
+      "cve_id": "CVE-2021-24031",
+      "description": "In the Zstandard command-line utility prior to v1.4.1, output files were created with default permissions. Correct file permissions (matching the input) would only be set at completion time. Output files could therefore be readable or writable to unintended parties.",
+      "sources": {
+        "nvd_api_url": "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2021-24031",
+        "cve_project_record_url": "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2021/24xxx/CVE-2021-24031.json",
+        "debian_tracker_url": "https://security-tracker.debian.org/tracker/CVE-2021-24031"
+      },
+      "debian_tracker": {
+        "description": "In the Zstandard command-line utility prior to v1.4.1, output files were created with default permissions. Correct file permissions (matching the input) would only be set at completion time. Output files could therefore be readable or writable to unintended parties.",
+        "source_package_statuses": [
+          {
+            "Source Package": "libzstd (PTS)",
+            "Release": "bullseye",
+            "Version": "1.4.8+dfsg-2.1",
+            "Status": "fixed"
+          },
+          {
+            "Source Package": "",
+            "Release": "bookworm",
+            "Version": "1.5.4+dfsg2-5",
+            "Status": "fixed"
+          },
+          {
+            "Source Package": "",
+            "Release": "trixie",
+            "Version": "1.5.7+dfsg-1",
+            "Status": "fixed"
+          },
+          {
+            "Source Package": "",
+            "Release": "forky, sid",
+            "Version": "1.5.7+dfsg-3",
+            "Status": "fixed"
+          }
+        ],
+        "fixed_versions": [
+          {
+            "Package": "libzstd",
+            "Type": "source",
+            "Release": "stretch",
+            "Fixed Version": "1.1.2-1+deb9u1",
+            "Urgency": "",
+            "Origin": "DLA-2573-1",
+            "Debian Bugs": ""
+          },
+          {
+            "Package": "libzstd",
+            "Type": "source",
+            "Release": "buster",
+            "Fixed Version": "1.3.8+dfsg-3+deb10u1",
+            "Urgency": "",
+            "Origin": "DSA-4850-1",
+            "Debian Bugs": ""
+          },
+          {
+            "Package": "libzstd",
+            "Type": "source",
+            "Release": "(unstable)",
+            "Fixed Version": "1.4.8+dfsg-1",
+            "Urgency": "",
+            "Origin": "",
+            "Debian Bugs": "981404"
+          }
+        ],
+        "notes": [
+          "https://github.com/facebook/zstd/issues/1630"
+        ]
+      },
+      "nvd": {
+        "cve": {
+          "id": "CVE-2021-24031",
+          "sourceIdentifier": "cve-assign@fb.com",
+          "published": "2021-03-04T21:15:12.743",
+          "lastModified": "2024-11-21T05:52:14.813",
+          "vulnStatus": "Modified",
+          "cveTags": [],
+          "descriptions": [
+            {
+              "lang": "en",
+              "value": "In the Zstandard command-line utility prior to v1.4.1, output files were created with default permissions. Correct file permissions (matching the input) would only be set at completion time. Output files could therefore be readable or writable to unintended parties."
+            },
+            {
+              "lang": "es",
+              "value": "En la utilidad Zstandard command-line versiones anteriores a v1.4.1, los archivos de salida se creaban con permisos predeterminados.&#xa0;Los permisos de archivo correctos (que coincidan con la entrada) solo se establecer\u00e1n en el momento de la completaci\u00f3n.&#xa0;Por lo tanto, los archivos de salida podr\u00edan ser le\u00eddos o escribibles para personas no deseadas"
+            }
+          ],
+          "metrics": {
+            "cvssMetricV31": [
+              {
+                "source": "nvd@nist.gov",
+                "type": "Primary",
+                "cvssData": {
+                  "version": "3.1",
+                  "vectorString": "CVSS:3.1/AV:L/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N",
+                  "baseScore": 5.5,
+                  "baseSeverity": "MEDIUM",
+                  "attackVector": "LOCAL",
+                  "attackComplexity": "LOW",
+                  "privilegesRequired": "LOW",
+                  "userInteraction": "NONE",
+                  "scope": "UNCHANGED",
+                  "confidentialityImpact": "HIGH",
+                  "integrityImpact": "NONE",
+                  "availabilityImpact": "NONE"
+                },
+                "exploitabilityScore": 1.8,
+                "impactScore": 3.6
+              }
+            ],
+            "cvssMetricV2": [
+              {
+                "source": "nvd@nist.gov",
+                "type": "Primary",
+                "cvssData": {
+                  "version": "2.0",
+                  "vectorString": "AV:L/AC:L/Au:N/C:P/I:N/A:N",
+                  "baseScore": 2.1,
+                  "accessVector": "LOCAL",
+                  "accessComplexity": "LOW",
+                  "authentication": "NONE",
+                  "confidentialityImpact": "PARTIAL",
+                  "integrityImpact": "NONE",
+                  "availabilityImpact": "NONE"
+                },
+                "baseSeverity": "LOW",
+                "exploitabilityScore": 3.9,
+                "impactScore": 2.9,
+                "acInsufInfo": false,
+                "obtainAllPrivilege": false,
+                "obtainUserPrivilege": false,
+                "obtainOtherPrivilege": false,
+                "userInteractionRequired": false
+              }
+            ]
+          },
+          "weaknesses": [
+            {
+              "source": "cve-assign@fb.com",
+              "type": "Secondary",
+              "description": [
+                {
+                  "lang": "en",
+                  "value": "CWE-277"
+                }
+              ]
+            },
+            {
+              "source": "nvd@nist.gov",
+              "type": "Primary",
+              "description": [
+                {
+                  "lang": "en",
+                  "value": "CWE-276"
+                }
+              ]
+            }
+          ],
+          "configurations": [
+            {
+              "nodes": [
+                {
+                  "operator": "OR",
+                  "negate": false,
+                  "cpeMatch": [
+                    {
+                      "vulnerable": true,
+                      "criteria": "cpe:2.3:a:facebook:zstandard:*:*:*:*:*:*:*:*",
+                      "versionEndExcluding": "1.4.1",
+                      "matchCriteriaId": "7BB54F72-0467-43BC-B73A-DA6DC8A55FD9"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "references": [
+            {
+              "url": "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=981404",
+              "source": "cve-assign@fb.com",
+              "tags": [
+                "Exploit",
+                "Issue Tracking",
+                "Mailing List",
+                "Third Party Advisory"
+              ]
+            },
+            {
+              "url": "https://github.com/facebook/zstd/issues/1630",
+              "source": "cve-assign@fb.com",
+              "tags": [
+                "Exploit",
+                "Issue Tracking",
+                "Third Party Advisory"
+              ]
+            },
+            {
+              "url": "https://www.facebook.com/security/advisories/cve-2021-24031",
+              "source": "cve-assign@fb.com",
+              "tags": [
+                "Vendor Advisory"
+              ]
+            },
+            {
+              "url": "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=981404",
+              "source": "af854a3a-2127-422b-91ae-364da2661108",
+              "tags": [
+                "Exploit",
+                "Issue Tracking",
+                "Mailing List",
+                "Third Party Advisory"
+              ]
+            },
+            {
+              "url": "https://github.com/facebook/zstd/issues/1630",
+              "source": "af854a3a-2127-422b-91ae-364da2661108",
+              "tags": [
+                "Exploit",
+                "Issue Tracking",
+                "Third Party Advisory"
+              ]
+            },
+            {
+              "url": "https://www.facebook.com/security/advisories/cve-2021-24031",
+              "source": "af854a3a-2127-422b-91ae-364da2661108",
+              "tags": [
+                "Vendor Advisory"
+              ]
+            }
+          ]
+        }
+      },
+      "cve_project": {
+        "containers": {
+          "cna": {
+            "affected": [
+              {
+                "product": "Zstandard",
+                "vendor": "Facebook",
+                "versions": [
+                  {
+                    "lessThan": "unspecified",
+                    "status": "unaffected",
+                    "version": "1.4.1",
+                    "versionType": "custom"
+                  },
+                  {
+                    "lessThan": "1.4.1",
+                    "status": "affected",
+                    "version": "unspecified",
+                    "versionType": "custom"
+                  }
+                ]
+              }
+            ],
+            "dateAssigned": "2021-03-01T00:00:00.000Z",
+            "descriptions": [
+              {
+                "lang": "en",
+                "value": "In the Zstandard command-line utility prior to v1.4.1, output files were created with default permissions. Correct file permissions (matching the input) would only be set at completion time. Output files could therefore be readable or writable to unintended parties."
+              }
+            ],
+            "problemTypes": [
+              {
+                "descriptions": [
+                  {
+                    "cweId": "CWE-277",
+                    "description": "Insecure Inherited Permissions (CWE-277)",
+                    "lang": "en",
+                    "type": "CWE"
+                  }
+                ]
+              }
+            ],
+            "providerMetadata": {
+              "dateUpdated": "2021-03-04T20:15:21.000Z",
+              "orgId": "4fc57720-52fe-4431-a0fb-3d2c8747b827",
+              "shortName": "facebook"
+            },
+            "references": [
+              {
+                "tags": [
+                  "x_refsource_MISC"
+                ],
+                "url": "https://github.com/facebook/zstd/issues/1630"
+              },
+              {
+                "tags": [
+                  "x_refsource_MISC"
+                ],
+                "url": "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=981404"
+              },
+              {
+                "tags": [
+                  "x_refsource_MISC"
+                ],
+                "url": "https://www.facebook.com/security/advisories/cve-2021-24031"
+              }
+            ],
+            "x_legacyV4Record": {
+              "CVE_data_meta": {
+                "ASSIGNER": "cve-assign@fb.com",
+                "DATE_ASSIGNED": "2021-03-01",
+                "ID": "CVE-2021-24031",
+                "STATE": "PUBLIC"
+              },
+              "affects": {
+                "vendor": {
+                  "vendor_data": [
+                    {
+                      "product": {
+                        "product_data": [
+                          {
+                            "product_name": "Zstandard",
+                            "version": {
+                              "version_data": [
+                                {
+                                  "version_affected": "!>=",
+                                  "version_value": "1.4.1"
+                                },
+                                {
+                                  "version_affected": "<",
+                                  "version_value": "1.4.1"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "vendor_name": "Facebook"
+                    }
+                  ]
+                }
+              },
+              "data_format": "MITRE",
+              "data_type": "CVE",
+              "data_version": "4.0",
+              "description": {
+                "description_data": [
+                  {
+                    "lang": "eng",
+                    "value": "In the Zstandard command-line utility prior to v1.4.1, output files were created with default permissions. Correct file permissions (matching the input) would only be set at completion time. Output files could therefore be readable or writable to unintended parties."
+                  }
+                ]
+              },
+              "problemtype": {
+                "problemtype_data": [
+                  {
+                    "description": [
+                      {
+                        "lang": "eng",
+                        "value": "Insecure Inherited Permissions (CWE-277)"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "references": {
+                "reference_data": [
+                  {
+                    "name": "https://github.com/facebook/zstd/issues/1630",
+                    "refsource": "MISC",
+                    "url": "https://github.com/facebook/zstd/issues/1630"
+                  },
+                  {
+                    "name": "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=981404",
+                    "refsource": "MISC",
+                    "url": "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=981404"
+                  },
+                  {
+                    "name": "https://www.facebook.com/security/advisories/cve-2021-24031",
+                    "refsource": "MISC",
+                    "url": "https://www.facebook.com/security/advisories/cve-2021-24031"
+                  }
+                ]
+              }
+            }
+          },
+          "adp": [
+            {
+              "providerMetadata": {
+                "orgId": "af854a3a-2127-422b-91ae-364da2661108",
+                "shortName": "CVE",
+                "dateUpdated": "2024-08-03T19:21:17.205Z"
+              },
+              "title": "CVE Program Container",
+              "references": [
+                {
+                  "tags": [
+                    "x_refsource_MISC",
+                    "x_transferred"
+                  ],
+                  "url": "https://github.com/facebook/zstd/issues/1630"
+                },
+                {
+                  "tags": [
+                    "x_refsource_MISC",
+                    "x_transferred"
+                  ],
+                  "url": "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=981404"
+                },
+                {
+                  "tags": [
+                    "x_refsource_MISC",
+                    "x_transferred"
+                  ],
+                  "url": "https://www.facebook.com/security/advisories/cve-2021-24031"
+                }
+              ]
+            }
+          ]
+        },
+        "cveMetadata": {
+          "assignerOrgId": "4fc57720-52fe-4431-a0fb-3d2c8747b827",
+          "assignerShortName": "facebook",
+          "cveId": "CVE-2021-24031",
+          "datePublished": "2021-03-04T20:15:21.000Z",
+          "dateReserved": "2021-01-13T00:00:00.000Z",
+          "dateUpdated": "2024-08-03T19:21:17.205Z",
+          "state": "PUBLISHED"
+        },
+        "dataType": "CVE_RECORD",
+        "dataVersion": "5.1"
+      }
+    },
+    {
+      "cve_id": "CVE-2021-24032",
+      "description": "Beginning in v1.4.1 and prior to v1.4.9, due to an incomplete fix for CVE-2021-24031, the Zstandard command-line utility created output files with default permissions and restricted those permissions immediately afterwards. Output files could therefore momentarily be readable or writable to unintended parties.",
+      "sources": {
+        "nvd_api_url": "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2021-24032",
+        "cve_project_record_url": "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2021/24xxx/CVE-2021-24032.json",
+        "debian_tracker_url": "https://security-tracker.debian.org/tracker/CVE-2021-24032"
+      },
+      "debian_tracker": {
+        "description": "Beginning in v1.4.1 and prior to v1.4.9, due to an incomplete fix for CVE-2021-24031, the Zstandard command-line utility created output files with default permissions and restricted those permissions immediately afterwards. Output files could therefore momentarily be readable or writable to unintended parties.",
+        "source_package_statuses": [
+          {
+            "Source Package": "libzstd (PTS)",
+            "Release": "bullseye",
+            "Version": "1.4.8+dfsg-2.1",
+            "Status": "fixed"
+          },
+          {
+            "Source Package": "",
+            "Release": "bookworm",
+            "Version": "1.5.4+dfsg2-5",
+            "Status": "fixed"
+          },
+          {
+            "Source Package": "",
+            "Release": "trixie",
+            "Version": "1.5.7+dfsg-1",
+            "Status": "fixed"
+          },
+          {
+            "Source Package": "",
+            "Release": "forky, sid",
+            "Version": "1.5.7+dfsg-3",
+            "Status": "fixed"
+          }
+        ],
+        "fixed_versions": [
+          {
+            "Package": "libzstd",
+            "Type": "source",
+            "Release": "stretch",
+            "Fixed Version": "(not affected)",
+            "Urgency": "",
+            "Origin": "",
+            "Debian Bugs": ""
+          },
+          {
+            "Package": "libzstd",
+            "Type": "source",
+            "Release": "buster",
+            "Fixed Version": "1.3.8+dfsg-3+deb10u2",
+            "Urgency": "",
+            "Origin": "DSA-4859-1",
+            "Debian Bugs": ""
+          },
+          {
+            "Package": "libzstd",
+            "Type": "source",
+            "Release": "(unstable)",
+            "Fixed Version": "1.4.8+dfsg-2",
+            "Urgency": "",
+            "Origin": "",
+            "Debian Bugs": "982519"
+          }
+        ],
+        "notes": [
+          "[stretch] - libzstd <not-affected> (Incomplete fix for CVE-2021-24031 not applied)",
+          "https://github.com/facebook/zstd/issues/2491"
+        ]
+      },
+      "nvd": {
+        "cve": {
+          "id": "CVE-2021-24032",
+          "sourceIdentifier": "cve-assign@fb.com",
+          "published": "2021-03-04T21:15:12.963",
+          "lastModified": "2024-11-21T05:52:14.943",
+          "vulnStatus": "Modified",
+          "cveTags": [],
+          "descriptions": [
+            {
+              "lang": "en",
+              "value": "Beginning in v1.4.1 and prior to v1.4.9, due to an incomplete fix for CVE-2021-24031, the Zstandard command-line utility created output files with default permissions and restricted those permissions immediately afterwards. Output files could therefore momentarily be readable or writable to unintended parties."
+            },
+            {
+              "lang": "es",
+              "value": "A partir de la versi\u00f3n v1.4.1 y anterior a la v1.4.9, debido a una soluci\u00f3n incompleta para el CVE-2021-24031, la utilidad de l\u00ednea de comandos Zstandard cre\u00f3 archivos de salida con permisos predeterminados y restringi\u00f3 esos permisos inmediatamente despu\u00e9s.&#xa0;Por lo tanto, los archivos de salida podr\u00edan ser moment\u00e1neamente legibles o escribibles para personas no deseadas"
+            }
+          ],
+          "metrics": {
+            "cvssMetricV31": [
+              {
+                "source": "nvd@nist.gov",
+                "type": "Primary",
+                "cvssData": {
+                  "version": "3.1",
+                  "vectorString": "CVSS:3.1/AV:L/AC:H/PR:L/UI:N/S:U/C:H/I:N/A:N",
+                  "baseScore": 4.7,
+                  "baseSeverity": "MEDIUM",
+                  "attackVector": "LOCAL",
+                  "attackComplexity": "HIGH",
+                  "privilegesRequired": "LOW",
+                  "userInteraction": "NONE",
+                  "scope": "UNCHANGED",
+                  "confidentialityImpact": "HIGH",
+                  "integrityImpact": "NONE",
+                  "availabilityImpact": "NONE"
+                },
+                "exploitabilityScore": 1.0,
+                "impactScore": 3.6
+              }
+            ],
+            "cvssMetricV2": [
+              {
+                "source": "nvd@nist.gov",
+                "type": "Primary",
+                "cvssData": {
+                  "version": "2.0",
+                  "vectorString": "AV:L/AC:M/Au:N/C:P/I:N/A:N",
+                  "baseScore": 1.9,
+                  "accessVector": "LOCAL",
+                  "accessComplexity": "MEDIUM",
+                  "authentication": "NONE",
+                  "confidentialityImpact": "PARTIAL",
+                  "integrityImpact": "NONE",
+                  "availabilityImpact": "NONE"
+                },
+                "baseSeverity": "LOW",
+                "exploitabilityScore": 3.4,
+                "impactScore": 2.9,
+                "acInsufInfo": false,
+                "obtainAllPrivilege": false,
+                "obtainUserPrivilege": false,
+                "obtainOtherPrivilege": false,
+                "userInteractionRequired": false
+              }
+            ]
+          },
+          "weaknesses": [
+            {
+              "source": "cve-assign@fb.com",
+              "type": "Secondary",
+              "description": [
+                {
+                  "lang": "en",
+                  "value": "CWE-277"
+                }
+              ]
+            },
+            {
+              "source": "nvd@nist.gov",
+              "type": "Primary",
+              "description": [
+                {
+                  "lang": "en",
+                  "value": "CWE-276"
+                }
+              ]
+            }
+          ],
+          "configurations": [
+            {
+              "nodes": [
+                {
+                  "operator": "OR",
+                  "negate": false,
+                  "cpeMatch": [
+                    {
+                      "vulnerable": true,
+                      "criteria": "cpe:2.3:a:facebook:zstandard:*:*:*:*:*:*:*:*",
+                      "versionStartIncluding": "1.4.1",
+                      "versionEndExcluding": "1.4.9",
+                      "matchCriteriaId": "D09560DA-1F1B-41AA-B96F-DABEE82C04D0"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "references": [
+            {
+              "url": "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=982519",
+              "source": "cve-assign@fb.com",
+              "tags": [
+                "Patch",
+                "Third Party Advisory"
+              ]
+            },
+            {
+              "url": "https://github.com/facebook/zstd/issues/2491",
+              "source": "cve-assign@fb.com",
+              "tags": [
+                "Issue Tracking",
+                "Patch",
+                "Third Party Advisory"
+              ]
+            },
+            {
+              "url": "https://www.facebook.com/security/advisories/cve-2021-24032",
+              "source": "cve-assign@fb.com",
+              "tags": [
+                "Third Party Advisory"
+              ]
+            },
+            {
+              "url": "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=982519",
+              "source": "af854a3a-2127-422b-91ae-364da2661108",
+              "tags": [
+                "Patch",
+                "Third Party Advisory"
+              ]
+            },
+            {
+              "url": "https://github.com/facebook/zstd/issues/2491",
+              "source": "af854a3a-2127-422b-91ae-364da2661108",
+              "tags": [
+                "Issue Tracking",
+                "Patch",
+                "Third Party Advisory"
+              ]
+            },
+            {
+              "url": "https://www.facebook.com/security/advisories/cve-2021-24032",
+              "source": "af854a3a-2127-422b-91ae-364da2661108",
+              "tags": [
+                "Third Party Advisory"
+              ]
+            }
+          ]
+        }
+      },
+      "cve_project": {
+        "containers": {
+          "cna": {
+            "affected": [
+              {
+                "product": "Zstandard",
+                "vendor": "Facebook",
+                "versions": [
+                  {
+                    "lessThan": "unspecified",
+                    "status": "unaffected",
+                    "version": "1.4.9",
+                    "versionType": "custom"
+                  },
+                  {
+                    "lessThan": "unspecified",
+                    "status": "affected",
+                    "version": "1.4.1",
+                    "versionType": "custom"
+                  },
+                  {
+                    "lessThan": "1.4.1",
+                    "status": "unaffected",
+                    "version": "unspecified",
+                    "versionType": "custom"
+                  }
+                ]
+              }
+            ],
+            "dateAssigned": "2021-03-01T00:00:00.000Z",
+            "descriptions": [
+              {
+                "lang": "en",
+                "value": "Beginning in v1.4.1 and prior to v1.4.9, due to an incomplete fix for CVE-2021-24031, the Zstandard command-line utility created output files with default permissions and restricted those permissions immediately afterwards. Output files could therefore momentarily be readable or writable to unintended parties."
+              }
+            ],
+            "problemTypes": [
+              {
+                "descriptions": [
+                  {
+                    "cweId": "CWE-277",
+                    "description": "Insecure Inherited Permissions (CWE-277)",
+                    "lang": "en",
+                    "type": "CWE"
+                  }
+                ]
+              }
+            ],
+            "providerMetadata": {
+              "dateUpdated": "2021-03-04T20:15:21.000Z",
+              "orgId": "4fc57720-52fe-4431-a0fb-3d2c8747b827",
+              "shortName": "facebook"
+            },
+            "references": [
+              {
+                "tags": [
+                  "x_refsource_MISC"
+                ],
+                "url": "https://github.com/facebook/zstd/issues/2491"
+              },
+              {
+                "tags": [
+                  "x_refsource_MISC"
+                ],
+                "url": "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=982519"
+              },
+              {
+                "tags": [
+                  "x_refsource_MISC"
+                ],
+                "url": "https://www.facebook.com/security/advisories/cve-2021-24032"
+              }
+            ],
+            "x_legacyV4Record": {
+              "CVE_data_meta": {
+                "ASSIGNER": "cve-assign@fb.com",
+                "DATE_ASSIGNED": "2021-03-01",
+                "ID": "CVE-2021-24032",
+                "STATE": "PUBLIC"
+              },
+              "affects": {
+                "vendor": {
+                  "vendor_data": [
+                    {
+                      "product": {
+                        "product_data": [
+                          {
+                            "product_name": "Zstandard",
+                            "version": {
+                              "version_data": [
+                                {
+                                  "version_affected": "!>=",
+                                  "version_value": "1.4.9"
+                                },
+                                {
+                                  "version_affected": ">=",
+                                  "version_value": "1.4.1"
+                                },
+                                {
+                                  "version_affected": "!<",
+                                  "version_value": "1.4.1"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "vendor_name": "Facebook"
+                    }
+                  ]
+                }
+              },
+              "data_format": "MITRE",
+              "data_type": "CVE",
+              "data_version": "4.0",
+              "description": {
+                "description_data": [
+                  {
+                    "lang": "eng",
+                    "value": "Beginning in v1.4.1 and prior to v1.4.9, due to an incomplete fix for CVE-2021-24031, the Zstandard command-line utility created output files with default permissions and restricted those permissions immediately afterwards. Output files could therefore momentarily be readable or writable to unintended parties."
+                  }
+                ]
+              },
+              "problemtype": {
+                "problemtype_data": [
+                  {
+                    "description": [
+                      {
+                        "lang": "eng",
+                        "value": "Insecure Inherited Permissions (CWE-277)"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "references": {
+                "reference_data": [
+                  {
+                    "name": "https://github.com/facebook/zstd/issues/2491",
+                    "refsource": "MISC",
+                    "url": "https://github.com/facebook/zstd/issues/2491"
+                  },
+                  {
+                    "name": "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=982519",
+                    "refsource": "MISC",
+                    "url": "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=982519"
+                  },
+                  {
+                    "name": "https://www.facebook.com/security/advisories/cve-2021-24032",
+                    "refsource": "MISC",
+                    "url": "https://www.facebook.com/security/advisories/cve-2021-24032"
+                  }
+                ]
+              }
+            }
+          },
+          "adp": [
+            {
+              "providerMetadata": {
+                "orgId": "af854a3a-2127-422b-91ae-364da2661108",
+                "shortName": "CVE",
+                "dateUpdated": "2024-08-03T19:21:17.115Z"
+              },
+              "title": "CVE Program Container",
+              "references": [
+                {
+                  "tags": [
+                    "x_refsource_MISC",
+                    "x_transferred"
+                  ],
+                  "url": "https://github.com/facebook/zstd/issues/2491"
+                },
+                {
+                  "tags": [
+                    "x_refsource_MISC",
+                    "x_transferred"
+                  ],
+                  "url": "https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=982519"
+                },
+                {
+                  "tags": [
+                    "x_refsource_MISC",
+                    "x_transferred"
+                  ],
+                  "url": "https://www.facebook.com/security/advisories/cve-2021-24032"
+                }
+              ]
+            }
+          ]
+        },
+        "cveMetadata": {
+          "assignerOrgId": "4fc57720-52fe-4431-a0fb-3d2c8747b827",
+          "assignerShortName": "facebook",
+          "cveId": "CVE-2021-24032",
+          "datePublished": "2021-03-04T20:15:21.000Z",
+          "dateReserved": "2021-01-13T00:00:00.000Z",
+          "dateUpdated": "2024-08-03T19:21:17.115Z",
+          "state": "PUBLISHED"
+        },
+        "dataType": "CVE_RECORD",
+        "dataVersion": "5.1"
+      }
+    },
+    {
+      "cve_id": "CVE-2022-4899",
+      "description": "A vulnerability was found in zstd v1.4.10, where an attacker can supply empty string as an argument to the command line tool to cause buffer overrun.",
+      "sources": {
+        "nvd_api_url": "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2022-4899",
+        "cve_project_record_url": "https://raw.githubusercontent.com/CVEProject/cvelistV5/main/cves/2022/4xxx/CVE-2022-4899.json",
+        "debian_tracker_url": "https://security-tracker.debian.org/tracker/CVE-2022-4899"
+      },
+      "debian_tracker": {
+        "description": "A vulnerability was found in zstd v1.4.10, where an attacker can supply empty string as an argument to the command line tool to cause buffer overrun.",
+        "source_package_statuses": [
+          {
+            "Source Package": "libzstd (PTS)",
+            "Release": "bullseye",
+            "Version": "1.4.8+dfsg-2.1",
+            "Status": "vulnerable"
+          },
+          {
+            "Source Package": "",
+            "Release": "bookworm",
+            "Version": "1.5.4+dfsg2-5",
+            "Status": "fixed"
+          },
+          {
+            "Source Package": "",
+            "Release": "trixie",
+            "Version": "1.5.7+dfsg-1",
+            "Status": "fixed"
+          },
+          {
+            "Source Package": "",
+            "Release": "forky, sid",
+            "Version": "1.5.7+dfsg-3",
+            "Status": "fixed"
+          }
+        ],
+        "fixed_versions": [
+          {
+            "Package": "libzstd",
+            "Type": "source",
+            "Release": "buster",
+            "Fixed Version": "(not affected)",
+            "Urgency": "",
+            "Origin": "",
+            "Debian Bugs": ""
+          },
+          {
+            "Package": "libzstd",
+            "Type": "source",
+            "Release": "(unstable)",
+            "Fixed Version": "1.5.4+dfsg2-1",
+            "Urgency": "",
+            "Origin": "",
+            "Debian Bugs": ""
+          }
+        ],
+        "notes": [
+          "[bullseye] - libzstd <no-dsa> (Minor issue)",
+          "[buster] - libzstd <not-affected> (Vulnerable code introduced later)",
+          "https://github.com/facebook/zstd/issues/3200",
+          "https://github.com/facebook/zstd/commit/e1873ad576cb478fff0e6e44ad99599cd5fd2846 (v1.5.4)",
+          "https://github.com/facebook/zstd/commit/f9f27de91c89d826c6a39c3ef44fb1b02f9a43aa (v1.5.4)",
+          "Introduced by https://github.com/facebook/zstd/commit/9a8ccd4ba377060fbe180bcbc3e2bb714bda8726 (v1.4.7)"
+        ]
+      },
+      "nvd": {
+        "cve": {
+          "id": "CVE-2022-4899",
+          "sourceIdentifier": "secalert@redhat.com",
+          "published": "2023-03-31T20:15:07.213",
+          "lastModified": "2025-02-18T18:15:14.023",
+          "vulnStatus": "Modified",
+          "cveTags": [],
+          "descriptions": [
+            {
+              "lang": "en",
+              "value": "A vulnerability was found in zstd v1.4.10, where an attacker can supply empty string as an argument to the command line tool to cause buffer overrun."
+            },
+            {
+              "lang": "es",
+              "value": "Se encontr\u00f3 una vulnerabilidad en zstd v1.4.10, donde un atacante puede proporcionar una cadena vac\u00eda como argumento a la herramienta de l\u00ednea de comando para provocar una saturaci\u00f3n del b\u00fafer."
+            }
+          ],
+          "metrics": {
+            "cvssMetricV31": [
+              {
+                "source": "nvd@nist.gov",
+                "type": "Primary",
+                "cvssData": {
+                  "version": "3.1",
+                  "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+                  "baseScore": 7.5,
+                  "baseSeverity": "HIGH",
+                  "attackVector": "NETWORK",
+                  "attackComplexity": "LOW",
+                  "privilegesRequired": "NONE",
+                  "userInteraction": "NONE",
+                  "scope": "UNCHANGED",
+                  "confidentialityImpact": "NONE",
+                  "integrityImpact": "NONE",
+                  "availabilityImpact": "HIGH"
+                },
+                "exploitabilityScore": 3.9,
+                "impactScore": 3.6
+              },
+              {
+                "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+                "type": "Secondary",
+                "cvssData": {
+                  "version": "3.1",
+                  "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+                  "baseScore": 7.5,
+                  "baseSeverity": "HIGH",
+                  "attackVector": "NETWORK",
+                  "attackComplexity": "LOW",
+                  "privilegesRequired": "NONE",
+                  "userInteraction": "NONE",
+                  "scope": "UNCHANGED",
+                  "confidentialityImpact": "NONE",
+                  "integrityImpact": "NONE",
+                  "availabilityImpact": "HIGH"
+                },
+                "exploitabilityScore": 3.9,
+                "impactScore": 3.6
+              }
+            ]
+          },
+          "weaknesses": [
+            {
+              "source": "secalert@redhat.com",
+              "type": "Secondary",
+              "description": [
+                {
+                  "lang": "en",
+                  "value": "CWE-400"
+                }
+              ]
+            },
+            {
+              "source": "nvd@nist.gov",
+              "type": "Secondary",
+              "description": [
+                {
+                  "lang": "en",
+                  "value": "CWE-400"
+                }
+              ]
+            },
+            {
+              "source": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+              "type": "Secondary",
+              "description": [
+                {
+                  "lang": "en",
+                  "value": "CWE-400"
+                }
+              ]
+            }
+          ],
+          "configurations": [
+            {
+              "nodes": [
+                {
+                  "operator": "OR",
+                  "negate": false,
+                  "cpeMatch": [
+                    {
+                      "vulnerable": true,
+                      "criteria": "cpe:2.3:a:facebook:zstandard:1.4.10:*:*:*:*:*:*:*",
+                      "matchCriteriaId": "018AE117-915E-4641-8395-E706D0BDBE55"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "references": [
+            {
+              "url": "https://github.com/facebook/zstd/issues/3200",
+              "source": "secalert@redhat.com",
+              "tags": [
+                "Issue Tracking",
+                "Patch"
+              ]
+            },
+            {
+              "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/C63HAGVLQA6FJNDCHR7CNZZL6VSLILB2/",
+              "source": "secalert@redhat.com"
+            },
+            {
+              "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/JEHRBBYYTPA4DETOM5XAKGCP37NUTLOA/",
+              "source": "secalert@redhat.com"
+            },
+            {
+              "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/QYLDK6ODVC4LJSDULLX6Q2YHTFOWABCN/",
+              "source": "secalert@redhat.com"
+            },
+            {
+              "url": "https://security.netapp.com/advisory/ntap-20230725-0005/",
+              "source": "secalert@redhat.com"
+            },
+            {
+              "url": "https://github.com/facebook/zstd/issues/3200",
+              "source": "af854a3a-2127-422b-91ae-364da2661108",
+              "tags": [
+                "Issue Tracking",
+                "Patch"
+              ]
+            },
+            {
+              "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/C63HAGVLQA6FJNDCHR7CNZZL6VSLILB2/",
+              "source": "af854a3a-2127-422b-91ae-364da2661108"
+            },
+            {
+              "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/JEHRBBYYTPA4DETOM5XAKGCP37NUTLOA/",
+              "source": "af854a3a-2127-422b-91ae-364da2661108"
+            },
+            {
+              "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/QYLDK6ODVC4LJSDULLX6Q2YHTFOWABCN/",
+              "source": "af854a3a-2127-422b-91ae-364da2661108"
+            },
+            {
+              "url": "https://security.netapp.com/advisory/ntap-20230725-0005/",
+              "source": "af854a3a-2127-422b-91ae-364da2661108"
+            }
+          ]
+        }
+      },
+      "cve_project": {
+        "dataType": "CVE_RECORD",
+        "dataVersion": "5.1",
+        "cveMetadata": {
+          "state": "PUBLISHED",
+          "cveId": "CVE-2022-4899",
+          "assignerOrgId": "53f830b8-0a3f-465b-8143-3b8a9948e749",
+          "assignerShortName": "redhat",
+          "dateUpdated": "2025-02-18T17:23:22.964Z",
+          "dateReserved": "2023-01-31T00:00:00.000Z",
+          "datePublished": "2023-03-31T00:00:00.000Z"
+        },
+        "containers": {
+          "cna": {
+            "providerMetadata": {
+              "orgId": "53f830b8-0a3f-465b-8143-3b8a9948e749",
+              "shortName": "redhat",
+              "dateUpdated": "2023-09-16T03:06:48.479Z"
+            },
+            "descriptions": [
+              {
+                "lang": "en",
+                "value": "A vulnerability was found in zstd v1.4.10, where an attacker can supply empty string as an argument to the command line tool to cause buffer overrun."
+              }
+            ],
+            "affected": [
+              {
+                "vendor": "n/a",
+                "product": "zstd",
+                "versions": [
+                  {
+                    "version": "zstd 1.5.4",
+                    "status": "affected"
+                  }
+                ]
+              }
+            ],
+            "references": [
+              {
+                "url": "https://github.com/facebook/zstd/issues/3200"
+              },
+              {
+                "url": "https://security.netapp.com/advisory/ntap-20230725-0005/"
+              },
+              {
+                "name": "FEDORA-2023-9ccff0b1b7",
+                "tags": [
+                  "vendor-advisory"
+                ],
+                "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/C63HAGVLQA6FJNDCHR7CNZZL6VSLILB2/"
+              },
+              {
+                "name": "FEDORA-2023-492105ed08",
+                "tags": [
+                  "vendor-advisory"
+                ],
+                "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/JEHRBBYYTPA4DETOM5XAKGCP37NUTLOA/"
+              },
+              {
+                "name": "FEDORA-2023-a9283d639f",
+                "tags": [
+                  "vendor-advisory"
+                ],
+                "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/QYLDK6ODVC4LJSDULLX6Q2YHTFOWABCN/"
+              }
+            ],
+            "problemTypes": [
+              {
+                "descriptions": [
+                  {
+                    "type": "CWE",
+                    "lang": "en",
+                    "description": "CWE-400",
+                    "cweId": "CWE-400"
+                  }
+                ]
+              }
+            ]
+          },
+          "adp": [
+            {
+              "providerMetadata": {
+                "orgId": "af854a3a-2127-422b-91ae-364da2661108",
+                "shortName": "CVE",
+                "dateUpdated": "2024-08-03T01:55:46.209Z"
+              },
+              "title": "CVE Program Container",
+              "references": [
+                {
+                  "url": "https://github.com/facebook/zstd/issues/3200",
+                  "tags": [
+                    "x_transferred"
+                  ]
+                },
+                {
+                  "url": "https://security.netapp.com/advisory/ntap-20230725-0005/",
+                  "tags": [
+                    "x_transferred"
+                  ]
+                },
+                {
+                  "name": "FEDORA-2023-9ccff0b1b7",
+                  "tags": [
+                    "vendor-advisory",
+                    "x_transferred"
+                  ],
+                  "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/C63HAGVLQA6FJNDCHR7CNZZL6VSLILB2/"
+                },
+                {
+                  "name": "FEDORA-2023-492105ed08",
+                  "tags": [
+                    "vendor-advisory",
+                    "x_transferred"
+                  ],
+                  "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/JEHRBBYYTPA4DETOM5XAKGCP37NUTLOA/"
+                },
+                {
+                  "name": "FEDORA-2023-a9283d639f",
+                  "tags": [
+                    "vendor-advisory",
+                    "x_transferred"
+                  ],
+                  "url": "https://lists.fedoraproject.org/archives/list/package-announce%40lists.fedoraproject.org/message/QYLDK6ODVC4LJSDULLX6Q2YHTFOWABCN/"
+                }
+              ]
+            },
+            {
+              "problemTypes": [
+                {
+                  "descriptions": [
+                    {
+                      "type": "CWE",
+                      "cweId": "CWE-400",
+                      "lang": "en",
+                      "description": "CWE-400 Uncontrolled Resource Consumption"
+                    }
+                  ]
+                }
+              ],
+              "metrics": [
+                {
+                  "cvssV3_1": {
+                    "scope": "UNCHANGED",
+                    "version": "3.1",
+                    "baseScore": 7.5,
+                    "attackVector": "NETWORK",
+                    "baseSeverity": "HIGH",
+                    "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H",
+                    "integrityImpact": "NONE",
+                    "userInteraction": "NONE",
+                    "attackComplexity": "LOW",
+                    "availabilityImpact": "HIGH",
+                    "privilegesRequired": "NONE",
+                    "confidentialityImpact": "NONE"
+                  }
+                },
+                {
+                  "other": {
+                    "type": "ssvc",
+                    "content": {
+                      "timestamp": "2025-02-18T17:23:19.192469Z",
+                      "id": "CVE-2022-4899",
+                      "options": [
+                        {
+                          "Exploitation": "none"
+                        },
+                        {
+                          "Automatable": "yes"
+                        },
+                        {
+                          "Technical Impact": "partial"
+                        }
+                      ],
+                      "role": "CISA Coordinator",
+                      "version": "2.0.3"
+                    }
+                  }
+                }
+              ],
+              "title": "CISA ADP Vulnrichment",
+              "providerMetadata": {
+                "orgId": "134c704f-9b21-4f2e-91b3-4a467353bcc0",
+                "shortName": "CISA-ADP",
+                "dateUpdated": "2025-02-18T17:23:22.964Z"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
