@@ -36,6 +36,7 @@ grillResults.txt
 _*
 tmp*
 *.zst
+!golden-decompression/*.zst
 *.gz
 !gzip/hufts-segv.gz
 result

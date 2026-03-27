@@ -28,7 +28,10 @@
 #include "benchfn.h"
 #include "benchzstd.h"
 #include "zstd_errors.h"
-#include "zstd_internal.h"     /* should not be needed */
+
+#define KB *(1U << 10)
+#define MB *(1U << 20)
+#define GB *(1U << 30)
 
 
 /*-************************************
@@ -90,6 +93,16 @@ static const char* g_stratName[ZSTD_STRATEGY_MAX+1] = {
                 "ZSTD_greedy  ", "ZSTD_lazy    ", "ZSTD_lazy2   ",
                 "ZSTD_btlazy2 ", "ZSTD_btopt   ", "ZSTD_btultra ",
                 "ZSTD_btultra2"};
+
+static U32 local_highbit32(U32 value)
+{
+    U32 bits = 0;
+    while (value != 0) {
+        value >>= 1;
+        bits++;
+    }
+    return bits ? bits - 1 : 0;
+}
 
 static const U32 tlen_table[TLEN_RANGE] = { 0, 1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 256, 512, 999 };
 
@@ -631,7 +644,7 @@ static void optimizerAdjustInput(paramValues_t* pc, const size_t maxBlockSize)
 
     if(pc->vals[wlog_ind] != PARAM_UNSET) {
 
-        U32 sshb = maxBlockSize > 1 ? ZSTD_highbit32((U32)(maxBlockSize-1)) + 1 : 1;
+        U32 sshb = maxBlockSize > 1 ? local_highbit32((U32)(maxBlockSize - 1)) + 1 : 1;
         /* edge case of highBit not working for 0 */
 
         if(maxBlockSize < (1ULL << 31) && sshb + 1 < pc->vals[wlog_ind]) {

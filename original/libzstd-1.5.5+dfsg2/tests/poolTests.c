@@ -8,264 +8,208 @@
  * You may select, at your option, one of the above-listed licenses.
  */
 
-
-#include "pool.h"
-#include "threading.h"
-#include "util.h"
-#include "timefn.h"
-#include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#define ASSERT_TRUE(p)                                                       \
-  do {                                                                       \
-    if (!(p)) {                                                              \
-      return 1;                                                              \
-    }                                                                        \
-  } while (0)
-#define ASSERT_FALSE(p) ASSERT_TRUE(!(p))
-#define ASSERT_EQ(lhs, rhs) ASSERT_TRUE((lhs) == (rhs))
+#include "zstd.h"
 
-struct data {
-  ZSTD_pthread_mutex_t mutex;
-  unsigned data[16];
-  size_t i;
-};
+#define DISPLAY(...) fprintf(stderr, __VA_ARGS__)
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-static void fn(void *opaque)
+#define CHECK_Z(value)                                                       \
+    do {                                                                     \
+        size_t const check_z_result = (value);                               \
+        if (ZSTD_isError(check_z_result)) {                                  \
+            DISPLAY("%s: %s\n", #value, ZSTD_getErrorName(check_z_result));  \
+            return 1;                                                        \
+        }                                                                    \
+    } while (0)
+
+static unsigned nextRandom(unsigned* state)
 {
-  struct data *data = (struct data *)opaque;
-  ZSTD_pthread_mutex_lock(&data->mutex);
-  data->data[data->i] = (unsigned)(data->i);
-  ++data->i;
-  ZSTD_pthread_mutex_unlock(&data->mutex);
+    unsigned value = *state;
+    value ^= value << 13;
+    value ^= value >> 17;
+    value ^= value << 5;
+    *state = value ? value : 1U;
+    return *state;
 }
 
-static int testOrder(size_t numThreads, size_t queueSize)
+static void generateSample(void* buffer, size_t size, unsigned seed)
 {
-  struct data data;
-  POOL_ctx* const ctx = POOL_create(numThreads, queueSize);
-  ASSERT_TRUE(ctx);
-  data.i = 0;
-  ASSERT_FALSE(ZSTD_pthread_mutex_init(&data.mutex, NULL));
-  { size_t i;
-    for (i = 0; i < 16; ++i) {
-      POOL_add(ctx, &fn, &data);
+    unsigned char* out = (unsigned char*)buffer;
+    size_t i;
+    for (i = 0; i < size; ++i) {
+        unsigned const rnd = nextRandom(&seed);
+        if (i > 0 && (rnd % 100U) < 70U) {
+            size_t const back = (rnd % MIN(i, (size_t)8192)) + 1;
+            out[i] = out[i - back];
+        } else {
+            out[i] = (unsigned char)rnd;
+        }
     }
-  }
-  POOL_free(ctx);
-  ASSERT_EQ(16, data.i);
-  { size_t i;
-    for (i = 0; i < data.i; ++i) {
-      ASSERT_EQ(i, data.data[i]);
-    }
-  }
-  ZSTD_pthread_mutex_destroy(&data.mutex);
-  return 0;
 }
 
-
-/* --- test deadlocks --- */
-
-static void waitFn(void *opaque) {
-  (void)opaque;
-  UTIL_sleepMilli(1);
-}
-
-/* Tests for deadlock */
-static int testWait(size_t numThreads, size_t queueSize) {
-  struct data data;
-  POOL_ctx* const ctx = POOL_create(numThreads, queueSize);
-  ASSERT_TRUE(ctx);
-  { size_t i;
-    for (i = 0; i < 16; ++i) {
-        POOL_add(ctx, &waitFn, &data);
-    }
-  }
-  POOL_free(ctx);
-  return 0;
-}
-
-
-/* --- test POOL_resize() --- */
-
-typedef struct {
-    ZSTD_pthread_mutex_t mut;
-    int countdown;
-    int val;
-    int max;
-    ZSTD_pthread_cond_t cond;
-} poolTest_t;
-
-static void waitLongFn(void *opaque) {
-  poolTest_t* const test = (poolTest_t*) opaque;
-  ZSTD_pthread_mutex_lock(&test->mut);
-  test->val++;
-  if (test->val > test->max)
-      test->max = test->val;
-  ZSTD_pthread_mutex_unlock(&test->mut);
-
-  UTIL_sleepMilli(10);
-
-  ZSTD_pthread_mutex_lock(&test->mut);
-  test->val--;
-  test->countdown--;
-  if (test->countdown == 0)
-      ZSTD_pthread_cond_signal(&test->cond);
-  ZSTD_pthread_mutex_unlock(&test->mut);
-}
-
-static int testThreadReduction_internal(POOL_ctx* ctx, poolTest_t test)
+static int roundTrip(size_t workers, int useDict)
 {
-    int const nbWaits = 16;
+    size_t const srcSize = 2U * 1024U * 1024U + 257U;
+    size_t const dictSize = 64U * 1024U;
+    void* const src = malloc(srcSize);
+    void* const compressed = malloc(ZSTD_compressBound(srcSize));
+    void* const decoded = malloc(srcSize);
+    ZSTD_CCtx* const cctx = ZSTD_createCCtx();
+    ZSTD_DCtx* const dctx = ZSTD_createDCtx();
+    size_t compressedSize;
 
-    test.countdown = nbWaits;
-    test.val = 0;
-    test.max = 0;
-
-    {   int i;
-        for (i=0; i<nbWaits; i++)
-            POOL_add(ctx, &waitLongFn, &test);
+    if (src == NULL || compressed == NULL || decoded == NULL || cctx == NULL || dctx == NULL) {
+        DISPLAY("allocation failure\n");
+        free(src);
+        free(compressed);
+        free(decoded);
+        ZSTD_freeCCtx(cctx);
+        ZSTD_freeDCtx(dctx);
+        return 1;
     }
-    ZSTD_pthread_mutex_lock(&test.mut);
-    while (test.countdown > 0)
-        ZSTD_pthread_cond_wait(&test.cond, &test.mut);
-    ASSERT_EQ(test.val, 0);
-    ASSERT_EQ(test.max, 4);
-    ZSTD_pthread_mutex_unlock(&test.mut);
 
-    ASSERT_EQ( POOL_resize(ctx, 2/*nbThreads*/) , 0 );
-    test.countdown = nbWaits;
-    test.val = 0;
-    test.max = 0;
-    {   int i;
-        for (i=0; i<nbWaits; i++)
-            POOL_add(ctx, &waitLongFn, &test);
+    generateSample(src, srcSize, (unsigned)(workers + 1U));
+
+    CHECK_Z(ZSTD_CCtx_reset(cctx, ZSTD_reset_session_and_parameters));
+    CHECK_Z(ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 3));
+    CHECK_Z(ZSTD_CCtx_setParameter(cctx, ZSTD_c_nbWorkers, (int)workers));
+    CHECK_Z(ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 1));
+
+    if (useDict) {
+        CHECK_Z(ZSTD_CCtx_loadDictionary(cctx, src, dictSize));
+        CHECK_Z(ZSTD_DCtx_loadDictionary(dctx, src, dictSize));
+        compressedSize = ZSTD_compress2(cctx,
+                                        compressed, ZSTD_compressBound(srcSize),
+                                        (const unsigned char*)src + dictSize, srcSize - dictSize);
+        if (ZSTD_isError(compressedSize)) {
+            DISPLAY("ZSTD_compress2: %s\n", ZSTD_getErrorName(compressedSize));
+            free(src);
+            free(compressed);
+            free(decoded);
+            ZSTD_freeCCtx(cctx);
+            ZSTD_freeDCtx(dctx);
+            return 1;
+        }
+        CHECK_Z(ZSTD_decompressDCtx(dctx, decoded, srcSize - dictSize, compressed, compressedSize));
+        if (memcmp(decoded, (const unsigned char*)src + dictSize, srcSize - dictSize) != 0) {
+            DISPLAY("dictionary round-trip mismatch\n");
+            free(src);
+            free(compressed);
+            free(decoded);
+            ZSTD_freeCCtx(cctx);
+            ZSTD_freeDCtx(dctx);
+            return 1;
+        }
+    } else {
+        compressedSize = ZSTD_compress2(cctx, compressed, ZSTD_compressBound(srcSize), src, srcSize);
+        if (ZSTD_isError(compressedSize)) {
+            DISPLAY("ZSTD_compress2: %s\n", ZSTD_getErrorName(compressedSize));
+            free(src);
+            free(compressed);
+            free(decoded);
+            ZSTD_freeCCtx(cctx);
+            ZSTD_freeDCtx(dctx);
+            return 1;
+        }
+        CHECK_Z(ZSTD_decompressDCtx(dctx, decoded, srcSize, compressed, compressedSize));
+        if (memcmp(decoded, src, srcSize) != 0) {
+            DISPLAY("round-trip mismatch\n");
+            free(src);
+            free(compressed);
+            free(decoded);
+            ZSTD_freeCCtx(cctx);
+            ZSTD_freeDCtx(dctx);
+            return 1;
+        }
     }
-    ZSTD_pthread_mutex_lock(&test.mut);
-    while (test.countdown > 0)
-        ZSTD_pthread_cond_wait(&test.cond, &test.mut);
-    ASSERT_EQ(test.val, 0);
-    ASSERT_EQ(test.max, 2);
-    ZSTD_pthread_mutex_unlock(&test.mut);
 
+    free(src);
+    free(compressed);
+    free(decoded);
+    ZSTD_freeCCtx(cctx);
+    ZSTD_freeDCtx(dctx);
     return 0;
 }
 
-static int testThreadReduction(void) {
-    int result;
-    poolTest_t test;
-    POOL_ctx* const ctx = POOL_create(4 /*nbThreads*/, 2 /*queueSize*/);
-
-    ASSERT_TRUE(ctx);
-
-    memset(&test, 0, sizeof(test));
-    ASSERT_FALSE( ZSTD_pthread_mutex_init(&test.mut, NULL) );
-    ASSERT_FALSE( ZSTD_pthread_cond_init(&test.cond, NULL) );
-
-    result = testThreadReduction_internal(ctx, test);
-
-    ZSTD_pthread_mutex_destroy(&test.mut);
-    ZSTD_pthread_cond_destroy(&test.cond);
-    POOL_free(ctx);
-
-    return result;
-}
-
-
-/* --- test abrupt ending --- */
-
-typedef struct {
-    ZSTD_pthread_mutex_t mut;
-    int val;
-} abruptEndCanary_t;
-
-static void waitIncFn(void *opaque) {
-  abruptEndCanary_t* test = (abruptEndCanary_t*) opaque;
-  UTIL_sleepMilli(10);
-  ZSTD_pthread_mutex_lock(&test->mut);
-  test->val = test->val + 1;
-  ZSTD_pthread_mutex_unlock(&test->mut);
-}
-
-static int testAbruptEnding_internal(abruptEndCanary_t test)
+static int reuseContexts(void)
 {
-    int const nbWaits = 16;
+    size_t const srcSize = 1024U * 1024U + 13U;
+    void* const src = malloc(srcSize);
+    void* const compressed = malloc(ZSTD_compressBound(srcSize));
+    void* const decoded = malloc(srcSize);
+    ZSTD_CCtx* const cctx = ZSTD_createCCtx();
+    ZSTD_DCtx* const dctx = ZSTD_createDCtx();
+    size_t workers;
 
-    POOL_ctx* const ctx = POOL_create(3 /*numThreads*/, nbWaits /*queueSize*/);
-    ASSERT_TRUE(ctx);
-    test.val = 0;
-
-    {   int i;
-        for (i=0; i<nbWaits; i++)
-            POOL_add(ctx, &waitIncFn, &test);  /* all jobs pushed into queue */
+    if (src == NULL || compressed == NULL || decoded == NULL || cctx == NULL || dctx == NULL) {
+        DISPLAY("allocation failure\n");
+        free(src);
+        free(compressed);
+        free(decoded);
+        ZSTD_freeCCtx(cctx);
+        ZSTD_freeDCtx(dctx);
+        return 1;
     }
-    ASSERT_EQ( POOL_resize(ctx, 1 /*numThreads*/) , 0 );   /* downsize numThreads, to try to break end condition */
 
-    POOL_free(ctx);  /* must finish all jobs in queue before giving back control */
-    ASSERT_EQ(test.val, nbWaits);
+    generateSample(src, srcSize, 7U);
+    for (workers = 0; workers <= 3; ++workers) {
+        size_t compressedSize;
+        CHECK_Z(ZSTD_CCtx_reset(cctx, ZSTD_reset_session_and_parameters));
+        CHECK_Z(ZSTD_CCtx_setParameter(cctx, ZSTD_c_nbWorkers, (int)workers));
+        CHECK_Z(ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, (int)(workers + 1)));
+        compressedSize = ZSTD_compress2(cctx, compressed, ZSTD_compressBound(srcSize), src, srcSize);
+        if (ZSTD_isError(compressedSize)) {
+            DISPLAY("context reuse compression failed: %s\n", ZSTD_getErrorName(compressedSize));
+            free(src);
+            free(compressed);
+            free(decoded);
+            ZSTD_freeCCtx(cctx);
+            ZSTD_freeDCtx(dctx);
+            return 1;
+        }
+        CHECK_Z(ZSTD_DCtx_reset(dctx, ZSTD_reset_session_only));
+        CHECK_Z(ZSTD_decompressDCtx(dctx, decoded, srcSize, compressed, compressedSize));
+        if (memcmp(decoded, src, srcSize) != 0) {
+            DISPLAY("context reuse mismatch\n");
+            free(src);
+            free(compressed);
+            free(decoded);
+            ZSTD_freeCCtx(cctx);
+            ZSTD_freeDCtx(dctx);
+            return 1;
+        }
+    }
+
+    free(src);
+    free(compressed);
+    free(decoded);
+    ZSTD_freeCCtx(cctx);
+    ZSTD_freeDCtx(dctx);
     return 0;
 }
 
-static int testAbruptEnding(void) {
-    int result;
-    abruptEndCanary_t test;
-
-    memset(&test, 0, sizeof(test));
-    ASSERT_FALSE( ZSTD_pthread_mutex_init(&test.mut, NULL) );
-
-    result = testAbruptEnding_internal(test);
-
-    ZSTD_pthread_mutex_destroy(&test.mut);
-    return result;
-}
-
-
-
-/* --- test launcher --- */
-
-int main(int argc, const char **argv) {
-  size_t numThreads;
-  (void)argc;
-  (void)argv;
-
-  if (POOL_create(0, 1)) {   /* should not be possible */
-    printf("FAIL: should not create POOL with 0 threads\n");
-    return 1;
-  }
-
-  for (numThreads = 1; numThreads <= 4; ++numThreads) {
-    size_t queueSize;
-    for (queueSize = 0; queueSize <= 2; ++queueSize) {
-      printf("queueSize==%u, numThreads=%u \n",
-            (unsigned)queueSize, (unsigned)numThreads);
-      if (testOrder(numThreads, queueSize)) {
-        printf("FAIL: testOrder\n");
+int main(void)
+{
+    if (roundTrip(0, 0)) {
         return 1;
-      }
-      printf("SUCCESS: testOrder\n");
-      if (testWait(numThreads, queueSize)) {
-        printf("FAIL: testWait\n");
-        return 1;
-      }
-      printf("SUCCESS: testWait\n");
     }
-  }
+    if (roundTrip(1, 0)) {
+        return 1;
+    }
+    if (roundTrip(2, 0)) {
+        return 1;
+    }
+    if (roundTrip(2, 1)) {
+        return 1;
+    }
+    if (reuseContexts()) {
+        return 1;
+    }
 
-  if (testThreadReduction()) {
-      printf("FAIL: thread reduction not effective \n");
-      return 1;
-  } else {
-      printf("SUCCESS: thread reduction effective \n");
-  }
-
-  if (testAbruptEnding()) {
-      printf("FAIL: jobs in queue not completed on early end \n");
-      return 1;
-  } else {
-      printf("SUCCESS: all jobs in queue completed on early end \n");
-  }
-
-  printf("PASS: all POOL tests\n");
-
-  return 0;
+    DISPLAY("poolTests: public multithread smoke tests passed\n");
+    return 0;
 }

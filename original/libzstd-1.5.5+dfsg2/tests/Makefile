@@ -169,7 +169,7 @@ fuzzer-dll : $(ZSTDDIR)/common/xxhash.c $(PRGDIR)/util.c $(PRGDIR)/timefn.c $(PR
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(filter %.c,$^) $(LDFLAGS) -o $@$(EXT)
 
 CLEAN += zstreamtest zstreamtest32
-ZSTREAM_LOCAL_FILES := $(PRGDIR)/datagen.c $(PRGDIR)/util.c $(PRGDIR)/timefn.c seqgen.c zstreamtest.c external_matchfinder.c
+ZSTREAM_LOCAL_FILES := $(PRGDIR)/datagen.c $(PRGDIR)/util.c $(PRGDIR)/timefn.c zstreamtest.c
 ZSTREAM_PROPER_FILES := $(ZDICT_FILES) $(ZSTREAM_LOCAL_FILES)
 ZSTREAMFILES := $(ZSTD_FILES) $(ZSTREAM_PROPER_FILES)
 zstreamtest32 : CFLAGS += -m32
@@ -229,11 +229,13 @@ legacy : $(ZSTD_FILES) $(sort $(wildcard $(ZSTDDIR)/legacy/*.c)) legacy.c
 
 CLEAN += decodecorpus
 decodecorpus : LDLIBS += -lm
-decodecorpus : $(filter-out zstdc_zstd_compress.o, $(ZSTD_OBJECTS)) $(ZDICT_FILES) $(PRGDIR)/util.c $(PRGDIR)/timefn.c decodecorpus.c
+decodecorpus : $(ZSTD_OBJECTS) $(ZDICT_FILES) $(PRGDIR)/util.c $(PRGDIR)/timefn.c decodecorpus.c
 
 CLEAN += poolTests
-poolTests : $(PRGDIR)/util.c $(PRGDIR)/timefn.c poolTests.c $(ZSTDDIR)/common/pool.c $(ZSTDDIR)/common/threading.c $(ZSTDDIR)/common/zstd_common.c $(ZSTDDIR)/common/error_private.c
-	$(LINK.c) $(MULTITHREAD) $^ -o $@$(EXT)
+poolTests : CPPFLAGS += $(MULTITHREAD_CPP)
+poolTests : LDFLAGS += $(MULTITHREAD_LD)
+poolTests : $(ZSTDMT_OBJECTS) poolTests.c
+	$(LINK.c) $^ -o $@$(EXT)
 
 .PHONY: versionsTest
 versionsTest: clean
@@ -394,8 +396,10 @@ test-legacy: legacy
 test-decodecorpus: decodecorpus
 	$(QEMU_SYS) ./decodecorpus -t $(DECODECORPUS_TESTTIME)
 
-test-decodecorpus-cli: decodecorpus
+test-decodecorpus-cli: ZSTD = $(abspath $(PRGDIR)/zstd)
+test-decodecorpus-cli: zstd decodecorpus
 	@echo "\n ---- decodecorpus basic cli tests ----"
+	@rm -rf testdir
 	@mkdir testdir
 	./decodecorpus -n5 -otestdir -ptestdir
 	@cd testdir && \
