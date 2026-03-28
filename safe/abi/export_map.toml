@@ -1,0 +1,1853 @@
+schema_version = 1
+upstream_shared_object = "original/libzstd-1.5.5+dfsg2/lib/libzstd.so.1.5.5"
+upstream_soname = "libzstd.so.1"
+
+[[symbol]]
+name = "ZSTD_estimateCStreamSize_usingCParams"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initDStream_usingDDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::ddict"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compress"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getBlockSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::block"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_DCtx_loadDictionary_byReference"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::ddict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getDictID_fromCDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createDStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compress_usingCDict_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createCStream_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_flushStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::ffi::advanced"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_defaultCLevel"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::params"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compressEnd"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compressStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CStreamInSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZDICT_addEntropyTablesFromBuffer"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zdict.h"
+owner_module = "crate::dict_builder::zdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_copyCCtx"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::ffi::advanced"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createDDict_byReference"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::ddict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createCDict_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initStaticCCtx"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::static_ctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compressBegin"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtxParams_init"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx_params"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_sizeof_DCtx"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_sizeof_CStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getParams"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::params"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createDDict_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::ddict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZDICT_finalizeDictionary"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zdict.h"
+owner_module = "crate::dict_builder::zdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_decompress"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZDICT_trainFromBuffer_legacy"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zdict.h"
+owner_module = "crate::dict_builder::zdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_adjustCParams"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::params"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_resetDStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_findDecompressedSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::frame"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_decompressBound"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::frame"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createCCtx"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_freeCCtxParams"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx_params"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_decompressionMargin"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::frame"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_toFlushNow"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::threading::zstdmt"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_writeSkippableFrame"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::skippable"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZDICT_getDictHeaderSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zdict.h"
+owner_module = "crate::dict_builder::zdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZDICT_optimizeTrainFromBuffer_cover"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zdict.h"
+owner_module = "crate::dict_builder::cover"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_estimateDCtxSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compressStream2_simpleArgs"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_sizeof_DStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_estimateDDictSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::static_ctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_estimateCStreamSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_setFParams"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx_params"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_endStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::ffi::advanced"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZDICT_getDictID"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zdict.h"
+owner_module = "crate::dict_builder::zdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_nextSrcSizeToDecompress"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_DStreamOutSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_freeThreadPool"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::threading::pool"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initCStream_usingDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_maxCLevel"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::params"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_freeCCtx"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createCCtxParams"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx_params"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createDCtx_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_refPrefix_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZDICT_trainFromBuffer_cover"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zdict.h"
+owner_module = "crate::dict_builder::cover"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_DCtx_loadDictionary_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::ddict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_getParameter"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtxParams_setParameter"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx_params"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CStreamOutSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_decompressBegin"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_estimateCStreamSize_usingCCtxParams"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_versionString"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::version"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_readSkippableFrame"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::skippable"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createThreadPool"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::threading::pool"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compressCCtx"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_isFrame"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::frame"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compressBlock"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::block"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_estimateCCtxSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZDICT_trainFromBuffer_fastCover"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zdict.h"
+owner_module = "crate::dict_builder::fastcover"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_refThreadPool"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::threading::pool"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_loadDictionary_byReference"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_sequenceBound"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::sequence_api"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_refCDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_copyDCtx"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::ffi::advanced"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_dParam_getBounds"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::params"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compressSequences"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::sequence_api"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_estimateCCtxSize_usingCCtxParams"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initStaticDCtx"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::static_ctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_freeCStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initCStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_DCtx_refPrefix_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_isError"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::error"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_isSkippableFrame"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::frame"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getErrorName"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::error"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_minCLevel"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::params"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compress_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_DCtx_refPrefix"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initStaticDDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::static_ctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getDictID_fromFrame"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::frame"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_estimateDStreamSize_fromFrame"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_freeDDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::ddict"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_setPledgedSrcSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_frameHeaderSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::frame"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createDCtx"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compress_usingDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_estimateCDictSize_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_estimateDStreamSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_DCtx_loadDictionary"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::ddict"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createCDict_byReference"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_decompress_usingDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_decompressContinue"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_refPrefix"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_setParametersUsingCCtxParams"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx_params"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_decompressBegin_usingDDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_DCtx_setParameter"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getFrameContentSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::frame"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZDICT_trainFromBuffer"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zdict.h"
+owner_module = "crate::dict_builder::zdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initCStream_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_DCtx_setFormat"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initCStream_srcSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getFrameProgression"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::threading::zstdmt"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_estimateCDictSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createDDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::ddict"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_DCtx_setMaxWindowSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getFrameHeader_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::frame"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_DCtx_reset"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZDICT_isError"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zdict.h"
+owner_module = "crate::dict_builder::zdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_nextInputType"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_decompressBlock"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::block"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_DStreamInSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compressContinue"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_freeDCtx"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compress_usingCDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getFrameHeader"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::frame"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_cParam_getBounds"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::params"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtxParams_getParameter"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx_params"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_decompress_usingDDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getErrorString"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd_errors.h"
+owner_module = "crate::common::error"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_generateSequences"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::sequence_api"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_freeDStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initDStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initStaticCDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::static_ctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_freeCDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getCParams"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::params"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_decompressStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initStaticCStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::static_ctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_decompressStream_simpleArgs"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_sizeof_DDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::ddict"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_decompressBegin_usingDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initCStream_usingCDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_registerSequenceProducer"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::sequence_api"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_checkCParams"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::params"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_decompressDCtx"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZDICT_getErrorName"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zdict.h"
+owner_module = "crate::dict_builder::zdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZDICT_optimizeTrainFromBuffer_fastCover"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zdict.h"
+owner_module = "crate::dict_builder::fastcover"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createCDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtxParams_init_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx_params"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_DCtx_refDDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::ddict"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compressBegin_usingDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_sizeof_CCtx"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtxParams_reset"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx_params"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_setCParams"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx_params"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compressBegin_usingCDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compressStream2"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_decodingBufferSize_min"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createDStream_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dstream"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_insertBlock"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::block"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getDictID_fromDDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::ddict"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_reset"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_findFrameCompressedSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::frame"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_setParams"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx_params"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_estimateCCtxSize_usingCParams"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compressBegin_usingCDict_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compress2"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_sizeof_CDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createCCtx_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_versionNumber"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::version"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_DCtx_getParameter"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::dctx"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_loadDictionary"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_mergeBlockDelimiters"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::sequence_api"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createCStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initStaticDStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::static_ctx"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_loadDictionary_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_CCtx_setParameter"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getDictID_fromDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::ddict"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compressBegin_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_createCDict_advanced2"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 4
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initDStream_usingDict"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::decompress::ddict"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_initCStream_usingCDict_advanced"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cdict"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_resetCStream"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cstream"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_compressBound"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::compress::cctx"
+owning_phase = 3
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getDecompressedSize"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd.h"
+owner_module = "crate::common::frame"
+owning_phase = 2
+status = "planned"
+
+[[symbol]]
+name = "ZSTD_getErrorCode"
+binding = "g"
+type_class = "DF"
+version_class = "Base"
+originating_header = "zstd_errors.h"
+owner_module = "crate::common::error"
+owning_phase = 2
+status = "planned"

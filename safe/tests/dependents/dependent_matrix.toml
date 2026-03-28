@@ -1,0 +1,72 @@
+schema_version = 1
+source_inventory = "dependents.json"
+
+[[dependent]]
+source_package = "apt"
+binary_package = "libapt-pkg6.0t64"
+compile_probe = "safe/tests/dependents/src/apt_probe.c"
+compile_mode = "pkg-config-c"
+runtime_test = "test_apt"
+
+[[dependent]]
+source_package = "dpkg"
+binary_package = "dpkg"
+compile_probe = "safe/tests/dependents/src/dpkg_probe.c"
+compile_mode = "pkg-config-c"
+runtime_test = "test_dpkg"
+
+[[dependent]]
+source_package = "rsync"
+binary_package = "rsync"
+compile_probe = "safe/tests/dependents/src/rsync_probe.c"
+compile_mode = "pkg-config-c"
+runtime_test = "test_rsync"
+
+[[dependent]]
+source_package = "systemd"
+binary_package = "libsystemd-shared"
+compile_probe = "safe/tests/dependents/src/systemd_probe.c"
+compile_mode = "pkg-config-c"
+runtime_test = "test_systemd"
+
+[[dependent]]
+source_package = "libarchive"
+binary_package = "libarchive13t64"
+compile_probe = "safe/tests/dependents/src/libarchive_probe.c"
+compile_mode = "pkg-config-c"
+runtime_test = "test_libarchive"
+
+[[dependent]]
+source_package = "btrfs-progs"
+binary_package = "btrfs-progs"
+compile_probe = "safe/tests/dependents/src/btrfs_probe.c"
+compile_mode = "pkg-config-c"
+runtime_test = "test_btrfs"
+
+[[dependent]]
+source_package = "squashfs-tools"
+binary_package = "squashfs-tools"
+compile_probe = "safe/tests/dependents/src/squashfs_probe.c"
+compile_mode = "pkg-config-c"
+runtime_test = "test_squashfs"
+
+[[dependent]]
+source_package = "qemu"
+binary_package = "qemu-utils"
+compile_probe = "safe/tests/dependents/src/qemu_probe.c"
+compile_mode = "pkg-config-c"
+runtime_test = "test_qemu"
+
+[[dependent]]
+source_package = "curl"
+binary_package = "libcurl4t64"
+compile_probe = "safe/tests/dependents/src/curl_probe.c"
+compile_mode = "pkg-config-c"
+runtime_test = "test_curl"
+
+[[dependent]]
+source_package = "tiff"
+binary_package = "libtiff6"
+compile_probe = "safe/tests/dependents/src/tiff_probe.c"
+compile_mode = "pkg-config-c"
+runtime_test = "test_tiff"

@@ -1,0 +1,394 @@
+schema_version = 1
+upstream_root = "original/libzstd-1.5.5+dfsg2"
+
+[[entry]]
+id = "tests:fuzzer"
+path = "original/libzstd-1.5.5+dfsg2/tests/fuzzer.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "fuzzer"
+execution_strategy = "compile-and-run"
+owning_phase = 4
+release_gate = true
+prerequisites = ["pthread"]
+
+[[entry]]
+id = "tests:zstreamtest"
+path = "original/libzstd-1.5.5+dfsg2/tests/zstreamtest.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "zstreamtest"
+execution_strategy = "compile-and-run"
+owning_phase = 4
+release_gate = true
+prerequisites = ["pthread", "dictionary-training coverage"]
+
+[[entry]]
+id = "tests:paramgrill"
+path = "original/libzstd-1.5.5+dfsg2/tests/paramgrill.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "paramgrill"
+execution_strategy = "compile-and-run"
+owning_phase = 3
+release_gate = true
+prerequisites = []
+
+[[entry]]
+id = "tests:decodecorpus"
+path = "original/libzstd-1.5.5+dfsg2/tests/decodecorpus.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "decodecorpus"
+execution_strategy = "compile-and-run"
+owning_phase = 2
+release_gate = true
+prerequisites = ["libm"]
+
+[[entry]]
+id = "tests:poolTests"
+path = "original/libzstd-1.5.5+dfsg2/tests/poolTests.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "poolTests"
+execution_strategy = "compile-and-run"
+owning_phase = 4
+release_gate = true
+prerequisites = ["pthread"]
+
+[[entry]]
+id = "tests:external_matchfinder"
+path = "original/libzstd-1.5.5+dfsg2/tests/external_matchfinder.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "external_matchfinder"
+execution_strategy = "compile-and-run"
+owning_phase = 3
+release_gate = true
+prerequisites = []
+
+[[entry]]
+id = "tests:legacy"
+path = "original/libzstd-1.5.5+dfsg2/tests/legacy.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "legacy"
+execution_strategy = "compile-and-run"
+owning_phase = 2
+release_gate = true
+prerequisites = ["ZSTD_LEGACY_SUPPORT=4+"]
+
+[[entry]]
+id = "tests:bigdict"
+path = "original/libzstd-1.5.5+dfsg2/tests/bigdict.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "bigdict"
+execution_strategy = "compile-and-run"
+owning_phase = 3
+release_gate = true
+prerequisites = ["pthread"]
+
+[[entry]]
+id = "tests:invalidDictionaries"
+path = "original/libzstd-1.5.5+dfsg2/tests/invalidDictionaries.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "invalidDictionaries"
+execution_strategy = "compile-and-run"
+owning_phase = 3
+release_gate = true
+prerequisites = []
+
+[[entry]]
+id = "tests:roundTripCrash"
+path = "original/libzstd-1.5.5+dfsg2/tests/roundTripCrash.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "roundTripCrash"
+execution_strategy = "compile-and-run"
+owning_phase = 3
+release_gate = true
+prerequisites = ["pthread", "tests/datagen"]
+
+[[entry]]
+id = "tests:fullbench"
+path = "original/libzstd-1.5.5+dfsg2/tests/fullbench.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "fullbench"
+execution_strategy = "compile-and-run"
+owning_phase = 3
+release_gate = false
+prerequisites = ["pthread"]
+
+[[entry]]
+id = "tests:datagen"
+path = "original/libzstd-1.5.5+dfsg2/tests/datagencli.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "datagen"
+execution_strategy = "compile-only"
+owning_phase = 3
+release_gate = false
+prerequisites = []
+
+[[entry]]
+id = "tests:test-valgrind"
+path = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "test-valgrind"
+execution_strategy = "compile-and-run"
+owning_phase = 6
+release_gate = false
+prerequisites = ["valgrind"]
+
+[[entry]]
+id = "tests:playTests.sh"
+path = "original/libzstd-1.5.5+dfsg2/tests/playTests.sh"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "script"
+execution_strategy = "environment-overrides"
+owning_phase = 6
+release_gate = true
+prerequisites = ["packaged zstd", "packaged datagen"]
+
+[[entry]]
+id = "tests:test-variants.sh"
+path = "original/libzstd-1.5.5+dfsg2/tests/test-variants.sh"
+source = "original/libzstd-1.5.5+dfsg2/tests/test-variants.sh"
+kind = "script"
+execution_strategy = "shell-script"
+owning_phase = 6
+release_gate = true
+prerequisites = ["build variants from safe/scripts/run-build-variant-tests.sh"]
+
+[[entry]]
+id = "tests:test-zstd-versions.py"
+path = "original/libzstd-1.5.5+dfsg2/tests/test-zstd-versions.py"
+source = "original/libzstd-1.5.5+dfsg2/tests/README.md"
+kind = "script"
+execution_strategy = "offline-fixture-replay"
+owning_phase = 6
+release_gate = true
+prerequisites = ["python3", "safe/tests/fixtures/versions"]
+
+[[entry]]
+id = "tests:check_size.py"
+path = "original/libzstd-1.5.5+dfsg2/tests/check_size.py"
+source = "original/libzstd-1.5.5+dfsg2/tests/check_size.py"
+kind = "script"
+execution_strategy = "python-script"
+owning_phase = 6
+release_gate = true
+prerequisites = ["python3"]
+
+[[entry]]
+id = "tests:test-license.py"
+path = "original/libzstd-1.5.5+dfsg2/tests/test-license.py"
+source = "original/libzstd-1.5.5+dfsg2/tests/test-license.py"
+kind = "script"
+execution_strategy = "python-script"
+owning_phase = 6
+release_gate = true
+prerequisites = ["python3"]
+
+[[entry]]
+id = "tests:cli-tests"
+path = "original/libzstd-1.5.5+dfsg2/tests/cli-tests"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "directory-family"
+execution_strategy = "python-runner"
+owning_phase = 6
+release_gate = true
+prerequisites = ["python3", "packaged zstd symlink set"]
+
+[[entry]]
+id = "tests:gzip"
+path = "original/libzstd-1.5.5+dfsg2/tests/gzip"
+source = "original/libzstd-1.5.5+dfsg2/tests/gzip/Makefile"
+kind = "directory-family"
+execution_strategy = "make test-* shell suite"
+owning_phase = 6
+release_gate = true
+prerequisites = ["POSIX shell", "packaged gzip-compatible symlink"]
+
+[[entry]]
+id = "tests:regression"
+path = "original/libzstd-1.5.5+dfsg2/tests/regression"
+source = "original/libzstd-1.5.5+dfsg2/tests/regression/Makefile"
+kind = "directory-family"
+execution_strategy = "offline-regression-harness"
+owning_phase = 6
+release_gate = true
+prerequisites = ["curl", "safe/tests/fixtures/regression", "original/libzstd-1.5.5+dfsg2/tests/regression/results.csv"]
+
+[[entry]]
+id = "tests:fuzz"
+path = "original/libzstd-1.5.5+dfsg2/tests/fuzz"
+source = "original/libzstd-1.5.5+dfsg2/tests/fuzz/Makefile"
+kind = "directory-family"
+execution_strategy = "offline-corpus-runner"
+owning_phase = 6
+release_gate = true
+prerequisites = ["libregression.a", "original/libzstd-1.5.5+dfsg2/tests/fuzz/corpora", "safe/tests/fixtures/fuzz-corpora"]
+
+[[entry]]
+id = "zlibWrapper:test"
+path = "original/libzstd-1.5.5+dfsg2/zlibWrapper"
+source = "original/libzstd-1.5.5+dfsg2/zlibWrapper/Makefile"
+kind = "make-target"
+make_target = "test"
+execution_strategy = "build-and-run"
+owning_phase = 6
+release_gate = true
+prerequisites = ["zlib1g-dev"]
+
+[[entry]]
+id = "zlibWrapper:test-valgrind"
+path = "original/libzstd-1.5.5+dfsg2/zlibWrapper"
+source = "original/libzstd-1.5.5+dfsg2/zlibWrapper/Makefile"
+kind = "make-target"
+make_target = "test-valgrind"
+execution_strategy = "build-and-run-under-valgrind"
+owning_phase = 6
+release_gate = true
+prerequisites = ["zlib1g-dev", "valgrind"]
+
+[[entry]]
+id = "educational_decoder:test"
+path = "original/libzstd-1.5.5+dfsg2/doc/educational_decoder"
+source = "original/libzstd-1.5.5+dfsg2/doc/educational_decoder/Makefile"
+kind = "make-target"
+make_target = "test"
+execution_strategy = "build-and-run"
+owning_phase = 6
+release_gate = true
+prerequisites = ["packaged zstd"]
+
+[[entry]]
+id = "contrib/pzstd:test-pzstd"
+path = "original/libzstd-1.5.5+dfsg2/contrib/pzstd"
+source = "original/libzstd-1.5.5+dfsg2/contrib/pzstd/Makefile"
+kind = "make-target"
+make_target = "test-pzstd"
+execution_strategy = "offline-googletest staging"
+owning_phase = 6
+release_gate = true
+prerequisites = ["cmake", "libgtest-dev", "googletest staged locally"]
+offline_strategy = "replace git clone with a system googletest installation staged into contrib/pzstd/googletest/"
+
+[[entry]]
+id = "contrib/pzstd:test-pzstd32"
+path = "original/libzstd-1.5.5+dfsg2/contrib/pzstd"
+source = "original/libzstd-1.5.5+dfsg2/contrib/pzstd/Makefile"
+kind = "make-target"
+make_target = "test-pzstd32"
+execution_strategy = "offline-googletest staging"
+owning_phase = 6
+release_gate = false
+prerequisites = ["cmake", "libgtest-dev", "gcc-multilib or g++-multilib", "googletest staged locally"]
+offline_strategy = "replace git clone with a system googletest installation staged into contrib/pzstd/googletest/"
+
+[[entry]]
+id = "contrib/pzstd:test-pzstd-tsan"
+path = "original/libzstd-1.5.5+dfsg2/contrib/pzstd"
+source = "original/libzstd-1.5.5+dfsg2/contrib/pzstd/Makefile"
+kind = "make-target"
+make_target = "test-pzstd-tsan"
+execution_strategy = "offline-googletest staging"
+owning_phase = 6
+release_gate = false
+prerequisites = ["cmake", "libgtest-dev", "thread sanitizer toolchain", "gold or compatible linker", "googletest staged locally"]
+offline_strategy = "replace git clone with a system googletest installation staged into contrib/pzstd/googletest/"
+
+[[entry]]
+id = "contrib/pzstd:test-pzstd-asan"
+path = "original/libzstd-1.5.5+dfsg2/contrib/pzstd"
+source = "original/libzstd-1.5.5+dfsg2/contrib/pzstd/Makefile"
+kind = "make-target"
+make_target = "test-pzstd-asan"
+execution_strategy = "offline-googletest staging"
+owning_phase = 6
+release_gate = false
+prerequisites = ["cmake", "libgtest-dev", "address sanitizer toolchain", "gold or compatible linker", "googletest staged locally"]
+offline_strategy = "replace git clone with a system googletest installation staged into contrib/pzstd/googletest/"
+
+[[entry]]
+id = "debian:zstd-selftest"
+path = "original/libzstd-1.5.5+dfsg2/debian/tests/control"
+source = "original/libzstd-1.5.5+dfsg2/debian/tests/control"
+kind = "autopkgtest"
+control_feature = "test-name=zstd-selftest"
+execution_strategy = "adt-run test command"
+owning_phase = 5
+release_gate = true
+prerequisites = []
+helper_paths = []
+
+[[entry]]
+id = "debian:build-pkg-config"
+path = "original/libzstd-1.5.5+dfsg2/debian/tests/control"
+source = "original/libzstd-1.5.5+dfsg2/debian/tests/control"
+kind = "autopkgtest"
+control_feature = "test-name=build-pkg-config"
+execution_strategy = "python helper module against pkg-make sample"
+owning_phase = 5
+release_gate = true
+prerequisites = ["build-essential", "pkgconf", "python3", "python3-click", "python3-typedload"]
+helper_paths = [
+  "safe/debian/tests/python/check_build/__init__.py",
+  "safe/debian/tests/python/check_build/__main__.py",
+  "safe/debian/tests/python/check_build/defs.py",
+  "safe/debian/tests/python/check_build/parse.py",
+  "safe/debian/tests/python/check_build/process.py",
+  "safe/debian/tests/python/check_build/util.py",
+  "safe/debian/tests/ztest/programs.toml",
+  "safe/debian/tests/ztest/pkg-make/Makefile",
+  "safe/debian/tests/ztest/pkg-make/ztest.c",
+]
+
+[[entry]]
+id = "debian:build-cmake"
+path = "original/libzstd-1.5.5+dfsg2/debian/tests/control"
+source = "original/libzstd-1.5.5+dfsg2/debian/tests/control"
+kind = "autopkgtest"
+control_feature = "test-name=build-cmake"
+execution_strategy = "python helper module against cmake sample"
+owning_phase = 5
+release_gate = true
+prerequisites = ["build-essential", "cmake", "python3", "python3-click", "python3-typedload"]
+helper_paths = [
+  "safe/debian/tests/python/check_build/__init__.py",
+  "safe/debian/tests/python/check_build/__main__.py",
+  "safe/debian/tests/python/check_build/defs.py",
+  "safe/debian/tests/python/check_build/parse.py",
+  "safe/debian/tests/python/check_build/process.py",
+  "safe/debian/tests/python/check_build/util.py",
+  "safe/debian/tests/ztest/programs.toml",
+  "safe/debian/tests/ztest/cmake/CMakeLists.txt",
+  "safe/debian/tests/ztest/cmake/ztest.c",
+]
+
+[[entry]]
+id = "examples:test"
+path = "original/libzstd-1.5.5+dfsg2/examples"
+source = "original/libzstd-1.5.5+dfsg2/examples/Makefile"
+kind = "make-target"
+make_target = "test"
+execution_strategy = "build-and-run"
+owning_phase = 6
+release_gate = true
+prerequisites = []
+
+[[entry]]
+id = "contrib/seekable_format:test"
+path = "original/libzstd-1.5.5+dfsg2/contrib/seekable_format/tests"
+source = "original/libzstd-1.5.5+dfsg2/contrib/seekable_format/tests/Makefile"
+kind = "make-target"
+make_target = "test"
+execution_strategy = "build-and-run"
+owning_phase = 6
+release_gate = true
+prerequisites = []
