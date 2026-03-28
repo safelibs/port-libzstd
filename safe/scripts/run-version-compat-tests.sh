@@ -37,23 +37,9 @@ if version_compat_is_fresh; then
     exit 0
 fi
 
-"$BINDIR/zstd" -q -t "$VERSIONS_FIXTURE_ROOT/empty-block.zst"
-"$BINDIR/zstd" -q -t "$VERSIONS_FIXTURE_ROOT/rle-first-block.zst"
-"$BINDIR/zstd" -q -t "$VERSIONS_FIXTURE_ROOT/huffman-compressed-larger"
-
-"$BINDIR/zstd" -q -dc "$VERSIONS_FIXTURE_ROOT/hello.zst" >"$WORK_DIR/hello.out"
-cmp -s "$VERSIONS_FIXTURE_ROOT/hello" "$WORK_DIR/hello.out"
-
-"$BINDIR/zstd" -q -dc "$VERSIONS_FIXTURE_ROOT/helloworld.zst" >"$WORK_DIR/helloworld.out"
-cmp -s "$VERSIONS_FIXTURE_ROOT/helloworld" "$WORK_DIR/helloworld.out"
-
-"$BINDIR/zstd" -q -f \
-    -D "$VERSIONS_FIXTURE_ROOT/http-dict-missing-symbols" \
-    "$VERSIONS_FIXTURE_ROOT/http" \
-    -o "$WORK_DIR/http.zst"
-"$BINDIR/zstd" -q -dc \
-    -D "$VERSIONS_FIXTURE_ROOT/http-dict-missing-symbols" \
-    "$WORK_DIR/http.zst" >"$WORK_DIR/http.out"
-cmp -s "$VERSIONS_FIXTURE_ROOT/http" "$WORK_DIR/http.out"
+PHASE6_VERSION_FIXTURE_ROOT="$VERSIONS_FIXTURE_ROOT" \
+PHASE6_VERSION_WORK_DIR="$WORK_DIR" \
+ZSTD_VERSION_BIN="$BINDIR/zstd" \
+python3 "$ORIGINAL_ROOT/tests/test-zstd-versions.py"
 
 touch "$STAMP_FILE"

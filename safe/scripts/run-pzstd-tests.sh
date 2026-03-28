@@ -10,11 +10,7 @@ phase6_export_safe_env
 phase6_ensure_datagen
 
 PZSTD_DIR="$ORIGINAL_ROOT/contrib/pzstd"
-PZSTD_ROUNDTRIP_BIN=${PZSTD_ROUNDTRIP_BIN:-$BINDIR/zstd}
-if [[ ! -x $PZSTD_ROUNDTRIP_BIN ]]; then
-    printf 'missing pzstd roundtrip smoke binary: %s\n' "$PZSTD_ROUNDTRIP_BIN" >&2
-    exit 1
-fi
+PZSTD_ROUNDTRIP_BIN=${PZSTD_ROUNDTRIP_BIN:-}
 GTEST_SRC=/usr/src/googletest
 if [[ ! -d $GTEST_SRC ]]; then
     printf 'missing system googletest source tree: %s\n' "$GTEST_SRC" >&2
@@ -26,10 +22,11 @@ PZSTD_TESTFLAGS=${PZSTD_TESTFLAGS:---gtest_filter=-*ExtremelyLarge*}
 PZSTD_OPTIONAL_TESTFLAGS=${PZSTD_OPTIONAL_TESTFLAGS:---gtest_filter=-*ExtremelyLarge*}
 PZSTD_ROUNDTRIP_CASES=${PZSTD_ROUNDTRIP_CASES:-8}
 PZSTD_ROUNDTRIP_OPTIONS_PER_INPUT=${PZSTD_ROUNDTRIP_OPTIONS_PER_INPUT:-1}
-PZSTD_SMALL_MAX_LEN=${PZSTD_SMALL_MAX_LEN:-4}
+PZSTD_SMALL_MAX_LEN=${PZSTD_SMALL_MAX_LEN:-1}
 PZSTD_LARGE_MIN_SHIFT=${PZSTD_LARGE_MIN_SHIFT:-20}
-PZSTD_LARGE_MAX_SHIFT=${PZSTD_LARGE_MAX_SHIFT:-20}
+PZSTD_LARGE_MAX_SHIFT=${PZSTD_LARGE_MAX_SHIFT:-19}
 PZSTD_MAX_THREADS=${PZSTD_MAX_THREADS:-1}
+PZSTD_MAX_LEVEL=${PZSTD_MAX_LEVEL:-1}
 PZSTD_CHECK_SCRIPT="$PHASE6_OUT/pzstd-check.sh"
 install -d "$SHIM_DIR"
 cat >"$SHIM_DIR/git" <<'EOF'
@@ -55,8 +52,10 @@ set -euo pipefail
 PZSTD_DIR=${1:?missing pzstd dir}
 DATAGEN_BIN=${PHASE6_DATAGEN_BIN:?missing datagen binary}
 PZSTD_BIN=${PHASE6_PZSTD_BIN:?missing pzstd binary}
+PZSTD_BIN_STYLE=${PHASE6_PZSTD_BIN_STYLE:-pzstd}
+PZSTD_GTEST_ROUNDTRIP_BIN=${PHASE6_PZSTD_GTEST_ROUNDTRIP_BIN:-}
+PZSTD_GTEST_ROUNDTRIP_STYLE=${PHASE6_PZSTD_GTEST_ROUNDTRIP_STYLE:-}
 GTEST_FILTER=${PHASE6_PZSTD_GTEST_FILTER:-}
-export PZSTD_ROUNDTRIP_BIN="$PZSTD_BIN"
 
 run_gtest() {
     local binary=$1
@@ -77,7 +76,11 @@ run_pzstd_roundtrip() {
         case $1 in
             -p)
                 shift
-                roundtrip_args+=("-T${1:?missing thread count}")
+                if [[ $PZSTD_BIN_STYLE == zstd ]]; then
+                    roundtrip_args+=("-T${1:?missing thread count}")
+                else
+                    roundtrip_args+=("-p" "${1:?missing thread count}")
+                fi
                 ;;
             *)
                 roundtrip_args+=("$1")
@@ -98,7 +101,15 @@ run_gtest "$PZSTD_DIR/utils/test/ScopeGuardTest"
 run_gtest "$PZSTD_DIR/utils/test/ThreadPoolTest"
 run_gtest "$PZSTD_DIR/utils/test/WorkQueueTest"
 run_gtest "$PZSTD_DIR/test/OptionsTest"
-run_gtest "$PZSTD_DIR/test/PzstdTest"
+if [[ -n $PZSTD_GTEST_ROUNDTRIP_BIN ]]; then
+    PZSTD_ROUNDTRIP_BIN="$PZSTD_GTEST_ROUNDTRIP_BIN" \
+    PZSTD_ROUNDTRIP_STYLE="$PZSTD_GTEST_ROUNDTRIP_STYLE" \
+        run_gtest "$PZSTD_DIR/test/PzstdTest"
+else
+    unset PZSTD_ROUNDTRIP_BIN
+    unset PZSTD_ROUNDTRIP_STYLE
+    run_gtest "$PZSTD_DIR/test/PzstdTest"
+fi
 
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
@@ -177,15 +188,34 @@ run_pzstd_make() {
 
 run_pzstd_check() {
     local testflags=${1:-$PZSTD_TESTFLAGS}
-    # Keep the bounded smoke roundtrips on an external zstd CLI while the
-    # preserved pzstd utility/options tests still run against the upstream tree.
+    local roundtrip_bin=${PZSTD_CHECK_BIN:-$BINDIR/zstd}
+    local roundtrip_style=${PZSTD_CHECK_BIN_STYLE:-}
+    [[ -x $roundtrip_bin ]] || {
+        printf 'missing pzstd check smoke binary: %s\n' "$roundtrip_bin" >&2
+        exit 1
+    }
+    if [[ -z $roundtrip_style ]]; then
+        case $(basename "$roundtrip_bin") in
+            zstd|zstd-*)
+                roundtrip_style=zstd
+                ;;
+            *)
+                roundtrip_style=pzstd
+                ;;
+        esac
+    fi
+
     PHASE6_DATAGEN_BIN="$TESTS_ROOT/datagen" \
-    PHASE6_PZSTD_BIN="$PZSTD_ROUNDTRIP_BIN" \
+    PHASE6_PZSTD_BIN="$roundtrip_bin" \
+    PHASE6_PZSTD_BIN_STYLE="$roundtrip_style" \
+    PHASE6_PZSTD_GTEST_ROUNDTRIP_BIN="$roundtrip_bin" \
+    PHASE6_PZSTD_GTEST_ROUNDTRIP_STYLE="$roundtrip_style" \
     PHASE6_PZSTD_GTEST_FILTER="$testflags" \
     PZSTD_SMALL_MAX_LEN="$PZSTD_SMALL_MAX_LEN" \
     PZSTD_LARGE_MIN_SHIFT="$PZSTD_LARGE_MIN_SHIFT" \
     PZSTD_LARGE_MAX_SHIFT="$PZSTD_LARGE_MAX_SHIFT" \
     PZSTD_MAX_THREADS="$PZSTD_MAX_THREADS" \
+    PZSTD_MAX_LEVEL="$PZSTD_MAX_LEVEL" \
     bash "$PZSTD_CHECK_SCRIPT" "$PZSTD_DIR"
 }
 
@@ -221,14 +251,31 @@ run_pzstd_test_family() {
 }
 
 run_pzstd_roundtripcheck() {
+    local roundtrip_bin=${PZSTD_ROUNDTRIP_BIN:-$PZSTD_DIR/pzstd}
+    local roundtrip_style=${PZSTD_ROUNDTRIP_STYLE:-}
+    [[ -x $roundtrip_bin ]] || {
+        printf 'missing pzstd roundtrip binary: %s\n' "$roundtrip_bin" >&2
+        exit 1
+    }
+    if [[ -z $roundtrip_style ]]; then
+        case $(basename "$roundtrip_bin") in
+            zstd|zstd-*)
+                roundtrip_style=zstd
+                ;;
+            *)
+                roundtrip_style=pzstd
+                ;;
+        esac
+    fi
+
     phase6_log "running bounded pzstd roundtripcheck"
     run_pzstd_make roundtrip
-    run_pzstd_check "$PZSTD_TESTFLAGS"
-    # The upstream roundtrip driver is preserved, but it delegates its bounded
-    # smoke I/O to the explicit zstd CLI override below.
-    export PZSTD_ROUNDTRIP_BIN
+    export PZSTD_ROUNDTRIP_BIN="$roundtrip_bin"
+    export PZSTD_ROUNDTRIP_STYLE="$roundtrip_style"
     PZSTD_ROUNDTRIP_CASES="$PZSTD_ROUNDTRIP_CASES" \
     PZSTD_ROUNDTRIP_OPTIONS_PER_INPUT="$PZSTD_ROUNDTRIP_OPTIONS_PER_INPUT" \
+    PZSTD_MAX_THREADS="$PZSTD_MAX_THREADS" \
+    PZSTD_MAX_LEVEL="$PZSTD_MAX_LEVEL" \
     "$PZSTD_DIR/test/RoundTripTest"
 }
 

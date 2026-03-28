@@ -9,6 +9,12 @@ use crate::ffi::{
 use core::ffi::{c_int, c_void};
 
 unsafe extern "C" {
+    #[link_name = "libzstd_safe_internal_ZSTD_createCCtx"]
+    fn internal_ZSTD_createCCtx() -> *mut ZSTD_CCtx;
+    #[link_name = "libzstd_safe_internal_ZSTD_freeCCtx"]
+    fn internal_ZSTD_freeCCtx(cctx: *mut ZSTD_CCtx) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_compressBound"]
+    fn internal_ZSTD_compressBound(srcSize: usize) -> usize;
     #[link_name = "libzstd_safe_internal_ZSTD_CCtx_refPrefix_advanced"]
     fn internal_ZSTD_CCtx_refPrefix_advanced(
         cctx: *mut ZSTD_CCtx,
@@ -37,34 +43,43 @@ unsafe extern "C" {
     ) -> usize;
     #[link_name = "libzstd_safe_internal_ZSTD_createCCtx_advanced"]
     fn internal_ZSTD_createCCtx_advanced(customMem: ZSTD_customMem) -> *mut ZSTD_CCtx;
+    #[link_name = "libzstd_safe_internal_ZSTD_CCtx_reset"]
+    fn internal_ZSTD_CCtx_reset(cctx: *mut ZSTD_CCtx, reset: ZSTD_ResetDirective) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_CCtx_setParameter"]
+    fn internal_ZSTD_CCtx_setParameter(
+        cctx: *mut ZSTD_CCtx,
+        param: ZSTD_cParameter,
+        value: c_int,
+    ) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_CCtx_setPledgedSrcSize"]
+    fn internal_ZSTD_CCtx_setPledgedSrcSize(
+        cctx: *mut ZSTD_CCtx,
+        pledgedSrcSize: u64,
+    ) -> usize;
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_createCCtx() -> *mut ZSTD_CCtx {
-    type Fn = unsafe extern "C" fn() -> *mut ZSTD_CCtx;
-    match load_upstream!("ZSTD_createCCtx", Fn) {
-        Some(func) => unsafe { func() },
-        None => null_cctx(),
+    let cctx = unsafe { internal_ZSTD_createCCtx() };
+    if cctx.is_null() {
+        null_cctx()
+    } else {
+        cctx
     }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_freeCCtx(cctx: *mut ZSTD_CCtx) -> usize {
-    type Fn = unsafe extern "C" fn(*mut ZSTD_CCtx) -> usize;
-    match load_upstream!("ZSTD_freeCCtx", Fn) {
-        Some(func) => unsafe { func(cctx) },
-        None if cctx.is_null() => 0,
-        None => generic_error(),
+    if cctx.is_null() {
+        0
+    } else {
+        unsafe { internal_ZSTD_freeCCtx(cctx) }
     }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_compressBound(srcSize: usize) -> usize {
-    type Fn = unsafe extern "C" fn(usize) -> usize;
-    match load_upstream!("ZSTD_compressBound", Fn) {
-        Some(func) => unsafe { func(srcSize) },
-        None => generic_error(),
-    }
+    unsafe { internal_ZSTD_compressBound(srcSize) }
 }
 
 #[no_mangle]
@@ -129,11 +144,7 @@ pub extern "C" fn ZSTD_copyCCtx(
 
 #[no_mangle]
 pub extern "C" fn ZSTD_CCtx_reset(cctx: *mut ZSTD_CCtx, reset: ZSTD_ResetDirective) -> usize {
-    type Fn = unsafe extern "C" fn(*mut ZSTD_CCtx, ZSTD_ResetDirective) -> usize;
-    match load_upstream!("ZSTD_CCtx_reset", Fn) {
-        Some(func) => unsafe { func(cctx, reset) },
-        None => generic_error(),
-    }
+    unsafe { internal_ZSTD_CCtx_reset(cctx, reset) }
 }
 
 #[no_mangle]
@@ -142,11 +153,7 @@ pub extern "C" fn ZSTD_CCtx_setParameter(
     param: ZSTD_cParameter,
     value: c_int,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(*mut ZSTD_CCtx, ZSTD_cParameter, c_int) -> usize;
-    match load_upstream!("ZSTD_CCtx_setParameter", Fn) {
-        Some(func) => unsafe { func(cctx, param, value) },
-        None => generic_error(),
-    }
+    unsafe { internal_ZSTD_CCtx_setParameter(cctx, param, value) }
 }
 
 #[no_mangle]
@@ -164,11 +171,7 @@ pub extern "C" fn ZSTD_CCtx_getParameter(
 
 #[no_mangle]
 pub extern "C" fn ZSTD_CCtx_setPledgedSrcSize(cctx: *mut ZSTD_CCtx, pledgedSrcSize: u64) -> usize {
-    type Fn = unsafe extern "C" fn(*mut ZSTD_CCtx, u64) -> usize;
-    match load_upstream!("ZSTD_CCtx_setPledgedSrcSize", Fn) {
-        Some(func) => unsafe { func(cctx, pledgedSrcSize) },
-        None => generic_error(),
-    }
+    unsafe { internal_ZSTD_CCtx_setPledgedSrcSize(cctx, pledgedSrcSize) }
 }
 
 #[no_mangle]

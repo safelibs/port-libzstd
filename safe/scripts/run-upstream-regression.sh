@@ -17,8 +17,6 @@ RESULTS_FILE="$WORK_DIR/results.csv"
 STAMP_FILE="$WORK_DIR/.stamp"
 PRIMARY_BASELINE_FILE="$ORIGINAL_ROOT/tests/regression/results.csv"
 COVERAGE_BASELINE_FILE="$ORIGINAL_ROOT/tests/regression/regression.out"
-FIXTURE_RESULTS_FILE="$REGRESSION_FIXTURE_ROOT/results-safe.csv"
-FIXTURE_HASH_FILE="$REGRESSION_FIXTURE_ROOT/results-safe.sha256"
 REGRESSION_BIN="$SAFE_ROOT/out/phase6/whitebox/regression/regression-offline"
 PHASE6_REGRESSION_JOBS=${PHASE6_REGRESSION_JOBS:-$(python3 - <<'PY'
 import os
@@ -62,45 +60,6 @@ stage_regression_cache() {
     fi
     rm -rf "$FRAGMENTS_DIR"
     install -d "$FRAGMENTS_DIR"
-}
-
-phase6_regression_source_fingerprint() {
-    python3 - "$SAFE_ROOT" "$ORIGINAL_ROOT" <<'PY'
-from pathlib import Path
-import hashlib
-import sys
-
-safe_root = Path(sys.argv[1])
-original_root = Path(sys.argv[2])
-repo_root = safe_root.parent
-files = [safe_root / "scripts" / "run-upstream-regression.sh"]
-for root in (
-    safe_root / "src",
-    safe_root / "include",
-    safe_root / "tests" / "ported" / "whitebox",
-    original_root / "tests" / "regression",
-):
-    files.extend(sorted(path for path in root.rglob("*") if path.is_file()))
-
-digest = hashlib.sha256()
-for path in sorted(files):
-    digest.update(path.relative_to(repo_root).as_posix().encode())
-    digest.update(b"\0")
-    digest.update(path.read_bytes())
-    digest.update(b"\0")
-print(digest.hexdigest())
-PY
-}
-
-use_cached_regression_results() {
-    [[ -f $FIXTURE_RESULTS_FILE && -f $FIXTURE_HASH_FILE ]] || return 1
-
-    local current_hash expected_hash
-    current_hash=$(phase6_regression_source_fingerprint)
-    expected_hash=$(tr -d '[:space:]' < "$FIXTURE_HASH_FILE")
-    [[ -n $expected_hash && $current_hash == "$expected_hash" ]] || return 1
-
-    cp "$FIXTURE_RESULTS_FILE" "$RESULTS_FILE"
 }
 
 compute_regression_results() {
@@ -306,12 +265,8 @@ if regression_results_are_fresh; then
     phase6_log "regression results already fresh; skipping recomputation"
 else
     stage_regression_cache
-    if use_cached_regression_results; then
-        phase6_log "using cached safe regression results fixture"
-    else
-        phase6_log "running offline regression coverage rows against the safe harness with $PHASE6_REGRESSION_JOBS workers"
-        compute_regression_results
-    fi
+    phase6_log "running offline regression coverage rows against the safe harness with $PHASE6_REGRESSION_JOBS workers"
+    compute_regression_results
 fi
 
 phase6_log "comparing regression matrix coverage against checked-in baselines"

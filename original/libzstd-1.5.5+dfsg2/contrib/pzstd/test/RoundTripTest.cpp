@@ -25,6 +25,21 @@ using namespace std;
 using namespace pzstd;
 
 namespace {
+unsigned readPositiveEnvOrDefault(const char* name, unsigned fallback) {
+  const char* value = std::getenv(name);
+  if (value == nullptr || *value == '\0') {
+    return fallback;
+  }
+
+  char* end = nullptr;
+  unsigned long parsed = std::strtoul(value, &end, 10);
+  if (end == value || *end != '\0' || parsed == 0 ||
+      parsed > std::numeric_limits<unsigned>::max()) {
+    return fallback;
+  }
+  return static_cast<unsigned>(parsed);
+}
+
 string
 writeData(size_t size, double matchProba, double litProba, unsigned seed) {
   std::unique_ptr<uint8_t[]> buf(new uint8_t[size]);
@@ -53,28 +68,17 @@ Options generateOptions(Generator& gen, const string& inputFile) {
   options.inputFiles = {inputFile};
   options.overwrite = true;
 
-  std::uniform_int_distribution<unsigned> numThreads{1, 32};
-  std::uniform_int_distribution<unsigned> compressionLevel{1, 10};
+  const unsigned maxThreads =
+      readPositiveEnvOrDefault("PZSTD_MAX_THREADS", 32);
+  const unsigned maxLevel =
+      readPositiveEnvOrDefault("PZSTD_MAX_LEVEL", 10);
+  std::uniform_int_distribution<unsigned> numThreads{1, maxThreads};
+  std::uniform_int_distribution<unsigned> compressionLevel{1, maxLevel};
 
   options.numThreads = numThreads(gen);
   options.compressionLevel = compressionLevel(gen);
 
   return options;
-}
-
-unsigned readPositiveEnvOrDefault(const char* name, unsigned fallback) {
-  const char* value = std::getenv(name);
-  if (value == nullptr || *value == '\0') {
-    return fallback;
-  }
-
-  char* end = nullptr;
-  unsigned long parsed = std::strtoul(value, &end, 10);
-  if (end == value || *end != '\0' || parsed == 0 ||
-      parsed > std::numeric_limits<unsigned>::max()) {
-    return fallback;
-  }
-  return static_cast<unsigned>(parsed);
 }
 }
 

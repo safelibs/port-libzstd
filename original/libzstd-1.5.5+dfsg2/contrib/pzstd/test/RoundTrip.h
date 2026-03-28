@@ -60,15 +60,19 @@ inline bool roundTripWithExternalBin(const std::string& binary,
                                      const std::string& compressedFile,
                                      const std::string& decompressedFile) {
   unsigned threads = options.numThreads == 0 ? 1 : options.numThreads;
-  std::vector<std::string> compressArgs = {
-      "-q",
-      "-f",
-      "-T" + std::to_string(threads),
-      "-" + std::to_string(options.compressionLevel),
-      "-o",
-      compressedFile,
-      source,
-  };
+  const char* styleEnv = std::getenv("PZSTD_ROUNDTRIP_STYLE");
+  const bool useZstdStyle = styleEnv != nullptr && std::string(styleEnv) == "zstd";
+  std::vector<std::string> compressArgs = {"-q", "-f"};
+  if (useZstdStyle) {
+    compressArgs.push_back("-T" + std::to_string(threads));
+  } else {
+    compressArgs.push_back("-p");
+    compressArgs.push_back(std::to_string(threads));
+  }
+  compressArgs.push_back("-" + std::to_string(options.compressionLevel));
+  compressArgs.push_back("-o");
+  compressArgs.push_back(compressedFile);
+  compressArgs.push_back(source);
   if (runProgram(binary, compressArgs) != 0) {
     return false;
   }

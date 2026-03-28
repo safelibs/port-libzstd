@@ -46,6 +46,10 @@ TEST(Pzstd, SmallSizes) {
   std::fprintf(stderr, "Pzstd.SmallSizes seed: %u\n", seed);
   std::mt19937 gen(seed);
   const unsigned maxLen = readPositiveEnvOrDefault("PZSTD_SMALL_MAX_LEN", 255);
+  const unsigned maxThreads =
+      readPositiveEnvOrDefault("PZSTD_MAX_THREADS", 2);
+  const unsigned maxLevel =
+      readPositiveEnvOrDefault("PZSTD_MAX_LEVEL", 4);
 
   for (unsigned len = 1; len <= maxLen; ++len) {
     if (len % 16 == 0) {
@@ -61,8 +65,11 @@ TEST(Pzstd, SmallSizes) {
       std::fclose(fd);
       ASSERT_EQ(written, len);
     }
-    for (unsigned numThreads = 1; numThreads <= 2; ++numThreads) {
-      for (unsigned level = 1; level <= 4; level *= 4) {
+    for (unsigned numThreads = 1; numThreads <= maxThreads; numThreads *= 2) {
+      for (unsigned level : {1u, 4u}) {
+        if (level > maxLevel) {
+          continue;
+        }
         auto errorGuard = makeScopeGuard([&] {
           std::fprintf(stderr, "# threads: %u\n", numThreads);
           std::fprintf(stderr, "compression level: %u\n", level);
@@ -90,6 +97,8 @@ TEST(Pzstd, LargeSizes) {
       readPositiveEnvOrDefault("PZSTD_LARGE_MAX_SHIFT", 24);
   const unsigned maxThreads =
       readPositiveEnvOrDefault("PZSTD_MAX_THREADS", 16);
+  const unsigned maxLevel =
+      readPositiveEnvOrDefault("PZSTD_MAX_LEVEL", 4);
 
   for (unsigned len = 1U << minShift; len <= (1U << maxShift); len *= 2) {
     std::string inputFile = std::tmpnam(nullptr);
@@ -103,7 +112,10 @@ TEST(Pzstd, LargeSizes) {
       ASSERT_EQ(written, len);
     }
     for (unsigned numThreads = 1; numThreads <= maxThreads; numThreads *= 4) {
-      for (unsigned level = 1; level <= 4; level *= 4) {
+      for (unsigned level : {1u, 4u}) {
+        if (level > maxLevel) {
+          continue;
+        }
         auto errorGuard = makeScopeGuard([&] {
           std::fprintf(stderr, "# threads: %u\n", numThreads);
           std::fprintf(stderr, "compression level: %u\n", level);
