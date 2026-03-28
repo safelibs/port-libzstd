@@ -44,7 +44,6 @@ int main(int argc, char const **argv) {
     fprintf(stderr, "WARNING: No files passed to %s\n", argv[0]);
   for (i = 0; i < files->tableSize; ++i) {
     char const *fileName = files->fileNames[i];
-    DEBUGLOG(3, "Running %s", fileName);
     size_t const fileSize = UTIL_getFileSize(fileName);
     size_t readSize;
     FILE *file;

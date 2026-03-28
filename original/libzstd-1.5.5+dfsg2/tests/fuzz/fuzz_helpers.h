@@ -15,9 +15,7 @@
 #ifndef FUZZ_HELPERS_H
 #define FUZZ_HELPERS_H
 
-#include "debug.h"
 #include "fuzz.h"
-#include "xxhash.h"
 #include "zstd.h"
 #include "fuzz_data_producer.h"
 #include <stdint.h>
@@ -73,6 +71,11 @@ void* FUZZ_malloc_rand(size_t size,  FUZZ_dataProducer_t *producer);
  * memcmp but accepts NULL.
  */
 int FUZZ_memcmp(void const* lhs, void const* rhs, size_t size);
+
+/**
+ * Stable local hash used for determinism checks without private headers.
+ */
+uint64_t FUZZ_hashBuffer(void const* ptr, size_t size);
 
 #ifdef __cplusplus
 }

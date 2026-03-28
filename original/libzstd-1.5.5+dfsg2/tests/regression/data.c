@@ -20,10 +20,8 @@
 
 #include <curl/curl.h>
 
-#include "mem.h"
 #include "util.h"
-#define XXH_STATIC_LINKING_ONLY
-#include "xxhash.h"
+#include "../test_hash.h"
 
 /**
  * Data objects
@@ -306,7 +304,7 @@ static char* cat2(char const* str1, char const* str2) {
  */
 typedef struct {
     FILE* file;
-    XXH64_state_t xxhash64;
+    TEST_hash64_state_t hash64;
     int error;
 } curl_data_t;
 
@@ -316,7 +314,7 @@ static curl_data_t curl_data_create(
     data_type_t type) {
     curl_data_t cdata = {};
 
-    XXH64_reset(&cdata.xxhash64, 0);
+    TEST_hash64_reset(&cdata.hash64, 0);
 
     assert(UTIL_isDirectory(g_data_dir));
 
@@ -355,7 +353,7 @@ static int curl_data_free(curl_data_t cdata) {
 static size_t curl_write(void* data, size_t size, size_t count, void* ptr) {
     curl_data_t* cdata = (curl_data_t*)ptr;
     size_t const written = fwrite(data, size, count, cdata->file);
-    XXH64_update(&cdata->xxhash64, data, written * size);
+    TEST_hash64_update(&cdata->hash64, data, written * size);
     return written;
 }
 
@@ -397,11 +395,11 @@ static int curl_download_resource(
         return EIO;
     }
     /* Check that the hash matches. */
-    if (XXH64_digest(&cdata.xxhash64) != resource->xxhash64) {
+    if (TEST_hash64_digest(&cdata.hash64) != resource->xxhash64) {
         fprintf(
             stderr,
             "checksum does not match: 0x%llxLL != 0x%llxLL\n",
-            (unsigned long long)XXH64_digest(&cdata.xxhash64),
+            (unsigned long long)TEST_hash64_digest(&cdata.hash64),
             (unsigned long long)resource->xxhash64);
         return EINVAL;
     }
@@ -487,35 +485,39 @@ static void data_free_paths(data_t* const* data) {
 
 static char const kStampName[] = "STAMP";
 
-static void xxh_update_le(XXH64_state_t* state, uint64_t data) {
-    if (!MEM_isLittleEndian())
-        data = MEM_swap64(data);
-    XXH64_update(state, &data, sizeof(data));
+static void hash64_update_le(TEST_hash64_state_t* state, uint64_t data) {
+    uint8_t bytes[sizeof(data)];
+    size_t i;
+
+    for (i = 0; i < sizeof(data); ++i) {
+        bytes[i] = (uint8_t)(data >> (8 * i));
+    }
+    TEST_hash64_update(state, bytes, sizeof(bytes));
 }
 
 /** Hash the data to create the stamp. */
 static uint64_t stamp_hash(data_t const* const* data) {
-    XXH64_state_t state;
+    TEST_hash64_state_t state;
 
-    XXH64_reset(&state, 0);
+    TEST_hash64_reset(&state, 0);
     assert(data != NULL);
     for (; *data != NULL; ++data) {
         data_t const* datum = *data;
         /* We don't care about the URL that we fetch from. */
         /* The path is derived from the name. */
-        XXH64_update(&state, datum->name, strlen(datum->name));
-        xxh_update_le(&state, datum->data.xxhash64);
-        xxh_update_le(&state, datum->dict.xxhash64);
-        xxh_update_le(&state, datum->type);
+        TEST_hash64_update(&state, datum->name, strlen(datum->name));
+        hash64_update_le(&state, datum->data.xxhash64);
+        hash64_update_le(&state, datum->dict.xxhash64);
+        hash64_update_le(&state, datum->type);
     }
-    return XXH64_digest(&state);
+    return TEST_hash64_digest(&state);
 }
 
 /** Check if the stamp matches the stamp in the cache directory. */
 static int stamp_check(char const* dir, data_t const* const* data) {
     char* stamp = cat3(dir, "/", kStampName);
     uint64_t const expected = stamp_hash(data);
-    XXH64_canonical_t actual;
+    TEST_hash64_canonical_t actual;
     FILE* stampfile = NULL;
     int matches = 0;
 
@@ -538,7 +540,7 @@ static int stamp_check(char const* dir, data_t const* const* data) {
         goto out;
     }
 
-    matches = (expected == XXH64_hashFromCanonical(&actual));
+    matches = (expected == TEST_hash64_fromCanonical(&actual));
     if (matches)
         fprintf(stderr, "stamp matches: reusing the cached data\n");
     else
@@ -565,9 +567,9 @@ stamp_write(char const* dir, data_t const* const* data, int const data_err) {
         err = data_err;
         goto out;
     }
-    XXH64_canonical_t hash;
+    TEST_hash64_canonical_t hash;
 
-    XXH64_canonicalFromHash(&hash, stamp_hash(data));
+    TEST_hash64_canonicalFromHash(&hash, stamp_hash(data));
 
     stampfile = fopen(stamp, "wb");
     if (stampfile == NULL)

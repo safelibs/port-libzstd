@@ -9,31 +9,31 @@
  */
 
 #include "seqgen.h"
-#include "mem.h"
 #include <string.h>
+#include <stdint.h>
 
 #define MIN(a, b)  ((a) < (b) ? (a) : (b))
 
 static const size_t kMatchBytes = 128;
 
 #define SEQ_rotl32(x,r) ((x << r) | (x >> (32 - r)))
-static BYTE SEQ_randByte(unsigned* src)
+static uint8_t SEQ_randByte(unsigned* src)
 {
-    static const U32 prime1 = 2654435761U;
-    static const U32 prime2 = 2246822519U;
-    U32 rand32 = *src;
+    static const uint32_t prime1 = 2654435761U;
+    static const uint32_t prime2 = 2246822519U;
+    uint32_t rand32 = *src;
     rand32 *= prime1;
     rand32 ^= prime2;
     rand32  = SEQ_rotl32(rand32, 13);
     *src = rand32;
-    return (BYTE)(rand32 >> 5);
+    return (uint8_t)(rand32 >> 5);
 }
 
 SEQ_stream SEQ_initStream(unsigned seed)
 {
     SEQ_stream stream;
     stream.state = 0;
-    XXH64_reset(&stream.xxh, 0);
+    TEST_hash64_reset(&stream.hash, 0);
     stream.seed = seed;
     return stream;
 }
@@ -49,9 +49,9 @@ static size_t SEQ_gen_matchLength(SEQ_stream* stream, unsigned value,
         ml_match_bytes,
         ml_last_byte,
     } ml_state;
-    BYTE* const ostart = (BYTE*)out->dst;
-    BYTE* const oend = ostart + out->size;
-    BYTE* op = ostart + out->pos;
+    uint8_t* const ostart = (uint8_t*)out->dst;
+    uint8_t* const oend = ostart + out->size;
+    uint8_t* op = ostart + out->pos;
 
     switch ((ml_state)stream->state) {
     case ml_first_byte:
@@ -100,7 +100,7 @@ static size_t SEQ_gen_matchLength(SEQ_stream* stream, unsigned value,
         stream->bytesLeft = 0;
         break;
     }
-    XXH64_update(&stream->xxh, ostart + out->pos, (op - ostart) - out->pos);
+    TEST_hash64_update(&stream->hash, ostart + out->pos, (op - ostart) - out->pos);
     out->pos = op - ostart;
     return stream->bytesLeft;
 }
@@ -118,9 +118,9 @@ static size_t SEQ_gen_litLength(SEQ_stream* stream, unsigned value, SEQ_outBuffe
         ll_literals,
         ll_run_match,
     } ll_state;
-    BYTE* const ostart = (BYTE*)out->dst;
-    BYTE* const oend = ostart + out->size;
-    BYTE* op = ostart + out->pos;
+    uint8_t* const ostart = (uint8_t*)out->dst;
+    uint8_t* const oend = ostart + out->size;
+    uint8_t* op = ostart + out->pos;
 
     switch ((ll_state)stream->state) {
     case ll_start:
@@ -164,7 +164,7 @@ static size_t SEQ_gen_litLength(SEQ_stream* stream, unsigned value, SEQ_outBuffe
         stream->bytesLeft = 0;
         break;
     }
-    XXH64_update(&stream->xxh, ostart + out->pos, (op - ostart) - out->pos);
+    TEST_hash64_update(&stream->hash, ostart + out->pos, (op - ostart) - out->pos);
     out->pos = op - ostart;
     return stream->bytesLeft;
 }
@@ -183,9 +183,9 @@ static size_t SEQ_gen_offset(SEQ_stream* stream, unsigned value, SEQ_outBuffer* 
         of_offset,
         of_run_match,
     } of_state;
-    BYTE* const ostart = (BYTE*)out->dst;
-    BYTE* const oend = ostart + out->size;
-    BYTE* op = ostart + out->pos;
+    uint8_t* const ostart = (uint8_t*)out->dst;
+    uint8_t* const oend = ostart + out->size;
+    uint8_t* op = ostart + out->pos;
 
     switch ((of_state)stream->state) {
     case of_start:
@@ -234,7 +234,7 @@ static size_t SEQ_gen_offset(SEQ_stream* stream, unsigned value, SEQ_outBuffer* 
         stream->bytesLeft = 0;
         break;
     }
-    XXH64_update(&stream->xxh, ostart + out->pos, (op - ostart) - out->pos);
+    TEST_hash64_update(&stream->hash, ostart + out->pos, (op - ostart) - out->pos);
     out->pos = op - ostart;
     return stream->bytesLeft;
 }
@@ -253,8 +253,8 @@ size_t SEQ_gen(SEQ_stream* stream, SEQ_gen_type type, unsigned value, SEQ_outBuf
     }
 }
 
-/* Returns the xxhash of the data produced so far */
-XXH64_hash_t SEQ_digest(SEQ_stream const* stream)
+/* Returns the digest of the data produced so far */
+TEST_hash64_t SEQ_digest(SEQ_stream const* stream)
 {
-    return XXH64_digest(&stream->xxh);
+    return TEST_hash64_digest(&stream->hash);
 }

@@ -42,7 +42,7 @@ static size_t roundTripTest(void* result, size_t resultCapacity,
         cSize = ZSTD_compress2(cctx, compressed, compressedCapacity, src, srcSize);
         FUZZ_ZASSERT(cSize);
         {
-            XXH64_hash_t const hash0 = XXH64(compressed, cSize, 0);
+            uint64_t const hash0 = FUZZ_hashBuffer(compressed, cSize);
             size_t const cSize0 = cSize;
             FUZZ_dataProducer_rollBack(producer, remainingBytes);
             FUZZ_ZASSERT(ZSTD_CCtx_reset(cctx, ZSTD_reset_session_and_parameters));
@@ -51,7 +51,7 @@ static size_t roundTripTest(void* result, size_t resultCapacity,
             FUZZ_ZASSERT(ZSTD_CCtx_loadDictionary(cctx, dict.buff, dict.size));
             cSize = ZSTD_compress2(cctx, compressed, compressedCapacity, src, srcSize);
             FUZZ_ASSERT(cSize == cSize0);
-            FUZZ_ASSERT(XXH64(compressed, cSize, 0) == hash0);
+            FUZZ_ASSERT(FUZZ_hashBuffer(compressed, cSize) == hash0);
         }
         FUZZ_ZASSERT(ZSTD_DCtx_loadDictionary(dctx, dict.buff, dict.size));
         {
@@ -67,12 +67,12 @@ static size_t roundTripTest(void* result, size_t resultCapacity,
                                         src, srcSize, dict.buff, dict.size, cLevel);
         FUZZ_ZASSERT(cSize);
         {
-            XXH64_hash_t const hash0 = XXH64(compressed, cSize, 0);
+            uint64_t const hash0 = FUZZ_hashBuffer(compressed, cSize);
             size_t const cSize0 = cSize;
             cSize = ZSTD_compress_usingDict(cctx, compressed, compressedCapacity,
                                             src, srcSize, dict.buff, dict.size, cLevel);
             FUZZ_ASSERT(cSize == cSize0);
-            FUZZ_ASSERT(XXH64(compressed, cSize, 0) == hash0);
+            FUZZ_ASSERT(FUZZ_hashBuffer(compressed, cSize) == hash0);
         }
         {
             size_t const ret = ZSTD_decompress_usingDict(dctx, result, resultCapacity,

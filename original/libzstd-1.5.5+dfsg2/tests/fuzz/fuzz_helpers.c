@@ -46,3 +46,17 @@ int FUZZ_memcmp(void const* lhs, void const* rhs, size_t size)
     }
     return memcmp(lhs, rhs, size);
 }
+
+uint64_t FUZZ_hashBuffer(void const* ptr, size_t size)
+{
+    unsigned char const* const bytes = (const unsigned char*)ptr;
+    uint64_t hash = 1469598103934665603ULL;
+    size_t i;
+
+    for (i = 0; i < size; ++i) {
+        hash ^= bytes[i];
+        hash *= 1099511628211ULL;
+    }
+
+    return hash;
+}

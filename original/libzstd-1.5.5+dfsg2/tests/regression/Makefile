@@ -23,13 +23,10 @@ REGRESSION_LDFLAGS = $(LDFLAGS) $(CURL_LDFLAGS)
 
 all: test
 
-xxhash.o: $(LIBDIR)/common/xxhash.c $(LIBDIR)/common/xxhash.h
-	$(CC) $(REGRESSION_CFLAGS) $(REGRESSION_CPPFLAGS) $< -c -o $@
-
 util.o: $(PROGDIR)/util.c $(PROGDIR)/util.h
 	$(CC) $(REGRESSION_CFLAGS) $(REGRESSION_CPPFLAGS) $< -c -o $@
 
-data.o: data.c data.h $(PROGDIR)/util.h $(LIBDIR)/common/xxhash.h
+data.o: data.c data.h $(PROGDIR)/util.h ../test_hash.h
 	$(CC) $(REGRESSION_CFLAGS) $(REGRESSION_CPPFLAGS) $< -c -o $@
 
 config.o: config.c config.h levels.h
@@ -51,7 +48,7 @@ libzstd.a:
 	$(MAKE) -C $(LIBDIR) libzstd.a-mt
 	cp $(LIBDIR)/libzstd.a .
 
-test: test.o data.o config.o util.o method.o result.o xxhash.o libzstd.a
+test: test.o data.o config.o util.o method.o result.o libzstd.a
 	$(CC) $^ $(REGRESSION_LDFLAGS) -o $@
 
 .PHONY: clean
