@@ -274,8 +274,8 @@ static int testFrameHelpers(const void* src,
 
     CHECK(ZSTD_getFrameContentSize(compressed, compressedSize) == (unsigned long long)srcSize,
           "ZSTD_getFrameContentSize mismatch\n");
-    CHECK(ZSTD_getDecompressedSize(compressed, compressedSize) == (unsigned long long)srcSize,
-          "ZSTD_getDecompressedSize mismatch\n");
+    CHECK(ZSTD_getDictID_fromFrame(compressed, compressedSize) == 0,
+          "unexpected dictionary ID in complete frame\n");
     CHECK(ZSTD_findFrameCompressedSize(compressed, compressedSize) == compressedSize,
           "ZSTD_findFrameCompressedSize mismatch\n");
 
@@ -560,8 +560,8 @@ static int testMissingContentSize(const void* src, size_t srcSize, int level)
 
     CHECK(ZSTD_getFrameContentSize(compressed, compressedSize) == unknown,
           "frame content size should be unknown\n");
-    CHECK(ZSTD_getDecompressedSize(compressed, compressedSize) == 0,
-          "deprecated getDecompressedSize should return 0 when size is hidden\n");
+    CHECK(ZSTD_getDictID_fromFrame(compressed, compressedSize) == 0,
+          "unexpected dictionary ID in hidden-size frame\n");
     decodedSize = ZSTD_decompress(decoded, srcSize, compressed, compressedSize);
     CHECK(!ZSTD_isError(decodedSize), "decompress failed for size-hidden frame: %s\n",
           ZSTD_getErrorName(decodedSize));
