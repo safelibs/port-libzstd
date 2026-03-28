@@ -124,14 +124,15 @@
         "build",
         "runtime"
       ],
-      "runtime_functionality": "Btrfs userspace tools expose zstd filesystem compression controls such as mount -o compress=zstd[:level], btrfs filesystem defrag -czstd, and btrfs property set ... compression zstd.",
+      "runtime_functionality": "The btrfs userspace tool uses zstd decompression for compressed send/receive flows, especially btrfs send --compressed-data and btrfs receive --force-decompress when handling zstd-compressed extents.",
       "evidence": {
         "build_dependency": "The btrfs-progs source package Build-Depends on libzstd-dev.",
         "runtime_dependency": "btrfs-progs Depends on libzstd1.",
         "feature_refs": [
-          "Documentation/ch-compression.rst",
-          "Documentation/ch-mount-options.rst",
-          "Documentation/btrfs-filesystem.rst"
+          "Documentation/btrfs-send.rst",
+          "Documentation/btrfs-receive.rst",
+          "cmds/send.c",
+          "cmds/receive.c"
         ]
       }
     },
