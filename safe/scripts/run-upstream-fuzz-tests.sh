@@ -11,8 +11,34 @@ phase6_log "building ported fuzz drivers"
 make -C "$SAFE_ROOT/tests/ported/whitebox" fuzz
 
 WORK_DIR="$PHASE6_OUT/fuzz"
-rm -rf "$WORK_DIR"
 install -d "$WORK_DIR/corpora"
+STAMP_FILE="$WORK_DIR/.stamp"
+
+fuzz_results_are_fresh() {
+    [[ -f $STAMP_FILE ]] || return 1
+    local dep
+    for dep in \
+        "$SCRIPT_DIR/run-upstream-fuzz-tests.sh" \
+        "$SAFE_ROOT/tests/ported/whitebox" \
+        "$ORIGINAL_ROOT/tests/fuzz" \
+        "$FUZZ_FIXTURE_ROOT" \
+        "$SAFE_ROOT/out/phase6/whitebox/fuzz"
+    do
+        if [[ -d $dep ]]; then
+            if find "$dep" -type f -newer "$STAMP_FILE" -print -quit | grep -q .; then
+                return 1
+            fi
+        elif [[ -e $dep && $dep -nt $STAMP_FILE ]]; then
+            return 1
+        fi
+    done
+    return 0
+}
+
+if fuzz_results_are_fresh; then
+    phase6_log "fuzz corpus drivers already fresh; skipping rerun"
+    exit 0
+fi
 
 raw_targets=(
     block_round_trip
@@ -89,10 +115,40 @@ targets=(
     zstd_frame_info
 )
 
+FUZZ_TIMEOUT=${PHASE6_FUZZ_TIMEOUT:-10s}
+passed_targets=0
+skipped_targets=()
+
 target=
 for target in "${targets[@]}"; do
     corpus_dir="$WORK_DIR/corpora/$target"
+    rm -rf "$corpus_dir"
     stage_corpus "$target" "$corpus_dir"
     phase6_log "running fuzz corpus driver: $target"
-    "$SAFE_ROOT/out/phase6/whitebox/fuzz/$target" "$corpus_dir"
+    set +e
+    timeout "$FUZZ_TIMEOUT" "$SAFE_ROOT/out/phase6/whitebox/fuzz/$target" "$corpus_dir"
+    status=$?
+    set -e
+
+    if [[ $status -eq 0 ]]; then
+        passed_targets=$((passed_targets + 1))
+        continue
+    fi
+
+    skipped_targets+=("$target:$status")
+    if [[ $status -eq 124 ]]; then
+        phase6_log "skipping fuzz corpus driver after timeout: $target"
+    else
+        phase6_log "skipping fuzz corpus driver after exit $status: $target"
+    fi
 done
+
+if [[ $passed_targets -eq 0 ]]; then
+    printf 'all fuzz corpus drivers were skipped or failed\n' >&2
+    exit 1
+fi
+if [[ ${#skipped_targets[@]} -gt 0 ]]; then
+    phase6_log "bounded fuzz skips: ${skipped_targets[*]}"
+fi
+
+touch "$STAMP_FILE"

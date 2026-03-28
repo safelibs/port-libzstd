@@ -104,6 +104,34 @@ phase6_run_zstreamtest_smoke() {
     "$TESTS_ROOT/$binary" --newapi -t1 -T1s >/dev/null
 }
 
+phase6_try_zstreamtest_smoke() {
+    local label=${1:?missing label}
+    local binary=${2:?missing zstreamtest binary}
+    local reason=${3:?missing skip reason}
+    local pattern=${4:?missing skip pattern}
+    local log
+    log=$(mktemp)
+
+    set +e
+    phase6_run_zstreamtest_smoke "$binary" >"$log" 2>&1
+    local status=$?
+    set -e
+
+    if [[ $status -eq 0 ]]; then
+        rm -f "$log"
+        return 0
+    fi
+    if grep -Eq "$pattern" "$log"; then
+        phase6_log "skipping $label ($reason)"
+        rm -f "$log"
+        return 1
+    fi
+
+    cat "$log" >&2
+    rm -f "$log"
+    exit "$status"
+}
+
 phase6_run_optional_tests_makefile_coverage() {
     phase6_log "dispatching phase-6 optional tests/Makefile targets"
 
@@ -141,7 +169,11 @@ phase6_run_optional_tests_makefile_coverage() {
     if phase6_have_sanitizer_toolchain thread; then
         phase6_log "running tests:zstreamtest_tsan smoke"
         phase6_make_upstream_test_targets zstreamtest_tsan
-        phase6_run_zstreamtest_smoke zstreamtest_tsan
+        phase6_try_zstreamtest_smoke \
+            "tests:zstreamtest_tsan" \
+            zstreamtest_tsan \
+            "thread sanitizer runtime unsupported on this host" \
+            'FATAL: ThreadSanitizer: unexpected memory mapping'
     else
         phase6_log "skipping tests:zstreamtest_tsan (thread sanitizer toolchain unavailable)"
     fi
