@@ -41,24 +41,30 @@ compressed_targets=(
 stage_corpus() {
     local target=$1
     local dest=$2
+    local upstream_dir=
     install -d "$dest"
-    if [[ -d $ORIGINAL_ROOT/tests/fuzz/corpora/$target ]]; then
-        rsync -a "$ORIGINAL_ROOT/tests/fuzz/corpora/$target/" "$dest/"
+    upstream_dir="$ORIGINAL_ROOT/tests/fuzz/corpora/$target"
+    if [[ -d $upstream_dir ]] && find "$upstream_dir" -type f -print -quit | grep -q .; then
+        rsync -a "$upstream_dir/" "$dest/"
         return
     fi
-    if [[ -d $ORIGINAL_ROOT/tests/fuzz/corpora/${target}-seed ]]; then
-        rsync -a "$ORIGINAL_ROOT/tests/fuzz/corpora/${target}-seed/" "$dest/"
+    upstream_dir="$ORIGINAL_ROOT/tests/fuzz/corpora/${target}-seed"
+    if [[ -d $upstream_dir ]] && find "$upstream_dir" -type f -print -quit | grep -q .; then
+        rsync -a "$upstream_dir/" "$dest/"
         return
     fi
     if printf '%s\n' "${raw_targets[@]}" | grep -qx "$target"; then
         rsync -a "$FUZZ_FIXTURE_ROOT/raw/" "$dest/"
-        return
-    fi
-    if printf '%s\n' "${compressed_targets[@]}" | grep -qx "$target"; then
+    elif printf '%s\n' "${compressed_targets[@]}" | grep -qx "$target"; then
         rsync -a "$FUZZ_FIXTURE_ROOT/compressed/" "$dest/"
-        return
+    else
+        rsync -a "$FUZZ_FIXTURE_ROOT/dictionary/" "$dest/"
     fi
-    rsync -a "$FUZZ_FIXTURE_ROOT/dictionary/" "$dest/"
+
+    if ! find "$dest" -type f -print -quit | grep -q .; then
+        printf 'no staged corpus inputs for fuzz target: %s\n' "$target" >&2
+        exit 1
+    fi
 }
 
 targets=(

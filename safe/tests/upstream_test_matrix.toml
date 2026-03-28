@@ -461,6 +461,22 @@ helper_paths = [
 ]
 
 [[entry]]
+id = "contrib/pzstd:roundtripcheck"
+path = "original/libzstd-1.5.5+dfsg2/contrib/pzstd"
+source = "original/libzstd-1.5.5+dfsg2/contrib/pzstd/Makefile"
+kind = "make-target"
+make_target = "roundtripcheck"
+execution_strategy = "offline-roundtrip replay"
+owning_phase = 6
+release_gate = true
+prerequisites = ["cmake", "libgtest-dev", "googletest staged locally"]
+offline_strategy = "replace git clone with a system googletest installation staged into contrib/pzstd/googletest/ and run the preserved roundtrip corpus offline"
+helper_paths = [
+  "safe/scripts/run-pzstd-tests.sh",
+  "safe/scripts/phase6-common.sh",
+]
+
+[[entry]]
 id = "contrib/pzstd:test-pzstd32"
 path = "original/libzstd-1.5.5+dfsg2/contrib/pzstd"
 source = "original/libzstd-1.5.5+dfsg2/contrib/pzstd/Makefile"

@@ -88,11 +88,23 @@ for key in coverage:
         baseline[key] = coverage[key]
         supplemented += 1
 
-exact = sum(1 for key, value in actual.items() if baseline[key] == value)
-changed = len(actual) - exact
+mismatches = []
+for key, value in actual.items():
+    if baseline[key] != value:
+        mismatches.append((key, baseline[key], value))
+
+if mismatches:
+    preview = ", ".join(
+        f"{data}/{config}/{method}: expected {expected} got {actual_value}"
+        for (data, config, method), expected, actual_value in mismatches[:5]
+    )
+    raise SystemExit(
+        f"regression matrix drifted from the checked-in baseline in {len(mismatches)} rows; "
+        f"first mismatches: {preview}"
+    )
+
 print(
-    f"regression matrix matched {exact}/{len(actual)} rows exactly; "
-    f"{changed} rows differ numerically from the upstream baseline "
+    f"regression matrix matched all {len(actual)} rows exactly "
     f"({len(actual) - supplemented} rows from results.csv, {supplemented} supplemented from regression.out)"
 )
 PY
