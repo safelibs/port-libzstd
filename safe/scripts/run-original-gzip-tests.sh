@@ -54,7 +54,7 @@ tests=(
     for local_test in "${tests[@]}"; do
         expect_failure=no
         case "$local_test" in
-            helin-segv|hufts|keep|list|null-suffix-clobber|trailing-nul|zgrep-context|zgrep-f|zgrep-signal|znew-k|z-suffix)
+            helin-segv|hufts|keep|list|null-suffix-clobber|trailing-nul|zgrep-context|zgrep-f|znew-k|z-suffix)
                 # The preserved GNU gzip suite includes legacy .Z handling and
                 # gzip-specific CLI semantics that upstream zstd's gzip-compat
                 # frontend does not implement. Keep them as tracked expected
