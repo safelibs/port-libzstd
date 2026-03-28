@@ -1,17 +1,27 @@
-use crate::ffi::{
-    decompress::api,
-    types::{ZSTD_DCtx, ZSTD_DDict, ZSTD_DStream},
+use crate::{
+    common::error::error_result,
+    decompress::{frame, fse},
+    ffi::{
+        decompress::{self, DictionaryUse},
+        types::{ZSTD_DCtx, ZSTD_DDict, ZSTD_DStream},
+    },
 };
 use core::ffi::c_void;
 
 #[no_mangle]
 pub extern "C" fn ZSTD_createDDict(dictBuffer: *const c_void, dictSize: usize) -> *mut ZSTD_DDict {
-    unsafe { (api().create_ddict)(dictBuffer, dictSize) }
+    let Some(dict) = decompress::optional_src_slice(dictBuffer, dictSize) else {
+        return core::ptr::null_mut();
+    };
+    if dict.is_empty() {
+        return core::ptr::null_mut();
+    }
+    decompress::create_ddict(dict).unwrap_or(core::ptr::null_mut())
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_freeDDict(ddict: *mut ZSTD_DDict) -> usize {
-    unsafe { (api().free_ddict)(ddict) }
+    decompress::free_ddict(ddict)
 }
 
 #[no_mangle]
@@ -20,12 +30,23 @@ pub extern "C" fn ZSTD_DCtx_loadDictionary(
     dict: *const c_void,
     dictSize: usize,
 ) -> usize {
-    unsafe { (api().dctx_load_dictionary)(dctx, dict, dictSize) }
+    let Some(dict_bytes) = decompress::optional_src_slice(dict, dictSize) else {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    match decompress::with_dctx_mut(dctx, |dctx| {
+        dctx.load_dictionary(dict_bytes, DictionaryUse::Indefinitely)
+    }) {
+        Ok(()) => 0,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_DCtx_refDDict(dctx: *mut ZSTD_DCtx, ddict: *const ZSTD_DDict) -> usize {
-    unsafe { (api().dctx_ref_ddict)(dctx, ddict) }
+    match decompress::with_dctx_mut(dctx, |dctx| dctx.ref_ddict(ddict.cast())) {
+        Ok(()) => 0,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
@@ -34,7 +55,17 @@ pub extern "C" fn ZSTD_initDStream_usingDict(
     dict: *const c_void,
     dictSize: usize,
 ) -> usize {
-    unsafe { (api().init_dstream_using_dict)(zds, dict, dictSize) }
+    let Some(dict_bytes) = decompress::optional_src_slice(dict, dictSize) else {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    match decompress::with_dctx_mut(zds, |zds| {
+        zds.reset_session();
+        zds.load_dictionary(dict_bytes, DictionaryUse::Indefinitely)?;
+        Ok(frame::starting_input_length(zds.format))
+    }) {
+        Ok(size) => size,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
@@ -42,20 +73,30 @@ pub extern "C" fn ZSTD_initDStream_usingDDict(
     zds: *mut ZSTD_DStream,
     ddict: *const ZSTD_DDict,
 ) -> usize {
-    unsafe { (api().init_dstream_using_ddict)(zds, ddict) }
+    match decompress::with_dctx_mut(zds, |zds| {
+        zds.reset_session();
+        zds.ref_ddict(ddict.cast())?;
+        Ok(frame::starting_input_length(zds.format))
+    }) {
+        Ok(size) => size,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_getDictID_fromDict(dict: *const c_void, dictSize: usize) -> u32 {
-    unsafe { (api().get_dict_id_from_dict)(dict, dictSize) }
+    let Some(dict_bytes) = decompress::optional_src_slice(dict, dictSize) else {
+        return 0;
+    };
+    fse::formatted_dict_id(dict_bytes)
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_getDictID_fromDDict(ddict: *const ZSTD_DDict) -> u32 {
-    unsafe { (api().get_dict_id_from_ddict)(ddict) }
+    decompress::get_dict_id_from_ddict(ddict)
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_sizeof_DDict(ddict: *const ZSTD_DDict) -> usize {
-    unsafe { (api().sizeof_ddict)(ddict) }
+    decompress::sizeof_ddict(ddict)
 }

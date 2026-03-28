@@ -1,4 +1,4 @@
-use std::{env, process};
+use std::{env, path::PathBuf, process};
 
 fn feature_enabled(name: &str) -> bool {
     env::var_os(name).is_some()
@@ -60,4 +60,35 @@ fn main() {
     );
     println!("cargo:rustc-env=LIBZSTD_VARIANT_SUFFIX={variant_suffix}");
     println!("cargo:rustc-env=LIBZSTD_DEFAULT_ARTIFACT={default_artifact}");
+
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("manifest dir"));
+    let upstream_root = manifest_dir.join("../original/libzstd-1.5.5+dfsg2/lib");
+    let legacy_root = upstream_root.join("legacy");
+    let common_root = upstream_root.join("common");
+    let legacy_files = [
+        common_root.join("xxhash.c"),
+        legacy_root.join("zstd_v05.c"),
+        legacy_root.join("zstd_v06.c"),
+        legacy_root.join("zstd_v07.c"),
+        manifest_dir.join("src/ffi/legacy_shim.c"),
+    ];
+
+    for path in &legacy_files {
+        println!("cargo:rerun-if-changed={}", path.display());
+    }
+    println!("cargo:rerun-if-changed={}", legacy_root.join("zstd_legacy.h").display());
+
+    let mut build = cc::Build::new();
+    build
+        .warnings(false)
+        .include(&legacy_root)
+        .include(&common_root)
+        .include(&upstream_root)
+        .define("ZSTD_LEGACY_SUPPORT", "5");
+
+    for path in &legacy_files {
+        build.file(path);
+    }
+
+    build.compile("zstd_safe_legacy");
 }

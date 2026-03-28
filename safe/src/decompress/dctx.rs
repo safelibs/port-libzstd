@@ -1,27 +1,77 @@
-use crate::ffi::{
-    decompress::api,
-    types::{ZSTD_DCtx, ZSTD_DDict, ZSTD_ResetDirective, ZSTD_dParameter, ZSTD_format_e},
+use crate::{
+    common::error::error_result,
+    decompress::frame::{self, DictionaryRef},
+    ffi::{
+        decompress::{self, DictionaryUse},
+        types::{ZSTD_DCtx, ZSTD_DDict, ZSTD_ResetDirective, ZSTD_dParameter, ZSTD_format_e},
+    },
 };
 use core::ffi::{c_int, c_void};
 
+fn decode_into(
+    dst: *mut c_void,
+    dst_capacity: usize,
+    src: *const c_void,
+    src_size: usize,
+    dict: DictionaryRef<'_>,
+    format: ZSTD_format_e,
+    max_window_size: usize,
+) -> usize {
+    let Some(src) = decompress::optional_src_slice(src, src_size) else {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+
+    match frame::decode_all_frames(src, dict, format, max_window_size) {
+        Ok(decoded) => frame::copy_decoded_to_ptr(&decoded, dst, dst_capacity),
+        Err(code) => error_result(code),
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn ZSTD_createDCtx() -> *mut ZSTD_DCtx {
-    unsafe { (api().create_dctx)() }
+    decompress::create_dctx()
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_freeDCtx(dctx: *mut ZSTD_DCtx) -> usize {
-    unsafe { (api().free_dctx)(dctx) }
+    decompress::free_dctx(dctx)
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_copyDCtx(dctx: *mut ZSTD_DCtx, preparedDCtx: *const ZSTD_DCtx) {
-    unsafe { (api().copy_dctx)(dctx, preparedDCtx) }
+    let Ok(snapshot) = decompress::with_dctx_ref(preparedDCtx, |prepared| Ok(prepared.clone())) else {
+        return;
+    };
+    let _ = decompress::with_dctx_mut(dctx, |target| {
+        target.copy_from(&snapshot);
+        Ok(())
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_DCtx_reset(dctx: *mut ZSTD_DCtx, reset: ZSTD_ResetDirective) -> usize {
-    unsafe { (api().dctx_reset)(dctx, reset) }
+    let result = decompress::with_dctx_mut(dctx, |dctx| {
+        match reset {
+            ZSTD_ResetDirective::ZSTD_reset_session_only => {
+                dctx.reset_session();
+            }
+            ZSTD_ResetDirective::ZSTD_reset_parameters => {
+                if !dctx.can_set_parameters() {
+                    return Err(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_stage_wrong);
+                }
+                dctx.reset_parameters();
+            }
+            ZSTD_ResetDirective::ZSTD_reset_session_and_parameters => {
+                dctx.reset_session();
+                dctx.reset_parameters();
+            }
+        }
+        Ok(())
+    });
+    match result {
+        Ok(()) => 0,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
@@ -31,20 +81,15 @@ pub extern "C" fn ZSTD_decompress(
     src: *const c_void,
     compressedSize: usize,
 ) -> usize {
-    if !dst.is_null() && !src.is_null() {
-        let legacy = unsafe {
-            let dst = std::slice::from_raw_parts_mut(dst.cast::<u8>(), dstCapacity);
-            let src = std::slice::from_raw_parts(src.cast::<u8>(), compressedSize);
-            crate::decompress::legacy::try_decompress(dst, src)
-        };
-        if let Some(result) = legacy {
-            return match result {
-                Ok(size) => size,
-                Err(code) => 0usize.wrapping_sub(code as usize),
-            };
-        }
-    }
-    unsafe { (api().decompress)(dst, dstCapacity, src, compressedSize) }
+    decode_into(
+        dst,
+        dstCapacity,
+        src,
+        compressedSize,
+        DictionaryRef::None,
+        ZSTD_format_e::ZSTD_f_zstd1,
+        (1usize << frame::ZSTD_WINDOWLOG_LIMIT_DEFAULT) + 1,
+    )
 }
 
 #[no_mangle]
@@ -55,20 +100,23 @@ pub extern "C" fn ZSTD_decompressDCtx(
     src: *const c_void,
     srcSize: usize,
 ) -> usize {
-    if !dst.is_null() && !src.is_null() {
-        let legacy = unsafe {
-            let dst = std::slice::from_raw_parts_mut(dst.cast::<u8>(), dstCapacity);
-            let src = std::slice::from_raw_parts(src.cast::<u8>(), srcSize);
-            crate::decompress::legacy::try_decompress(dst, src)
-        };
-        if let Some(result) = legacy {
-            return match result {
-                Ok(size) => size,
-                Err(code) => 0usize.wrapping_sub(code as usize),
-            };
-        }
+    match decompress::with_dctx_mut(dctx, |dctx| {
+        let decoded = decode_into(
+            dst,
+            dstCapacity,
+            src,
+            srcSize,
+            dctx.resolved_dict()?,
+            dctx.format,
+            dctx.max_window_size,
+        );
+        frame::decode_error_result(decoded)?;
+        dctx.clear_once_dict();
+        Ok(decoded)
+    }) {
+        Ok(size) => size,
+        Err(code) => error_result(code),
     }
-    unsafe { (api().decompress_dctx)(dctx, dst, dstCapacity, src, srcSize) }
 }
 
 #[no_mangle]
@@ -81,7 +129,23 @@ pub extern "C" fn ZSTD_decompress_usingDict(
     dict: *const c_void,
     dictSize: usize,
 ) -> usize {
-    unsafe { (api().decompress_using_dict)(dctx, dst, dstCapacity, src, srcSize, dict, dictSize) }
+    let Some(dict_bytes) = decompress::optional_src_slice(dict, dictSize) else {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    match decompress::with_dctx_mut(dctx, |dctx| {
+        Ok(decode_into(
+            dst,
+            dstCapacity,
+            src,
+            srcSize,
+            frame::dictionary_ref(Some(dict_bytes)),
+            dctx.format,
+            dctx.max_window_size,
+        ))
+    }) {
+        Ok(size) => size,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
@@ -93,12 +157,45 @@ pub extern "C" fn ZSTD_decompress_usingDDict(
     srcSize: usize,
     ddict: *const ZSTD_DDict,
 ) -> usize {
-    unsafe { (api().decompress_using_ddict)(dctx, dst, dstCapacity, src, srcSize, ddict) }
+    match decompress::with_dctx_mut(dctx, |dctx| {
+        if ddict.is_null() {
+            return Ok(decode_into(
+                dst,
+                dstCapacity,
+                src,
+                srcSize,
+                DictionaryRef::None,
+                dctx.format,
+                dctx.max_window_size,
+            ));
+        }
+        decompress::with_ddict_ref(ddict, |prepared| {
+            Ok(decode_into(
+                dst,
+                dstCapacity,
+                src,
+                srcSize,
+                prepared.as_dictionary_ref(),
+                dctx.format,
+                dctx.max_window_size,
+            ))
+        })
+    }) {
+        Ok(size) => size,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_decompressBegin(dctx: *mut ZSTD_DCtx) -> usize {
-    unsafe { (api().decompress_begin)(dctx) }
+    match decompress::with_dctx_mut(dctx, |dctx| {
+        dctx.reset_session();
+        decompress::begin_bufferless(dctx);
+        Ok(())
+    }) {
+        Ok(()) => 0,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
@@ -107,7 +204,18 @@ pub extern "C" fn ZSTD_decompressBegin_usingDict(
     dict: *const c_void,
     dictSize: usize,
 ) -> usize {
-    unsafe { (api().decompress_begin_using_dict)(dctx, dict, dictSize) }
+    let Some(dict_bytes) = decompress::optional_src_slice(dict, dictSize) else {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    match decompress::with_dctx_mut(dctx, |dctx| {
+        dctx.reset_session();
+        dctx.load_dictionary(dict_bytes, DictionaryUse::Once)?;
+        decompress::begin_bufferless(dctx);
+        Ok(())
+    }) {
+        Ok(()) => 0,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
@@ -115,7 +223,15 @@ pub extern "C" fn ZSTD_decompressBegin_usingDDict(
     dctx: *mut ZSTD_DCtx,
     ddict: *const ZSTD_DDict,
 ) -> usize {
-    unsafe { (api().decompress_begin_using_ddict)(dctx, ddict) }
+    match decompress::with_dctx_mut(dctx, |dctx| {
+        dctx.reset_session();
+        dctx.ref_ddict(ddict.cast())?;
+        decompress::begin_bufferless(dctx);
+        Ok(())
+    }) {
+        Ok(()) => 0,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
@@ -126,7 +242,15 @@ pub extern "C" fn ZSTD_decompressContinue(
     src: *const c_void,
     srcSize: usize,
 ) -> usize {
-    unsafe { (api().decompress_continue)(dctx, dst, dstCapacity, src, srcSize) }
+    let Some(src_bytes) = decompress::optional_src_slice(src, srcSize) else {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    match decompress::with_dctx_mut(dctx, |dctx| {
+        decompress::bufferless_continue(dctx, dst, dstCapacity, src_bytes)
+    }) {
+        Ok(size) => size,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
@@ -135,7 +259,10 @@ pub extern "C" fn ZSTD_DCtx_setParameter(
     param: ZSTD_dParameter,
     value: c_int,
 ) -> usize {
-    unsafe { (api().dctx_set_parameter)(dctx, param, value) }
+    match decompress::with_dctx_mut(dctx, |dctx| dctx.set_parameter(param, value)) {
+        Ok(()) => 0,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
@@ -144,17 +271,39 @@ pub extern "C" fn ZSTD_DCtx_getParameter(
     param: ZSTD_dParameter,
     value: *mut c_int,
 ) -> usize {
-    unsafe { (api().dctx_get_parameter)(dctx, param, value) }
+    if value.is_null() {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_GENERIC);
+    }
+
+    match decompress::with_dctx_ref(dctx, |dctx| dctx.get_parameter(param)) {
+        Ok(current) => {
+            // SAFETY: The caller provided a valid writable `int*`.
+            unsafe {
+                *value = current;
+            }
+            0
+        }
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_DCtx_setFormat(dctx: *mut ZSTD_DCtx, format: ZSTD_format_e) -> usize {
-    unsafe { (api().dctx_set_format)(dctx, format) }
+    match decompress::with_dctx_mut(dctx, |dctx| dctx.set_format(format)) {
+        Ok(()) => 0,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn ZSTD_DCtx_setMaxWindowSize(dctx: *mut ZSTD_DCtx, maxWindowSize: usize) -> usize {
-    unsafe { (api().dctx_set_max_window_size)(dctx, maxWindowSize) }
+pub extern "C" fn ZSTD_DCtx_setMaxWindowSize(
+    dctx: *mut ZSTD_DCtx,
+    maxWindowSize: usize,
+) -> usize {
+    match decompress::with_dctx_mut(dctx, |dctx| dctx.set_max_window_size(maxWindowSize)) {
+        Ok(()) => 0,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
@@ -163,10 +312,16 @@ pub extern "C" fn ZSTD_DCtx_refPrefix(
     prefix: *const c_void,
     prefixSize: usize,
 ) -> usize {
-    unsafe { (api().dctx_ref_prefix)(dctx, prefix, prefixSize) }
+    let Some(prefix_bytes) = decompress::optional_src_slice(prefix, prefixSize) else {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    match decompress::with_dctx_mut(dctx, |dctx| dctx.ref_prefix(prefix_bytes)) {
+        Ok(()) => 0,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_sizeof_DCtx(dctx: *const ZSTD_DCtx) -> usize {
-    unsafe { (api().sizeof_dctx)(dctx) }
+    decompress::sizeof_dctx(dctx)
 }

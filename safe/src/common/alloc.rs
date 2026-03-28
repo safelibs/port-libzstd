@@ -1,4 +1,7 @@
-/// Phase-2 keeps allocator-sensitive decompression behavior delegated to the
-/// host libzstd implementation behind the narrow FFI loader.
-#[allow(dead_code)]
-pub(crate) const PHASE2_ALLOC_MODEL: &str = "system-libzstd";
+pub(crate) fn heap_bytes(len: usize) -> usize {
+    len
+}
+
+pub(crate) fn base_size<T>() -> usize {
+    core::mem::size_of::<T>()
+}
