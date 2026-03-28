@@ -121,6 +121,12 @@ poolTests = executable('poolTests',
   dependencies: [ testcommon_dep, thread_dep ],
   install: false)
 
+external_matchfinder_sources = [join_paths(zstd_rootdir, 'tests/external_matchfinder.c')]
+external_matchfinder = executable('external_matchfinder',
+  external_matchfinder_sources,
+  dependencies: [ libzstd_dep ],
+  install: false)
+
 checkTag_sources = [join_paths(zstd_rootdir, 'tests/checkTag.c')]
 checkTag = executable('checkTag',
   checkTag_sources,
@@ -202,6 +208,7 @@ test('test-decodecorpus',
   args: ['-t', DECODECORPUS_TESTTIME],
   timeout: 60)
 test('test-poolTests', poolTests) # should be fast
+test('test-external_matchfinder', external_matchfinder) # should be fast
 
 if meson.version().version_compare('>=0.57.0')
   add_test_setup('fast',

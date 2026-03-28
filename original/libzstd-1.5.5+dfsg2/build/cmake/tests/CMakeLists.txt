@@ -90,6 +90,10 @@ AddTestFlagsOption(ZSTD_ZSTREAM_FLAGS "$ENV{ZSTREAM_TESTTIME} $ENV{FUZZER_FLAGS}
     "Semicolon-separated list of flags to pass to the zstreamtest test (see `zstreamtest -h` for usage)")
 add_test(NAME zstreamtest COMMAND zstreamtest ${ZSTD_ZSTREAM_FLAGS})
 
+add_executable(external_matchfinder ${TESTS_DIR}/external_matchfinder.c)
+target_link_libraries(external_matchfinder libzstd_static)
+add_test(NAME external_matchfinder COMMAND external_matchfinder)
+
 #
 # playTests.sh
 #

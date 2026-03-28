@@ -9,6 +9,7 @@ This directory contains the following programs and scripts:
 - `test-zstd-speed.py` : script for testing zstd speed difference between commits
 - `test-zstd-versions.py` : compatibility test between zstd versions stored on Github (v0.1+)
 - `zstreamtest` : Fuzzer test tool for zstd streaming API
+- `external_matchfinder` : Public match-parameter and prefix/streaming coverage
 - `legacy` : Test tool to test decoding of legacy zstd frames
 - `decodecorpus` : Tool to generate valid Zstandard frames, for verifying decoder implementations
 
@@ -129,6 +130,18 @@ as well as the 10,000 original files for more detailed comparison of decompressi
 will choose a random seed, and for 1 minute,
 generate random test frames and ensure that the
 zstd library correctly decompresses them in both simple and streaming modes.
+
+`decodecorpus` only generates complete public Zstandard frames. Private raw-block
+generation options such as `--gen-blocks` and `--max-block-size-log` are rejected
+instead of being silently accepted.
+
+#### `external_matchfinder` - public match-parameter coverage
+
+`external_matchfinder` validates the public match-finding surface without relying on
+sequence-producer internals. It checks public bounds/error handling for match-related
+compression parameters, runs a strategy matrix round-trip suite, verifies prefix-reference
+compression wins on repeated data, and exercises long-distance matching through the
+streaming API.
 
 #### `paramgrill` - public-API tester for stable compression parameters
 

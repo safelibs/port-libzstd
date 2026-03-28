@@ -48,10 +48,10 @@ CORPORA_DIR = abs_join(FUZZ_DIR, 'corpora')
 TARGET_INFO = {
     'simple_round_trip': TargetInfo(InputType.RAW_DATA),
     'stream_round_trip': TargetInfo(InputType.RAW_DATA),
-    'block_round_trip': TargetInfo(InputType.RAW_DATA, FrameType.BLOCK),
+    'block_round_trip': TargetInfo(InputType.RAW_DATA),
     'simple_decompress': TargetInfo(InputType.COMPRESSED_DATA),
     'stream_decompress': TargetInfo(InputType.COMPRESSED_DATA),
-    'block_decompress': TargetInfo(InputType.COMPRESSED_DATA, FrameType.BLOCK),
+    'block_decompress': TargetInfo(InputType.COMPRESSED_DATA),
     'dictionary_round_trip': TargetInfo(InputType.RAW_DATA),
     'dictionary_decompress': TargetInfo(InputType.COMPRESSED_DATA),
     'zstd_frame_info': TargetInfo(InputType.COMPRESSED_DATA),

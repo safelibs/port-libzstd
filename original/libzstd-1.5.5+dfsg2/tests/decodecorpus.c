@@ -32,8 +32,6 @@ typedef struct {
     unsigned useDict;
     unsigned dictSize;
     unsigned maxContentSizeLog;
-    unsigned maxBlockSizeLog;
-    int genBlocksRequested;
 } advancedOptions_t;
 
 static unsigned readInt(const char** argument)
@@ -317,9 +315,6 @@ static int runTestMode(unsigned seed,
     if (iterations == 0) {
         iterations = 12U;
     }
-    if (advanced->genBlocksRequested) {
-        DISPLAY("decodecorpus: --gen-blocks requested, generating frames instead in public-only mode\n");
-    }
 
     for (test = 0; test < iterations; ++test) {
         size_t const maxSize = 1U << advanced->maxContentSizeLog;
@@ -384,9 +379,9 @@ static void usage(const char* programName)
     DISPLAY(" -h/-H    : help\n");
     DISPLAY(" --content-size           : write content sizes\n");
     DISPLAY(" --use-dict=#             : emit and use a raw dictionary\n");
-    DISPLAY(" --gen-blocks             : accepted for compatibility, generates frames instead\n");
-    DISPLAY(" --max-block-size-log=#   : accepted for compatibility\n");
     DISPLAY(" --max-content-size-log=# : cap generated content size\n");
+    DISPLAY(" --gen-blocks             : unsupported in public-only mode\n");
+    DISPLAY(" --max-block-size-log=#   : unsupported in public-only mode\n");
 }
 
 int main(int argc, char** argv)
@@ -404,7 +399,6 @@ int main(int argc, char** argv)
     memset(&advanced, 0, sizeof(advanced));
     advanced.dictSize = 10U << 10;
     advanced.maxContentSizeLog = 20U;
-    advanced.maxBlockSizeLog = 17U;
 
     for (argNb = 1; argNb < argc; ++argNb) {
         const char* argument = argv[argNb];
@@ -457,9 +451,11 @@ int main(int argc, char** argv)
                     advanced.useDict = 1;
                     advanced.dictSize = readU32FromChar(&argument);
                 } else if (strcmp(argument, "gen-blocks") == 0) {
-                    advanced.genBlocksRequested = 1;
+                    DISPLAY("decodecorpus: --gen-blocks is unsupported in public-only mode\n");
+                    return 1;
                 } else if (longCommandWArg(&argument, "max-block-size-log=")) {
-                    advanced.maxBlockSizeLog = readU32FromChar(&argument);
+                    DISPLAY("decodecorpus: --max-block-size-log is unsupported in public-only mode\n");
+                    return 1;
                 } else if (longCommandWArg(&argument, "max-content-size-log=")) {
                     advanced.maxContentSizeLog = readU32FromChar(&argument);
                     if (advanced.maxContentSizeLog > 20U) {

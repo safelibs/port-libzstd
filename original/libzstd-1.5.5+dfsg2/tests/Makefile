@@ -80,7 +80,7 @@ DECODECORPUS_TESTTIME ?= -T30
 default: fullbench
 
 .PHONY: all
-all: fullbench fuzzer zstreamtest paramgrill datagen decodecorpus roundTripCrash poolTests
+all: fullbench fuzzer zstreamtest paramgrill datagen decodecorpus roundTripCrash poolTests external_matchfinder
 
 .PHONY: all32
 all32: fullbench32 fuzzer32 zstreamtest32
@@ -88,7 +88,7 @@ all32: fullbench32 fuzzer32 zstreamtest32
 .PHONY: allnothread
 allnothread: MULTITHREAD_CPP=
 allnothread: MULTITHREAD_LD=
-allnothread: fullbench fuzzer paramgrill datagen decodecorpus
+allnothread: fullbench fuzzer paramgrill datagen decodecorpus external_matchfinder
 
 # note : broken : requires symbols unavailable from dynamic library
 .PHONY: dll
@@ -236,6 +236,9 @@ poolTests : LDFLAGS += $(MULTITHREAD_LD)
 poolTests : $(ZSTDMT_OBJECTS) poolTests.c
 	$(LINK.c) $^ -o $@$(EXT)
 
+CLEAN += external_matchfinder
+external_matchfinder : $(ZSTD_OBJECTS) external_matchfinder.c
+
 .PHONY: versionsTest
 versionsTest: clean
 	$(PYTHON) test-zstd-versions.py
@@ -314,7 +317,7 @@ check: shortest
 fuzztest: test-fuzzer test-zstream test-decodecorpus
 
 .PHONY: test
-test: test-zstd test-fullbench test-fuzzer test-zstream test-invalidDictionaries test-legacy test-decodecorpus test-cli-tests
+test: test-zstd test-fullbench test-fuzzer test-zstream test-invalidDictionaries test-legacy test-decodecorpus test-cli-tests test-external-matchfinder
 ifeq ($(QEMU_SYS),)
 test: test-pool
 endif
@@ -438,6 +441,9 @@ test-decodecorpus-cli: zstd decodecorpus
 
 test-pool: poolTests
 	$(QEMU_SYS) ./poolTests
+
+test-external-matchfinder: external_matchfinder
+	$(QEMU_SYS) ./external_matchfinder
 
 test-lz4: ZSTD = LD_LIBRARY_PATH=/usr/local/lib $(PRGDIR)/zstd
 test-lz4: ZSTD_LZ4 = LD_LIBRARY_PATH=/usr/local/lib ./lz4
