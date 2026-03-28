@@ -32,10 +32,19 @@ grep -q 'Libs.private: -pthread' "$MT_LIBDIR/pkgconfig/libzstd.pc" || {
     printf 'mt pkg-config metadata lost pthread linkage\n' >&2
     exit 1
 }
+if grep -q 'Libs.private: -pthread' "$DEFAULT_LIBDIR/pkgconfig/libzstd.pc"; then
+    printf 'default pkg-config metadata still advertises pthread linkage\n' >&2
+    exit 1
+fi
 if grep -q 'Libs.private: -pthread' "$NOMT_LIBDIR/pkgconfig/libzstd.pc"; then
     printf 'nomt pkg-config metadata still advertises pthread linkage\n' >&2
     exit 1
 fi
+
+nm -A "$DEFAULT_LIBDIR/libzstd.a" | rg -q 'pthread_' && {
+    printf 'default static archive still carries pthread references\n' >&2
+    exit 1
+}
 
 if cmp -s "$MT_LIBDIR/libzstd.a" "$NOMT_LIBDIR/libzstd.a"; then
     printf 'mt and nomt static archives are unexpectedly identical\n' >&2

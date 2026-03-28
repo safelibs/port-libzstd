@@ -86,8 +86,20 @@ grep -q 'zstd::libzstd_static' "$LIBDIR/cmake/zstd/zstdTargets-noconfig.cmake" |
     printf 'CMake metadata does not export zstd::libzstd_static\n' >&2
     exit 1
 }
+if grep -q 'Libs.private: -pthread' "$LIBDIR/pkgconfig/libzstd.pc"; then
+    printf 'default pkg-config metadata still advertises pthread linkage\n' >&2
+    exit 1
+fi
+nm -A "$LIBDIR/libzstd.a" | rg -q 'pthread_' && {
+    printf 'default static archive still carries pthread references\n' >&2
+    exit 1
+}
 
 if [[ $MODE == debian ]]; then
+    if [[ -e $STAGE_ROOT/original ]]; then
+        printf 'staged Debian source tree still contains a safe-rooted original/ subtree\n' >&2
+        exit 1
+    fi
     assert_exists "$INSTALL_ROOT/usr/share/doc/libzstd-dev/examples"
     assert_exists_any "$INSTALL_ROOT/usr/share/doc/zstd/CHANGELOG"
     assert_exists "$INSTALL_ROOT/usr/share/doc/zstd/CODE_OF_CONDUCT.md"

@@ -33,7 +33,7 @@ fn run_command(command: &mut Command, description: &str) {
 
 fn upstream_lib_root(manifest_dir: &Path) -> PathBuf {
     for candidate in [
-        manifest_dir.join("original/libzstd-1.5.5+dfsg2/lib"),
+        manifest_dir.join("lib"),
         manifest_dir.join("../original/libzstd-1.5.5+dfsg2/lib"),
     ] {
         if candidate.exists() {
@@ -42,23 +42,21 @@ fn upstream_lib_root(manifest_dir: &Path) -> PathBuf {
     }
 
     panic!(
-        "could not locate the staged upstream lib sources next to {}",
+        "could not locate the upstream lib sources for {}",
         manifest_dir.display()
     );
 }
 
-fn upstream_phase4_sources(root: &Path) -> Vec<PathBuf> {
+fn upstream_phase4_sources(root: &Path, threading: bool) -> Vec<PathBuf> {
     let common = root.join("common");
     let compress = root.join("compress");
     let decompress = root.join("decompress");
     let dict_builder = root.join("dictBuilder");
-    vec![
+    let mut sources = vec![
         common.join("debug.c"),
         common.join("entropy_common.c"),
         common.join("error_private.c"),
         common.join("fse_decompress.c"),
-        common.join("pool.c"),
-        common.join("threading.c"),
         common.join("xxhash.c"),
         common.join("zstd_common.c"),
         compress.join("fse_compress.c"),
@@ -73,7 +71,6 @@ fn upstream_phase4_sources(root: &Path) -> Vec<PathBuf> {
         compress.join("zstd_lazy.c"),
         compress.join("zstd_ldm.c"),
         compress.join("zstd_opt.c"),
-        compress.join("zstdmt_compress.c"),
         decompress.join("huf_decompress.c"),
         decompress.join("zstd_ddict.c"),
         decompress.join("zstd_decompress.c"),
@@ -82,7 +79,17 @@ fn upstream_phase4_sources(root: &Path) -> Vec<PathBuf> {
         dict_builder.join("divsufsort.c"),
         dict_builder.join("fastcover.c"),
         dict_builder.join("zdict.c"),
-    ]
+    ];
+
+    if threading {
+        sources.extend([
+            common.join("pool.c"),
+            common.join("threading.c"),
+            compress.join("zstdmt_compress.c"),
+        ]);
+    }
+
+    sources
 }
 
 fn compile_source(
@@ -90,6 +97,7 @@ fn compile_source(
     includes: &[PathBuf],
     source: &Path,
     object: &Path,
+    threading: bool,
 ) {
     let mut command = Command::new(compiler.path());
     command
@@ -98,10 +106,12 @@ fn compile_source(
         .arg(source)
         .arg("-o")
         .arg(object)
-        .arg("-DZSTD_MULTITHREAD")
         .arg("-DZSTD_STATIC_LINKING_ONLY")
         .arg("-DZDICT_STATIC_LINKING_ONLY")
         .arg("-D_POSIX_C_SOURCE=200809L");
+    if threading {
+        command.arg("-DZSTD_MULTITHREAD");
+    }
     if compiler.is_like_gnu() || compiler.is_like_clang() {
         command.arg("-fvisibility=hidden");
     }
@@ -114,7 +124,7 @@ fn compile_source(
     );
 }
 
-fn compile_upstream_phase4_helpers(manifest_dir: &Path) {
+fn compile_upstream_phase4_helpers(manifest_dir: &Path, threading: bool) {
     let upstream_root = upstream_lib_root(manifest_dir);
     let includes = vec![
         upstream_root.clone(),
@@ -123,7 +133,7 @@ fn compile_upstream_phase4_helpers(manifest_dir: &Path) {
         upstream_root.join("decompress"),
         upstream_root.join("dictBuilder"),
     ];
-    let sources = upstream_phase4_sources(&upstream_root);
+    let sources = upstream_phase4_sources(&upstream_root, threading);
 
     for source in &sources {
         println!("cargo:rerun-if-changed={}", source.display());
@@ -142,10 +152,12 @@ fn compile_upstream_phase4_helpers(manifest_dir: &Path) {
         .include(upstream_root.join("compress"))
         .include(upstream_root.join("decompress"))
         .include(upstream_root.join("dictBuilder"))
-        .define("ZSTD_MULTITHREAD", None)
         .define("ZSTD_STATIC_LINKING_ONLY", None)
         .define("ZDICT_STATIC_LINKING_ONLY", None)
         .define("_POSIX_C_SOURCE", "200809L");
+    if threading {
+        cc_build.define("ZSTD_MULTITHREAD", None);
+    }
     cc_build.flag_if_supported("-fvisibility=hidden");
     let compiler = cc_build.get_compiler();
 
@@ -157,7 +169,7 @@ fn compile_upstream_phase4_helpers(manifest_dir: &Path) {
             .to_string_lossy()
             .replace('.', "_");
         let object = object_dir.join(format!("{file_name}.o"));
-        compile_source(&compiler, &includes, source, &object);
+        compile_source(&compiler, &includes, source, &object, threading);
         objects.push(object);
     }
 
@@ -222,7 +234,9 @@ fn compile_upstream_phase4_helpers(manifest_dir: &Path) {
 
     println!("cargo:rustc-link-search=native={}", build_dir.display());
     println!("cargo:rustc-link-lib=static=zstd_safe_phase4");
-    println!("cargo:rustc-link-lib=pthread");
+    if threading {
+        println!("cargo:rustc-link-lib=pthread");
+    }
 }
 
 fn main() {
@@ -309,5 +323,5 @@ fn main() {
     }
 
     build.compile("zstd_safe_legacy");
-    compile_upstream_phase4_helpers(&manifest_dir);
+    compile_upstream_phase4_helpers(&manifest_dir, threading);
 }

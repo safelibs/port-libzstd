@@ -134,7 +134,7 @@ case "$VARIANT" in
     default)
         SHARED_FEATURES=build-shared-default
         STATIC_FEATURES=build-static-default
-        LIBS_PRIVATE=-pthread
+        LIBS_PRIVATE=
         ;;
     mt)
         SHARED_FEATURES=variant-mt
@@ -155,8 +155,11 @@ esac
 BUILD_ROOT="$SAFE_ROOT/out/cargo/${PROFILE}-${VARIANT}"
 SHARED_TARGET_DIR="$BUILD_ROOT/shared"
 STATIC_TARGET_DIR="$BUILD_ROOT/static"
+STATIC_RUSTFLAGS=${RUSTFLAGS:-}
+STATIC_RUSTFLAGS="${STATIC_RUSTFLAGS:+$STATIC_RUSTFLAGS }-C panic=abort -C embed-bitcode=no"
 
 rm -rf "$DESTDIR" "$OBJDIR"
+rm -rf "$BUILD_ROOT"
 install -d "$DESTDIR$LIBDIR" "$DESTDIR$INCLUDEDIR" \
     "$DESTDIR$LIBDIR/pkgconfig" "$OBJDIR/CMakeFiles/Export/libzstd-safe"
 if [[ $INSTALL_CMAKE -eq 1 ]]; then
@@ -170,7 +173,7 @@ fi
 
 CARGO_TARGET_DIR="$SHARED_TARGET_DIR" \
     "${CARGO_BASE[@]}" --features "$SHARED_FEATURES" -- --crate-type=cdylib
-CARGO_TARGET_DIR="$STATIC_TARGET_DIR" \
+CARGO_TARGET_DIR="$STATIC_TARGET_DIR" RUSTFLAGS="$STATIC_RUSTFLAGS" \
     "${CARGO_BASE[@]}" --features "$STATIC_FEATURES" -- --crate-type=staticlib
 
 SHARED_OUT_DIR="$SHARED_TARGET_DIR/$PROFILE"

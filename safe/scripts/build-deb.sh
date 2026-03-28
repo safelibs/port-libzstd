@@ -58,21 +58,15 @@ if [[ -f $SAFE_ROOT/Cargo.lock ]]; then
     install -m 644 "$SAFE_ROOT/Cargo.lock" "$STAGE_ROOT/Cargo.lock"
 fi
 
-install -d "$STAGE_ROOT/lib"
-rsync_tree "$UPSTREAM_ROOT/lib/common/" "$STAGE_ROOT/lib/common/"
-rsync_tree "$UPSTREAM_ROOT/lib/legacy/" "$STAGE_ROOT/lib/legacy/"
-install -m 644 "$UPSTREAM_ROOT/lib/libzstd.mk" "$STAGE_ROOT/lib/libzstd.mk"
-install -m 644 "$SAFE_ROOT/include/zstd.h" "$STAGE_ROOT/lib/zstd.h"
-install -m 644 "$SAFE_ROOT/include/zdict.h" "$STAGE_ROOT/lib/zdict.h"
-install -m 644 "$SAFE_ROOT/include/zstd_errors.h" "$STAGE_ROOT/lib/zstd_errors.h"
-
-install -d "$STAGE_ROOT/original/libzstd-1.5.5+dfsg2"
-rsync_tree "$UPSTREAM_ROOT/lib/" "$STAGE_ROOT/original/libzstd-1.5.5+dfsg2/lib/" \
+rsync_tree "$UPSTREAM_ROOT/lib/" "$STAGE_ROOT/lib/" \
     --exclude='*.o' \
     --exclude='*.a' \
     --exclude='*.so' \
     --exclude='*.so.*' \
     --exclude='obj'
+install -m 644 "$SAFE_ROOT/include/zstd.h" "$STAGE_ROOT/lib/zstd.h"
+install -m 644 "$SAFE_ROOT/include/zdict.h" "$STAGE_ROOT/lib/zdict.h"
+install -m 644 "$SAFE_ROOT/include/zstd_errors.h" "$STAGE_ROOT/lib/zstd_errors.h"
 
 rsync_tree "$UPSTREAM_ROOT/programs/" "$STAGE_ROOT/programs/" \
     --exclude='.gitignore' \

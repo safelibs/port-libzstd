@@ -8,11 +8,8 @@ License: BSD-3-clause or GPL-2
 
 Files: CHANGELOG CODE_OF_CONDUCT.md CONTRIBUTING.md COPYING LICENSE README.md TESTING.md
        examples/*
-       lib/common/*
-       lib/legacy/*
-       lib/libzstd.mk
-       original/libzstd-1.5.5+dfsg2/lib/*
-       original/libzstd-1.5.5+dfsg2/lib/*/*
+       lib/*
+       lib/*/*
        programs/*
        contrib/pzstd/*
        doc/educational_decoder/*

@@ -7,6 +7,7 @@ pub mod compress;
 pub mod decompress;
 pub mod dict_builder;
 pub mod ffi;
+#[cfg(libzstd_threading)]
 pub mod threading;
 
 pub const ABI_SONAME: &str = "libzstd.so.1";
