@@ -1,4 +1,4 @@
-use core::ffi::{c_int, c_uint, c_void};
+use core::ffi::{c_double, c_int, c_uint, c_void};
 
 pub const ZSTD_CONTENTSIZE_UNKNOWN: u64 = u64::MAX;
 pub const ZSTD_CONTENTSIZE_ERROR: u64 = u64::MAX - 1;
@@ -204,6 +204,47 @@ pub struct ZSTD_parameters {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ZSTD_dictContentType_e {
+    ZSTD_dct_auto = 0,
+    ZSTD_dct_rawContent = 1,
+    ZSTD_dct_fullDict = 2,
+}
+
+impl Default for ZSTD_dictContentType_e {
+    fn default() -> Self {
+        Self::ZSTD_dct_auto
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ZSTD_dictLoadMethod_e {
+    ZSTD_dlm_byCopy = 0,
+    ZSTD_dlm_byRef = 1,
+}
+
+impl Default for ZSTD_dictLoadMethod_e {
+    fn default() -> Self {
+        Self::ZSTD_dlm_byCopy
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ZSTD_paramSwitch_e {
+    ZSTD_ps_auto = 0,
+    ZSTD_ps_enable = 1,
+    ZSTD_ps_disable = 2,
+}
+
+impl Default for ZSTD_paramSwitch_e {
+    fn default() -> Self {
+        Self::ZSTD_ps_auto
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ZSTD_format_e {
     ZSTD_f_zstd1 = 0,
     ZSTD_f_zstd1_magicless = 1,
@@ -263,6 +304,62 @@ pub struct ZSTD_Sequence {
     pub litLength: c_uint,
     pub matchLength: c_uint,
     pub rep: c_uint,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ZSTD_sequenceFormat_e {
+    ZSTD_sf_noBlockDelimiters = 0,
+    ZSTD_sf_explicitBlockDelimiters = 1,
+}
+
+impl Default for ZSTD_sequenceFormat_e {
+    fn default() -> Self {
+        Self::ZSTD_sf_noBlockDelimiters
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ZDICT_params_t {
+    pub compressionLevel: c_int,
+    pub notificationLevel: c_uint,
+    pub dictID: c_uint,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ZDICT_cover_params_t {
+    pub k: c_uint,
+    pub d: c_uint,
+    pub steps: c_uint,
+    pub nbThreads: c_uint,
+    pub splitPoint: c_double,
+    pub shrinkDict: c_uint,
+    pub shrinkDictMaxRegression: c_uint,
+    pub zParams: ZDICT_params_t,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ZDICT_fastCover_params_t {
+    pub k: c_uint,
+    pub d: c_uint,
+    pub f: c_uint,
+    pub steps: c_uint,
+    pub nbThreads: c_uint,
+    pub splitPoint: c_double,
+    pub accel: c_uint,
+    pub shrinkDict: c_uint,
+    pub shrinkDictMaxRegression: c_uint,
+    pub zParams: ZDICT_params_t,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ZDICT_legacy_params_t {
+    pub selectivityLevel: c_uint,
+    pub zParams: ZDICT_params_t,
 }
 
 #[repr(C)]
@@ -338,3 +435,15 @@ impl Default for ZSTD_ErrorCode {
         Self::ZSTD_error_no_error
     }
 }
+
+pub type ZSTD_sequenceProducer_F = unsafe extern "C" fn(
+    sequenceProducerState: *mut c_void,
+    outSeqs: *mut ZSTD_Sequence,
+    outSeqsCapacity: usize,
+    src: *const c_void,
+    srcSize: usize,
+    dict: *const c_void,
+    dictSize: usize,
+    compressionLevel: c_int,
+    windowSize: usize,
+) -> usize;

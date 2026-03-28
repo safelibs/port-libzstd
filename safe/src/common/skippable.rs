@@ -3,7 +3,7 @@ use crate::{
     decompress::frame::{self, ZSTD_SKIPPABLEHEADERSIZE},
     ffi::types::ZSTD_ErrorCode,
 };
-use core::ffi::c_void;
+use core::ffi::{c_uint, c_void};
 
 #[no_mangle]
 pub extern "C" fn ZSTD_readSkippableFrame(
@@ -45,4 +45,20 @@ pub extern "C" fn ZSTD_readSkippableFrame(
         }
     }
     payload_size
+}
+
+#[no_mangle]
+pub extern "C" fn ZSTD_writeSkippableFrame(
+    dst: *mut c_void,
+    dstCapacity: usize,
+    src: *const c_void,
+    srcSize: usize,
+    magicVariant: c_uint,
+) -> usize {
+    type Fn = unsafe extern "C" fn(*mut c_void, usize, *const c_void, usize, c_uint) -> usize;
+    let Some(func) = crate::ffi::compress::load_upstream!("ZSTD_writeSkippableFrame", Fn) else {
+        return error_result(ZSTD_ErrorCode::ZSTD_error_GENERIC);
+    };
+    // SAFETY: The loaded symbol is cached with the exact signature declared above.
+    unsafe { func(dst, dstCapacity, src, srcSize, magicVariant) }
 }

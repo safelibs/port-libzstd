@@ -3,7 +3,10 @@ use crate::{
     decompress::frame::{self, DictionaryRef},
     ffi::{
         decompress::{self, DictionaryUse},
-        types::{ZSTD_DCtx, ZSTD_DDict, ZSTD_ResetDirective, ZSTD_dParameter, ZSTD_format_e},
+        types::{
+            ZSTD_DCtx, ZSTD_DDict, ZSTD_ResetDirective, ZSTD_customMem,
+            ZSTD_dParameter, ZSTD_dictContentType_e, ZSTD_format_e,
+        },
     },
 };
 use core::ffi::{c_int, c_void};
@@ -373,4 +376,31 @@ pub extern "C" fn ZSTD_DCtx_refPrefix(
 #[no_mangle]
 pub extern "C" fn ZSTD_sizeof_DCtx(dctx: *const ZSTD_DCtx) -> usize {
     decompress::sizeof_dctx(dctx)
+}
+
+#[no_mangle]
+pub extern "C" fn ZSTD_estimateDCtxSize() -> usize {
+    crate::common::alloc::base_size::<crate::ffi::decompress::DecoderContext>()
+}
+
+#[no_mangle]
+pub extern "C" fn ZSTD_createDCtx_advanced(_customMem: ZSTD_customMem) -> *mut ZSTD_DCtx {
+    decompress::create_dctx()
+}
+
+#[no_mangle]
+pub extern "C" fn ZSTD_DCtx_refPrefix_advanced(
+    dctx: *mut ZSTD_DCtx,
+    prefix: *const c_void,
+    prefixSize: usize,
+    dictContentType: ZSTD_dictContentType_e,
+) -> usize {
+    let _ = dictContentType;
+    let Some(prefix_bytes) = decompress::optional_src_slice(prefix, prefixSize) else {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    match decompress::with_dctx_mut(dctx, |dctx| dctx.ref_prefix(prefix_bytes)) {
+        Ok(()) => 0,
+        Err(code) => error_result(code),
+    }
 }

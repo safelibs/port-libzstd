@@ -84,7 +84,7 @@ pub(crate) fn default_params() -> ZSTD_parameters {
 }
 
 macro_rules! load_upstream {
-    ($name:literal, $ty:ty) => {{
+    ($name:expr, $ty:ty) => {{
         static CELL: ::std::sync::OnceLock<Option<$ty>> = ::std::sync::OnceLock::new();
         *CELL.get_or_init(|| {
             // SAFETY: The requested symbol name is tied to the exact function pointer type used here.

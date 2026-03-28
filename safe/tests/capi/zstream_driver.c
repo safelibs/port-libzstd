@@ -4,23 +4,6 @@
 #include "../../../original/libzstd-1.5.5+dfsg2/tests/zstreamtest.c"
 #undef main
 
-size_t ZDICT_trainFromBuffer(void* dictBuffer, size_t dictBufferCapacity,
-                             const void* samplesBuffer,
-                             const size_t* samplesSizes, unsigned nbSamples)
-{
-    (void)dictBuffer;
-    (void)dictBufferCapacity;
-    (void)samplesBuffer;
-    (void)samplesSizes;
-    (void)nbSamples;
-    return (size_t)-1;
-}
-
-unsigned ZDICT_isError(size_t errorCode)
-{
-    return ZSTD_isError(errorCode);
-}
-
 int main(void)
 {
     size_t const srcSize = 384U * 1024U;
@@ -41,12 +24,14 @@ int main(void)
 
     if (runLegacyRoundTrip(src, srcSize, seed ^ 0x11111111U) ||
         runNewRoundTrip(src, srcSize, 4, 0, NULL, 0, seed ^ 0x22222222U) ||
-        testSkippableFrame()) {
+        runNewRoundTrip(src, srcSize, 4, 2, NULL, 0, seed ^ 0x23232323U) ||
+        testSkippableFrame() ||
+        testDictionaryTraining(src, srcSize, 2, seed ^ 0x33333333U)) {
         free(src);
         return 1;
     }
 
-    if (compressNewStream(src, srcSize, 5, 0, NULL, 0, seed ^ 0x44444444U,
+    if (compressNewStream(src, srcSize, 5, 2, NULL, 0, seed ^ 0x44444444U,
                           &compressed, &compressedSize)) {
         free(src);
         free(compressed);

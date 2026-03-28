@@ -1,7 +1,8 @@
 use crate::ffi::{
     compress::{generic_error, load_upstream, null_cctx},
     types::{
-        ZSTD_CCtx, ZSTD_CStream, ZSTD_EndDirective, ZSTD_inBuffer, ZSTD_outBuffer,
+        ZSTD_CCtx, ZSTD_CCtx_params, ZSTD_CStream, ZSTD_EndDirective,
+        ZSTD_compressionParameters, ZSTD_customMem, ZSTD_inBuffer, ZSTD_outBuffer,
         ZSTD_parameters,
     },
 };
@@ -157,5 +158,74 @@ pub extern "C" fn ZSTD_sizeof_CStream(zcs: *const ZSTD_CStream) -> usize {
     match load_upstream!("ZSTD_sizeof_CStream", Fn) {
         Some(func) => unsafe { func(zcs) },
         None => 0,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ZSTD_estimateCStreamSize_usingCParams(
+    cParams: ZSTD_compressionParameters,
+) -> usize {
+    type Fn = unsafe extern "C" fn(ZSTD_compressionParameters) -> usize;
+    match load_upstream!("ZSTD_estimateCStreamSize_usingCParams", Fn) {
+        Some(func) => unsafe { func(cParams) },
+        None => generic_error(),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ZSTD_createCStream_advanced(
+    customMem: ZSTD_customMem,
+) -> *mut ZSTD_CStream {
+    type Fn = unsafe extern "C" fn(ZSTD_customMem) -> *mut ZSTD_CStream;
+    match load_upstream!("ZSTD_createCStream_advanced", Fn) {
+        Some(func) => unsafe { func(customMem) },
+        None => null_cctx().cast(),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ZSTD_compressStream2_simpleArgs(
+    cctx: *mut ZSTD_CCtx,
+    dst: *mut c_void,
+    dstCapacity: usize,
+    dstPos: *mut usize,
+    src: *const c_void,
+    srcSize: usize,
+    srcPos: *mut usize,
+    endOp: ZSTD_EndDirective,
+) -> usize {
+    type Fn = unsafe extern "C" fn(
+        *mut ZSTD_CCtx,
+        *mut c_void,
+        usize,
+        *mut usize,
+        *const c_void,
+        usize,
+        *mut usize,
+        ZSTD_EndDirective,
+    ) -> usize;
+    match load_upstream!("ZSTD_compressStream2_simpleArgs", Fn) {
+        Some(func) => unsafe { func(cctx, dst, dstCapacity, dstPos, src, srcSize, srcPos, endOp) },
+        None => generic_error(),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ZSTD_estimateCStreamSize(compressionLevel: c_int) -> usize {
+    type Fn = unsafe extern "C" fn(c_int) -> usize;
+    match load_upstream!("ZSTD_estimateCStreamSize", Fn) {
+        Some(func) => unsafe { func(compressionLevel) },
+        None => generic_error(),
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ZSTD_estimateCStreamSize_usingCCtxParams(
+    params: *const ZSTD_CCtx_params,
+) -> usize {
+    type Fn = unsafe extern "C" fn(*const ZSTD_CCtx_params) -> usize;
+    match load_upstream!("ZSTD_estimateCStreamSize_usingCCtxParams", Fn) {
+        Some(func) => unsafe { func(params) },
+        None => generic_error(),
     }
 }

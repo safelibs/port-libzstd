@@ -5,7 +5,9 @@
 pub mod common;
 pub mod compress;
 pub mod decompress;
+pub mod dict_builder;
 pub mod ffi;
+pub mod threading;
 
 pub const ABI_SONAME: &str = "libzstd.so.1";
 pub const ABI_VERSION: &str = "1.5.5";
