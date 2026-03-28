@@ -3,6 +3,7 @@
 #![allow(non_snake_case)]
 
 pub mod common;
+pub mod compress;
 pub mod decompress;
 pub mod ffi;
 

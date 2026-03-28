@@ -1,15 +1,16 @@
 use crate::{
     common::{
-        error::{decode_error, error_result},
+        error::{decode_error, error_result, is_error_result},
     },
     decompress::{
         block::{parse_block_header, BlockHeader, BlockType, BLOCK_HEADER_SIZE, BLOCK_SIZE_MAX},
         fse::formatted_dict_id,
         legacy,
     },
-    ffi::types::{ZSTD_ErrorCode, ZSTD_format_e, ZSTD_frameHeader, ZSTD_frameType_e},
+    ffi::types::{ZSTD_DCtx, ZSTD_ErrorCode, ZSTD_format_e, ZSTD_frameHeader, ZSTD_frameType_e},
 };
-use structured_zstd::decoding::{BlockDecodingStrategy, Dictionary, FrameDecoder};
+use core::ffi::c_void;
+use structured_zstd::decoding::{BlockDecodingStrategy, FrameDecoder};
 
 pub(crate) const ZSTD_MAGICNUMBER: u32 = 0xFD2F_B528;
 pub(crate) const ZSTD_MAGIC_SKIPPABLE_START: u32 = 0x184D_2A50;
@@ -53,7 +54,7 @@ pub(crate) enum HeaderProbe {
 pub(crate) enum DictionaryRef<'a> {
     None,
     Raw(&'a [u8]),
-    Formatted(&'a [u8], u32),
+    Formatted(&'a [u8]),
 }
 
 fn read_u32(src: &[u8]) -> u32 {
@@ -336,17 +337,66 @@ fn map_structured_error(error: structured_zstd::decoding::errors::FrameDecoderEr
     }
 }
 
-fn map_oxiarc_error(error: impl core::fmt::Display) -> ZSTD_ErrorCode {
-    let message = error.to_string();
-    if message.contains("Invalid magic") {
-        ZSTD_ErrorCode::ZSTD_error_prefix_unknown
-    } else if message.contains("CRC mismatch") {
-        ZSTD_ErrorCode::ZSTD_error_checksum_wrong
-    } else if message.contains("Buffer too small") {
-        ZSTD_ErrorCode::ZSTD_error_dstSize_tooSmall
-    } else {
-        ZSTD_ErrorCode::ZSTD_error_corruption_detected
+fn decode_dict_with_upstream(
+    frame: &[u8],
+    format: ZSTD_format_e,
+    dict: &[u8],
+    dst_capacity: usize,
+) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    type CreateDCtx = unsafe extern "C" fn() -> *mut ZSTD_DCtx;
+    type FreeDCtx = unsafe extern "C" fn(dctx: *mut ZSTD_DCtx) -> usize;
+    type DecompressUsingDict = unsafe extern "C" fn(
+        dctx: *mut ZSTD_DCtx,
+        dst: *mut c_void,
+        dst_capacity: usize,
+        src: *const c_void,
+        src_size: usize,
+        dict: *const c_void,
+        dict_size: usize,
+    ) -> usize;
+
+    let Some(create_dctx) =
+        crate::ffi::compress::load_upstream!("ZSTD_createDCtx", CreateDCtx)
+    else {
+        return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
+    };
+    let Some(free_dctx) = crate::ffi::compress::load_upstream!("ZSTD_freeDCtx", FreeDCtx) else {
+        return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
+    };
+    let Some(decompress_using_dict) =
+        crate::ffi::compress::load_upstream!("ZSTD_decompress_usingDict", DecompressUsingDict)
+    else {
+        return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
+    };
+
+    let input = build_modern_frame_bytes(frame, format);
+    let mut output = vec![0u8; dst_capacity];
+    let dctx = unsafe { create_dctx() };
+    if dctx.is_null() {
+        return Err(ZSTD_ErrorCode::ZSTD_error_memory_allocation);
     }
+
+    let decoded_size = unsafe {
+        decompress_using_dict(
+            dctx,
+            output.as_mut_ptr().cast(),
+            output.len(),
+            input.as_ptr().cast(),
+            input.len(),
+            dict.as_ptr().cast(),
+            dict.len(),
+        )
+    };
+    unsafe {
+        free_dctx(dctx);
+    }
+
+    if is_error_result(decoded_size) {
+        return Err(decode_error(decoded_size));
+    }
+
+    output.truncate(decoded_size);
+    Ok(output)
 }
 
 fn decode_single_modern_frame(
@@ -361,9 +411,11 @@ fn decode_single_modern_frame(
     }
 
     match dict {
-        DictionaryRef::Raw(bytes) if !bytes.is_empty() => {
-            let input = build_modern_frame_bytes(frame, format);
-            return oxiarc_zstd::decompress_with_dict(&input, bytes).map_err(map_oxiarc_error);
+        DictionaryRef::Raw(bytes) | DictionaryRef::Formatted(bytes) if !bytes.is_empty() => {
+            let info = find_frame_size_info(frame, format)?;
+            let dst_capacity = usize::try_from(info.decompressed_bound)
+                .map_err(|_| ZSTD_ErrorCode::ZSTD_error_frameParameter_unsupported)?;
+            return decode_dict_with_upstream(frame, format, bytes, dst_capacity);
         }
         _ => {}
     }
@@ -373,25 +425,7 @@ fn decode_single_modern_frame(
     let mut output = Vec::new();
     let mut decoder = FrameDecoder::new();
 
-    let formatted_dict_id = match dict {
-        DictionaryRef::Formatted(bytes, dict_id) => {
-            let prepared = Dictionary::decode_dict(bytes).map_err(|_| {
-                ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted
-            })?;
-            decoder
-                .add_dict(prepared)
-                .map_err(map_structured_error)?;
-            Some(dict_id)
-        }
-        _ => None,
-    };
-
     decoder.init(&mut input).map_err(map_structured_error)?;
-    if header.dictID == 0 {
-        if let Some(dict_id) = formatted_dict_id {
-            decoder.force_dict(dict_id).map_err(map_structured_error)?;
-        }
-    }
 
     while !decoder.is_finished() {
         decoder
@@ -537,7 +571,7 @@ pub(crate) fn decode_all_frames(
                     let decoded = legacy::decompress(buffer.as_mut_slice(), supported, match dict {
                         DictionaryRef::None => None,
                         DictionaryRef::Raw(bytes) => Some(bytes),
-                        DictionaryRef::Formatted(bytes, _) => Some(bytes),
+                        DictionaryRef::Formatted(bytes) => Some(bytes),
                     })?;
                     buffer.truncate(decoded);
                     output.extend_from_slice(&buffer);
@@ -568,12 +602,14 @@ pub(crate) fn decode_all_frames(
     Ok(output)
 }
 
+#[allow(dead_code)]
 pub(crate) fn dictionary_ref<'a>(dict: Option<&'a [u8]>) -> DictionaryRef<'a> {
     match dict {
         None => DictionaryRef::None,
         Some(bytes) if bytes.is_empty() => DictionaryRef::None,
         Some(bytes) if crate::decompress::huf::is_formatted_dictionary(bytes) => {
-            DictionaryRef::Formatted(bytes, formatted_dict_id(bytes))
+            let _ = formatted_dict_id(bytes);
+            DictionaryRef::Formatted(bytes)
         }
         Some(bytes) => DictionaryRef::Raw(bytes),
     }

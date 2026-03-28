@@ -1,5 +1,10 @@
 use core::ffi::{c_int, c_uint, c_void};
 
+pub const ZSTD_CONTENTSIZE_UNKNOWN: u64 = u64::MAX;
+pub const ZSTD_CONTENTSIZE_ERROR: u64 = u64::MAX - 1;
+pub const ZSTD_BLOCKSIZE_MAX: usize = 1 << 17;
+pub const ZSTD_CLEVEL_DEFAULT: c_int = 3;
+
 #[repr(C)]
 pub struct ZSTD_CCtx {
     _private: [u8; 0],
@@ -86,6 +91,75 @@ impl Default for ZSTD_ResetDirective {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ZSTD_strategy {
+    ZSTD_fast = 1,
+    ZSTD_dfast = 2,
+    ZSTD_greedy = 3,
+    ZSTD_lazy = 4,
+    ZSTD_lazy2 = 5,
+    ZSTD_btlazy2 = 6,
+    ZSTD_btopt = 7,
+    ZSTD_btultra = 8,
+    ZSTD_btultra2 = 9,
+}
+
+impl Default for ZSTD_strategy {
+    fn default() -> Self {
+        Self::ZSTD_fast
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ZSTD_cParameter {
+    ZSTD_c_compressionLevel = 100,
+    ZSTD_c_windowLog = 101,
+    ZSTD_c_hashLog = 102,
+    ZSTD_c_chainLog = 103,
+    ZSTD_c_searchLog = 104,
+    ZSTD_c_minMatch = 105,
+    ZSTD_c_targetLength = 106,
+    ZSTD_c_strategy = 107,
+    ZSTD_c_enableLongDistanceMatching = 160,
+    ZSTD_c_ldmHashLog = 161,
+    ZSTD_c_ldmMinMatch = 162,
+    ZSTD_c_ldmBucketSizeLog = 163,
+    ZSTD_c_ldmHashRateLog = 164,
+    ZSTD_c_contentSizeFlag = 200,
+    ZSTD_c_checksumFlag = 201,
+    ZSTD_c_dictIDFlag = 202,
+    ZSTD_c_nbWorkers = 400,
+    ZSTD_c_jobSize = 401,
+    ZSTD_c_overlapLog = 402,
+    ZSTD_c_experimentalParam1 = 500,
+    ZSTD_c_experimentalParam2 = 10,
+    ZSTD_c_experimentalParam3 = 1000,
+    ZSTD_c_experimentalParam4 = 1001,
+    ZSTD_c_experimentalParam5 = 1002,
+    ZSTD_c_experimentalParam6 = 1003,
+    ZSTD_c_experimentalParam7 = 1004,
+    ZSTD_c_experimentalParam8 = 1005,
+    ZSTD_c_experimentalParam9 = 1006,
+    ZSTD_c_experimentalParam10 = 1007,
+    ZSTD_c_experimentalParam11 = 1008,
+    ZSTD_c_experimentalParam12 = 1009,
+    ZSTD_c_experimentalParam13 = 1010,
+    ZSTD_c_experimentalParam14 = 1011,
+    ZSTD_c_experimentalParam15 = 1012,
+    ZSTD_c_experimentalParam16 = 1013,
+    ZSTD_c_experimentalParam17 = 1014,
+    ZSTD_c_experimentalParam18 = 1015,
+    ZSTD_c_experimentalParam19 = 1016,
+}
+
+impl Default for ZSTD_cParameter {
+    fn default() -> Self {
+        Self::ZSTD_c_compressionLevel
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ZSTD_dParameter {
     ZSTD_d_windowLogMax = 100,
     ZSTD_d_experimentalParam1 = 1000,
@@ -102,6 +176,33 @@ impl Default for ZSTD_dParameter {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ZSTD_compressionParameters {
+    pub windowLog: c_uint,
+    pub chainLog: c_uint,
+    pub hashLog: c_uint,
+    pub searchLog: c_uint,
+    pub minMatch: c_uint,
+    pub targetLength: c_uint,
+    pub strategy: ZSTD_strategy,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ZSTD_frameParameters {
+    pub contentSizeFlag: c_int,
+    pub checksumFlag: c_int,
+    pub noDictIDFlag: c_int,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ZSTD_parameters {
+    pub cParams: ZSTD_compressionParameters,
+    pub fParams: ZSTD_frameParameters,
+}
+
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ZSTD_format_e {
     ZSTD_f_zstd1 = 0,
@@ -111,6 +212,20 @@ pub enum ZSTD_format_e {
 impl Default for ZSTD_format_e {
     fn default() -> Self {
         Self::ZSTD_f_zstd1
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ZSTD_EndDirective {
+    ZSTD_e_continue = 0,
+    ZSTD_e_flush = 1,
+    ZSTD_e_end = 2,
+}
+
+impl Default for ZSTD_EndDirective {
+    fn default() -> Self {
+        Self::ZSTD_e_continue
     }
 }
 

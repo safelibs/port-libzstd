@@ -16,6 +16,10 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 name = "decompress"
 path = "tests/rust/decompress.rs"
 
+[[test]]
+name = "compress"
+path = "tests/rust/compress.rs"
+
 [features]
 default = []
 legacy = []

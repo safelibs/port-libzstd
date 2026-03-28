@@ -9,7 +9,30 @@ use crate::{
     },
 };
 use core::ffi::c_void;
-use structured_zstd::decoding::Dictionary;
+
+fn validate_formatted_dictionary(bytes: &[u8]) -> Result<(), ZSTD_ErrorCode> {
+    type CreateDDict = unsafe extern "C" fn(*const c_void, usize) -> *mut ZSTD_DDict;
+    type FreeDDict = unsafe extern "C" fn(*mut ZSTD_DDict) -> usize;
+
+    let Some(create_ddict) =
+        crate::ffi::compress::load_upstream!("ZSTD_createDDict", CreateDDict)
+    else {
+        return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
+    };
+    let Some(free_ddict) = crate::ffi::compress::load_upstream!("ZSTD_freeDDict", FreeDDict)
+    else {
+        return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
+    };
+
+    let ddict = unsafe { create_ddict(bytes.as_ptr().cast(), bytes.len()) };
+    if ddict.is_null() {
+        return Err(ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted);
+    }
+    unsafe {
+        free_ddict(ddict);
+    }
+    Ok(())
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum DictionaryUse {
@@ -53,7 +76,8 @@ impl DictionarySelection {
                 dict_id,
                 ..
             } => Ok(if *formatted {
-                DictionaryRef::Formatted(raw, *dict_id)
+                let _ = dict_id;
+                DictionaryRef::Formatted(raw)
             } else {
                 DictionaryRef::Raw(raw)
             }),
@@ -85,8 +109,7 @@ impl DecoderDictionary {
         crate::decompress::fse::validate_dictionary_kind(bytes)?;
         let formatted = crate::decompress::huf::is_formatted_dictionary(bytes);
         if formatted {
-            Dictionary::decode_dict(bytes)
-                .map_err(|_| ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted)?;
+            validate_formatted_dictionary(bytes)?;
         }
         Ok(Self {
             raw: bytes.to_vec(),
@@ -97,7 +120,8 @@ impl DecoderDictionary {
 
     pub(crate) fn as_dictionary_ref(&self) -> DictionaryRef<'_> {
         if self.formatted {
-            DictionaryRef::Formatted(&self.raw, self.dict_id)
+            let _ = self.dict_id;
+            DictionaryRef::Formatted(&self.raw)
         } else {
             DictionaryRef::Raw(&self.raw)
         }

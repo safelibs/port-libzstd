@@ -30,7 +30,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_getBlockSize"
@@ -40,7 +40,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::block"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_DCtx_loadDictionary_byReference"
@@ -60,7 +60,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cdict"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_createDStream"
@@ -100,7 +100,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cstream"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_defaultCLevel"
@@ -110,7 +110,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::params"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_compressEnd"
@@ -120,7 +120,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_compressStream"
@@ -130,7 +130,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cstream"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_CStreamInSize"
@@ -140,7 +140,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cstream"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZDICT_addEntropyTablesFromBuffer"
@@ -160,7 +160,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_createDDict_byReference"
@@ -200,7 +200,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_CCtxParams_init"
@@ -230,7 +230,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cstream"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_getParams"
@@ -240,7 +240,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::params"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_createDDict_advanced"
@@ -290,7 +290,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::params"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_resetDStream"
@@ -330,7 +330,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_freeCCtxParams"
@@ -460,7 +460,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cstream"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZDICT_getDictID"
@@ -510,7 +510,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cstream"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_maxCLevel"
@@ -520,7 +520,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::params"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_freeCCtx"
@@ -530,7 +530,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_createCCtxParams"
@@ -590,7 +590,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_CCtxParams_setParameter"
@@ -610,7 +610,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cstream"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_decompressBegin"
@@ -670,7 +670,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_isFrame"
@@ -690,7 +690,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::block"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_estimateCCtxSize"
@@ -750,7 +750,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cdict"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_copyDCtx"
@@ -770,7 +770,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::params"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_compressSequences"
@@ -810,7 +810,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cstream"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_initCStream"
@@ -820,7 +820,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cstream"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_DCtx_refPrefix_advanced"
@@ -870,7 +870,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::params"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_compress_advanced"
@@ -940,7 +940,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_frameHeaderSize"
@@ -970,7 +970,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_estimateCDictSize_advanced"
@@ -1040,7 +1040,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_CCtx_setParametersUsingCCtxParams"
@@ -1100,7 +1100,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cstream"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_DCtx_setFormat"
@@ -1120,7 +1120,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cstream"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_getFrameProgression"
@@ -1230,7 +1230,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_freeDCtx"
@@ -1250,7 +1250,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cdict"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_getFrameHeader"
@@ -1270,7 +1270,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::params"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_CCtxParams_getParameter"
@@ -1350,7 +1350,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cdict"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_getCParams"
@@ -1360,7 +1360,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::params"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_decompressStream"
@@ -1420,7 +1420,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cdict"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_registerSequenceProducer"
@@ -1440,7 +1440,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::params"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_decompressDCtx"
@@ -1480,7 +1480,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cdict"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_CCtxParams_init_advanced"
@@ -1510,7 +1510,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_sizeof_CCtx"
@@ -1520,7 +1520,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_CCtxParams_reset"
@@ -1550,7 +1550,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cdict"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_compressStream2"
@@ -1560,7 +1560,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cstream"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_decodingBufferSize_min"
@@ -1610,7 +1610,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_findFrameCompressedSize"
@@ -1650,7 +1650,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cdict"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_compress2"
@@ -1660,7 +1660,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_sizeof_CDict"
@@ -1670,7 +1670,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cdict"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_createCCtx_advanced"
@@ -1710,7 +1710,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cdict"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_mergeBlockDelimiters"
@@ -1730,7 +1730,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cstream"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_initStaticDStream"
@@ -1760,7 +1760,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_getDictID_fromDict"
@@ -1780,7 +1780,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_createCDict_advanced2"
@@ -1810,7 +1810,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cdict"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_resetCStream"
@@ -1820,7 +1820,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cstream"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_compressBound"
@@ -1830,7 +1830,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::compress::cctx"
 owning_phase = 3
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_getDecompressedSize"
