@@ -176,6 +176,76 @@ fn decompress_modern_frames_and_contexts() {
         "ZSTD_DCtx_reset",
     );
 
+    let header_size = frame::ZSTD_frameHeaderSize(modern.as_ptr().cast(), modern.len());
+    let mut block_output = vec![0u8; output.len()];
+    let mut block_offset = header_size + 3;
+    let mut produced = 0usize;
+    check_result(dctx::ZSTD_decompressBegin(dctx), "ZSTD_decompressBegin(block)");
+    assert_eq!(dstream::ZSTD_nextSrcSizeToDecompress(dctx), 5);
+    assert_eq!(
+        dctx::ZSTD_decompressContinue(
+            dctx,
+            block_output.as_mut_ptr().cast(),
+            block_output.len(),
+            modern[..5].as_ptr().cast(),
+            5,
+        ),
+        0
+    );
+    assert_eq!(
+        dctx::ZSTD_decompressContinue(
+            dctx,
+            block_output.as_mut_ptr().cast(),
+            block_output.len(),
+            modern[5..header_size].as_ptr().cast(),
+            header_size - 5,
+        ),
+        0
+    );
+    assert_eq!(dstream::ZSTD_nextSrcSizeToDecompress(dctx), 3);
+    assert_eq!(
+        dctx::ZSTD_decompressContinue(
+            dctx,
+            block_output.as_mut_ptr().cast(),
+            block_output.len(),
+            modern[header_size..header_size + 3].as_ptr().cast(),
+            3,
+        ),
+        0
+    );
+    let block_size = dstream::ZSTD_nextSrcSizeToDecompress(dctx);
+    let block_written = zstd::decompress::block::ZSTD_decompressBlock(
+        dctx,
+        block_output.as_mut_ptr().cast(),
+        block_output.len(),
+        modern[block_offset..block_offset + block_size]
+            .as_ptr()
+            .cast(),
+        block_size,
+    );
+    check_result(block_written, "ZSTD_decompressBlock");
+    assert!(block_written > 0);
+    assert!(block_output[..block_written].iter().all(|&byte| byte == 0));
+    block_offset += block_size;
+    produced += block_written;
+
+    while dstream::ZSTD_nextSrcSizeToDecompress(dctx) != 0 {
+        let need = dstream::ZSTD_nextSrcSizeToDecompress(dctx);
+        let wrote = dctx::ZSTD_decompressContinue(
+            dctx,
+            block_output[produced..].as_mut_ptr().cast(),
+            block_output.len() - produced,
+            modern[block_offset..block_offset + need].as_ptr().cast(),
+            need,
+        );
+        check_result(wrote, "ZSTD_decompressContinue(block-finish)");
+        produced += wrote;
+        block_offset += need;
+    }
+    assert_eq!(produced, output.len());
+    assert_eq!(block_offset, modern.len());
+    assert!(block_output.iter().all(|&byte| byte == 0));
+
     ddict::ZSTD_freeDDict(std::ptr::null_mut::<ZSTD_DDict>());
     dstream::ZSTD_freeDStream(std::ptr::null_mut::<ZSTD_DStream>());
     dctx::ZSTD_freeDCtx(clone);

@@ -205,6 +205,67 @@ static void test_bufferless(const unsigned char* compressed, size_t compressed_s
         "ZSTD_decompressContinue(skippable-payload)");
     if (ZSTD_nextSrcSizeToDecompress(dctx) != 0) die("expected skippable bufferless completion");
 
+    {
+        size_t header_size = ZSTD_frameHeaderSize(compressed, compressed_size);
+        size_t block_size;
+        size_t offset;
+        size_t produced_after_block;
+        size_t produced_total;
+
+        check_zstd(ZSTD_decompressBegin(dctx), "ZSTD_decompressBegin(block)");
+        check_zstd(
+            ZSTD_decompressContinue(dctx, output, decompressed_size, compressed, 5),
+            "ZSTD_decompressContinue(block-prefix)");
+        check_zstd(
+            ZSTD_decompressContinue(
+                dctx,
+                output,
+                decompressed_size,
+                compressed + 5,
+                header_size - 5),
+            "ZSTD_decompressContinue(block-header)");
+        check_zstd(
+            ZSTD_decompressContinue(
+                dctx,
+                output,
+                decompressed_size,
+                compressed + header_size,
+                3),
+            "ZSTD_decompressContinue(block-header3)");
+        block_size = ZSTD_nextSrcSizeToDecompress(dctx);
+        offset = header_size + 3;
+        produced_after_block = ZSTD_decompressBlock(
+            dctx,
+            output,
+            decompressed_size,
+            compressed + offset,
+            block_size);
+        check_zstd(
+            produced_after_block,
+            "ZSTD_decompressBlock");
+        if (produced_after_block == 0) die("expected ZSTD_decompressBlock to produce output");
+        expect_zeroes(output, produced_after_block);
+        offset += block_size;
+        produced_total = produced_after_block;
+        while (ZSTD_nextSrcSizeToDecompress(dctx) != 0) {
+            size_t need = ZSTD_nextSrcSizeToDecompress(dctx);
+            size_t wrote;
+            check_zstd(
+                wrote = ZSTD_decompressContinue(
+                    dctx,
+                    output + produced_total,
+                    decompressed_size - produced_total,
+                    compressed + offset,
+                    need),
+                "ZSTD_decompressContinue(block-finish)");
+            produced_total += wrote;
+            offset += need;
+        }
+        if (produced_total != decompressed_size) die("unexpected block-assisted decompressed size");
+        if (offset != compressed_size) die("block-assisted bufferless decoder did not consume full frame");
+        expect_zeroes(output, produced_total);
+    }
+
     free(output);
     ZSTD_freeDCtx(dctx);
 }

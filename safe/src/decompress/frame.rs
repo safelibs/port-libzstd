@@ -245,6 +245,72 @@ fn build_modern_frame_bytes(frame: &[u8], format: ZSTD_format_e) -> Vec<u8> {
     output
 }
 
+fn encode_window_descriptor(window_size: u64) -> Result<u8, ZSTD_ErrorCode> {
+    for window_log in ZSTD_WINDOWLOG_ABSOLUTEMIN..=ZSTD_WINDOWLOG_MAX {
+        let window_base = 1u64 << window_log;
+        if window_size < window_base {
+            continue;
+        }
+        let step = window_base >> 3;
+        let diff = window_size - window_base;
+        if diff > step * 7 || diff % step != 0 {
+            continue;
+        }
+        let mantissa = (diff / step) as u8;
+        return Ok((((window_log - ZSTD_WINDOWLOG_ABSOLUTEMIN) as u8) << 3) | mantissa);
+    }
+    Err(ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge)
+}
+
+pub(crate) fn build_synthetic_block_frame(
+    frame_prefix: &[u8],
+    header: ZSTD_frameHeader,
+    format: ZSTD_format_e,
+    block_body: &[u8],
+) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    let header_size = header.headerSize as usize;
+    if frame_prefix.len() < header_size + BLOCK_HEADER_SIZE {
+        return Err(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong);
+    }
+
+    let dict_id_code = if header.dictID == 0 {
+        0
+    } else if header.dictID <= u8::MAX as u32 {
+        1
+    } else if header.dictID <= u16::MAX as u32 {
+        2
+    } else {
+        3
+    };
+
+    let mut synthetic = Vec::with_capacity(
+        frame_prefix.len() + block_body.len() + ZSTD_FRAMEIDSIZE + 2,
+    );
+    if format == ZSTD_format_e::ZSTD_f_zstd1 {
+        synthetic.extend_from_slice(&ZSTD_MAGICNUMBER.to_le_bytes());
+    }
+    synthetic.push(dict_id_code as u8);
+    synthetic.push(encode_window_descriptor(header.windowSize)?);
+    match dict_id_code {
+        0 => {}
+        1 => synthetic.push(header.dictID as u8),
+        2 => synthetic.extend_from_slice(&(header.dictID as u16).to_le_bytes()),
+        3 => synthetic.extend_from_slice(&header.dictID.to_le_bytes()),
+        _ => unreachable!(),
+    }
+
+    let mut block_prefix = frame_prefix[header_size..].to_vec();
+    let last_header = block_prefix
+        .len()
+        .checked_sub(BLOCK_HEADER_SIZE)
+        .ok_or(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong)?;
+    block_prefix[last_header] |= 1;
+
+    synthetic.extend_from_slice(&block_prefix);
+    synthetic.extend_from_slice(block_body);
+    Ok(synthetic)
+}
+
 fn map_structured_error(error: structured_zstd::decoding::errors::FrameDecoderError) -> ZSTD_ErrorCode {
     use structured_zstd::decoding::errors::{
         FrameDecoderError, FrameHeaderError, ReadFrameHeaderError,

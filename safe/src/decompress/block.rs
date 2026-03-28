@@ -1,7 +1,7 @@
 use crate::{
     common::error::error_result,
     ffi::{
-        decompress::with_dctx_mut,
+        decompress::{decompress_block_body, with_dctx_mut},
         types::{ZSTD_DCtx, ZSTD_ErrorCode},
     },
 };
@@ -52,17 +52,16 @@ pub(crate) fn parse_block_header(src: &[u8]) -> Result<BlockHeader, ZSTD_ErrorCo
 #[no_mangle]
 pub extern "C" fn ZSTD_decompressBlock(
     dctx: *mut ZSTD_DCtx,
-    _dst: *mut c_void,
-    _dstCapacity: usize,
+    dst: *mut c_void,
+    dstCapacity: usize,
     src: *const c_void,
     srcSize: usize,
 ) -> usize {
     let Some(src) = crate::ffi::decompress::optional_src_slice(src, srcSize) else {
         return error_result(ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
     };
-    let _ = with_dctx_mut(dctx, |_| Ok::<(), ZSTD_ErrorCode>(()));
-    match parse_block_header(src) {
-        Ok(_) => error_result(ZSTD_ErrorCode::ZSTD_error_corruption_detected),
+    match with_dctx_mut(dctx, |dctx| decompress_block_body(dctx, dst, dstCapacity, src)) {
+        Ok(size) => size,
         Err(code) => error_result(code),
     }
 }

@@ -1210,7 +1210,7 @@ version_class = "Base"
 originating_header = "zstd.h"
 owner_module = "crate::decompress::block"
 owning_phase = 2
-status = "planned"
+status = "implemented"
 
 [[symbol]]
 name = "ZSTD_DStreamInSize"

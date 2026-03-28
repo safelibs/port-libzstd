@@ -151,6 +151,7 @@ struct BufferlessState {
     stage: BufferlessStage,
     frame_bytes: Vec<u8>,
     header: Option<crate::ffi::types::ZSTD_frameHeader>,
+    decoded_bytes: usize,
 }
 
 impl Default for BufferlessState {
@@ -159,6 +160,7 @@ impl Default for BufferlessState {
             stage: BufferlessStage::Idle,
             frame_bytes: Vec::new(),
             header: None,
+            decoded_bytes: 0,
         }
     }
 }
@@ -168,6 +170,7 @@ impl BufferlessState {
         self.stage = BufferlessStage::NeedStart;
         self.frame_bytes.clear();
         self.header = None;
+        self.decoded_bytes = 0;
     }
 
     fn reset(&mut self) {
@@ -673,31 +676,7 @@ pub(crate) fn bufferless_continue(
                 Ok(0)
             }
         }
-        BufferlessStage::NeedBlockBody(block) => {
-            dctx.bufferless.frame_bytes.extend_from_slice(src);
-            if block.last_block {
-                if dctx.bufferless.header.expect("header set").checksumFlag != 0 {
-                    dctx.bufferless.stage = BufferlessStage::NeedChecksum(4);
-                    return Ok(0);
-                }
-                let decoded = frame::decode_all_frames(
-                    &dctx.bufferless.frame_bytes,
-                    dctx.resolved_dict()?,
-                    dctx.format,
-                    dctx.max_window_size,
-                )?;
-                let written = frame::copy_decoded_to_ptr(&decoded, dst, dst_capacity);
-                if crate::common::error::is_error_result(written) {
-                    return Err(crate::common::error::decode_error(written));
-                }
-                dctx.bufferless.stage = BufferlessStage::Finished;
-                dctx.clear_once_dict();
-                Ok(written)
-            } else {
-                dctx.bufferless.stage = BufferlessStage::NeedBlockHeader;
-                Ok(0)
-            }
-        }
+        BufferlessStage::NeedBlockBody(_) => decompress_block_body(dctx, dst, dst_capacity, src),
         BufferlessStage::NeedSkippablePayload(_) => {
             dctx.bufferless.frame_bytes.extend_from_slice(src);
             dctx.bufferless.stage = BufferlessStage::Finished;
@@ -706,22 +685,83 @@ pub(crate) fn bufferless_continue(
         }
         BufferlessStage::NeedChecksum(_) => {
             dctx.bufferless.frame_bytes.extend_from_slice(src);
-            let decoded = frame::decode_all_frames(
-                &dctx.bufferless.frame_bytes,
-                dctx.resolved_dict()?,
-                dctx.format,
-                dctx.max_window_size,
-            )?;
-            let written = frame::copy_decoded_to_ptr(&decoded, dst, dst_capacity);
-            if crate::common::error::is_error_result(written) {
-                return Err(crate::common::error::decode_error(written));
-            }
             dctx.bufferless.stage = BufferlessStage::Finished;
             dctx.clear_once_dict();
-            Ok(written)
+            Ok(0)
         }
         BufferlessStage::Finished => Ok(0),
     }
+}
+
+fn decompress_buffered_block(
+    dctx: &mut DecoderContext,
+    dst: *mut c_void,
+    dst_capacity: usize,
+    block: BlockHeader,
+    src: &[u8],
+) -> Result<usize, ZSTD_ErrorCode> {
+    let expected = if block.block_type == BlockType::Rle {
+        1
+    } else {
+        block.content_size
+    };
+    if src.len() != expected {
+        return Err(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong);
+    }
+
+    let mut completed_prefix = dctx.bufferless.frame_bytes.clone();
+    completed_prefix.extend_from_slice(src);
+    let checksum_flag = dctx.bufferless.header.expect("header set").checksumFlag != 0;
+
+    let dict = dctx.resolved_dict()?;
+    let synthetic_frame = frame::build_synthetic_block_frame(
+        &dctx.bufferless.frame_bytes,
+        dctx.bufferless.header.expect("header set"),
+        dctx.format,
+        src,
+    )?;
+    let completed_output = frame::decode_all_frames(
+        &synthetic_frame,
+        dict,
+        dctx.format,
+        dctx.max_window_size,
+    )?;
+    if completed_output.len() < dctx.bufferless.decoded_bytes {
+        return Err(ZSTD_ErrorCode::ZSTD_error_corruption_detected);
+    }
+
+    let block_output = &completed_output[dctx.bufferless.decoded_bytes..];
+    let written = frame::copy_decoded_to_ptr(block_output, dst, dst_capacity);
+    if crate::common::error::is_error_result(written) {
+        return Err(crate::common::error::decode_error(written));
+    }
+
+    dctx.bufferless.frame_bytes = completed_prefix;
+    dctx.bufferless.decoded_bytes = completed_output.len();
+    if block.last_block {
+        if checksum_flag {
+            dctx.bufferless.stage = BufferlessStage::NeedChecksum(4);
+        } else {
+            dctx.bufferless.stage = BufferlessStage::Finished;
+            dctx.clear_once_dict();
+        }
+    } else {
+        dctx.bufferless.stage = BufferlessStage::NeedBlockHeader;
+    }
+
+    Ok(written)
+}
+
+pub(crate) fn decompress_block_body(
+    dctx: &mut DecoderContext,
+    dst: *mut c_void,
+    dst_capacity: usize,
+    src: &[u8],
+) -> Result<usize, ZSTD_ErrorCode> {
+    let BufferlessStage::NeedBlockBody(block) = dctx.bufferless.stage.clone() else {
+        return Err(ZSTD_ErrorCode::ZSTD_error_stage_wrong);
+    };
+    decompress_buffered_block(dctx, dst, dst_capacity, block, src)
 }
 
 pub(crate) fn stream_decompress(
