@@ -72,6 +72,50 @@ pub struct ZSTD_customMem {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ZSTD_ResetDirective {
+    ZSTD_reset_session_only = 1,
+    ZSTD_reset_parameters = 2,
+    ZSTD_reset_session_and_parameters = 3,
+}
+
+impl Default for ZSTD_ResetDirective {
+    fn default() -> Self {
+        Self::ZSTD_reset_session_only
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ZSTD_dParameter {
+    ZSTD_d_windowLogMax = 100,
+    ZSTD_d_experimentalParam1 = 1000,
+    ZSTD_d_experimentalParam2 = 1001,
+    ZSTD_d_experimentalParam3 = 1002,
+    ZSTD_d_experimentalParam4 = 1003,
+    ZSTD_d_experimentalParam5 = 1004,
+}
+
+impl Default for ZSTD_dParameter {
+    fn default() -> Self {
+        Self::ZSTD_d_windowLogMax
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ZSTD_format_e {
+    ZSTD_f_zstd1 = 0,
+    ZSTD_f_zstd1_magicless = 1,
+}
+
+impl Default for ZSTD_format_e {
+    fn default() -> Self {
+        Self::ZSTD_f_zstd1
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ZSTD_frameType_e {
     ZSTD_frame = 0,
     ZSTD_skippableFrame = 1,
@@ -115,4 +159,67 @@ pub struct ZSTD_frameProgression {
     pub flushed: u64,
     pub currentJobID: c_uint,
     pub nbActiveWorkers: c_uint,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ZSTD_nextInputType_e {
+    ZSTDnit_frameHeader = 0,
+    ZSTDnit_blockHeader = 1,
+    ZSTDnit_block = 2,
+    ZSTDnit_lastBlock = 3,
+    ZSTDnit_checksum = 4,
+    ZSTDnit_skippableFrame = 5,
+}
+
+impl Default for ZSTD_nextInputType_e {
+    fn default() -> Self {
+        Self::ZSTDnit_frameHeader
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ZSTD_ErrorCode {
+    ZSTD_error_no_error = 0,
+    ZSTD_error_GENERIC = 1,
+    ZSTD_error_prefix_unknown = 10,
+    ZSTD_error_version_unsupported = 12,
+    ZSTD_error_frameParameter_unsupported = 14,
+    ZSTD_error_frameParameter_windowTooLarge = 16,
+    ZSTD_error_corruption_detected = 20,
+    ZSTD_error_checksum_wrong = 22,
+    ZSTD_error_literals_headerWrong = 24,
+    ZSTD_error_dictionary_corrupted = 30,
+    ZSTD_error_dictionary_wrong = 32,
+    ZSTD_error_dictionaryCreation_failed = 34,
+    ZSTD_error_parameter_unsupported = 40,
+    ZSTD_error_parameter_combination_unsupported = 41,
+    ZSTD_error_parameter_outOfBound = 42,
+    ZSTD_error_tableLog_tooLarge = 44,
+    ZSTD_error_maxSymbolValue_tooLarge = 46,
+    ZSTD_error_maxSymbolValue_tooSmall = 48,
+    ZSTD_error_stabilityCondition_notRespected = 50,
+    ZSTD_error_stage_wrong = 60,
+    ZSTD_error_init_missing = 62,
+    ZSTD_error_memory_allocation = 64,
+    ZSTD_error_workSpace_tooSmall = 66,
+    ZSTD_error_dstSize_tooSmall = 70,
+    ZSTD_error_srcSize_wrong = 72,
+    ZSTD_error_dstBuffer_null = 74,
+    ZSTD_error_noForwardProgress_destFull = 80,
+    ZSTD_error_noForwardProgress_inputEmpty = 82,
+    ZSTD_error_frameIndex_tooLarge = 100,
+    ZSTD_error_seekableIO = 102,
+    ZSTD_error_dstBuffer_wrong = 104,
+    ZSTD_error_srcBuffer_wrong = 105,
+    ZSTD_error_sequenceProducer_failed = 106,
+    ZSTD_error_externalSequences_invalid = 107,
+    ZSTD_error_maxCode = 120,
+}
+
+impl Default for ZSTD_ErrorCode {
+    fn default() -> Self {
+        Self::ZSTD_error_no_error
+    }
 }

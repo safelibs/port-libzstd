@@ -24,6 +24,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import tomllib
 
 
 def strip_comments(text: str) -> str:
@@ -341,6 +342,17 @@ export_map_lines = [
     "",
 ]
 
+existing_status = {}
+if export_map_out.exists():
+    try:
+        existing = tomllib.loads(export_map_out.read_text(encoding="utf-8"))
+    except Exception:
+        existing = {"symbol": []}
+    existing_status = {
+        entry["name"]: entry.get("status", "planned")
+        for entry in existing.get("symbol", [])
+    }
+
 for export in exports:
     name = export["name"]
     header = find_header(name)
@@ -368,7 +380,7 @@ for export in exports:
             f'originating_header = "{header}"',
             f'owner_module = "{owner_module(name)}"',
             f"owning_phase = {phase}",
-            'status = "planned"',
+            f'status = "{existing_status.get(name, "planned")}"',
             "",
         ]
     )

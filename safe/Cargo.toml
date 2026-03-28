@@ -5,12 +5,16 @@ edition = "2021"
 rust-version = "1.82"
 publish = false
 build = "build.rs"
-description = "Phase-1 scaffold for the libzstd safe port"
+description = "Phase-2 common/decompression ABI scaffold for the libzstd safe port"
 license = "BSD-3-Clause OR GPL-2.0-only"
 
 [lib]
 name = "zstd"
 crate-type = ["cdylib", "staticlib", "rlib"]
+
+[[test]]
+name = "decompress"
+path = "tests/rust/decompress.rs"
 
 [features]
 default = []
@@ -29,3 +33,5 @@ headers = [
     "include/zdict.h",
     "include/zstd_errors.h",
 ]
+
+[dependencies]

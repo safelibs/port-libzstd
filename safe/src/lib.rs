@@ -2,6 +2,8 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
+pub mod common;
+pub mod decompress;
 pub mod ffi;
 
 pub const ABI_SONAME: &str = "libzstd.so.1";
