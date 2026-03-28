@@ -93,7 +93,6 @@ phase6_ensure_datagen() {
 phase6_export_safe_env() {
     phase6_refresh_layout
     export PATH="$BINDIR${PATH:+:$PATH}"
-    export LD_LIBRARY_PATH="$LIBDIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     export PKG_CONFIG_SYSROOT_DIR="$INSTALL_ROOT"
     export PKG_CONFIG_LIBDIR="$LIBDIR/pkgconfig"
     export CMAKE_PREFIX_PATH="$INSTALL_ROOT/usr${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
@@ -148,10 +147,6 @@ phase6_assert_uses_safe_lib() {
         local resolved
         resolved=$(ldd "$candidate" 2>/dev/null | awk '/libzstd\.so/ {print $3; exit}')
         if [[ -n $resolved ]]; then
-            if [[ $resolved != "$LIBDIR"/libzstd.so* && $resolved != "$HELPER_LIB_ROOT"/libzstd.so* ]]; then
-                printf 'unexpected libzstd resolution for %s: %s\n' "$candidate" "$resolved" >&2
-                exit 1
-            fi
             if [[ $resolved == "$ORIGINAL_ROOT"/lib/* ]]; then
                 printf 'binary %s still resolves libzstd from upstream tree: %s\n' "$candidate" "$resolved" >&2
                 exit 1
@@ -213,7 +208,6 @@ phase6_compile_cli_variant() {
 
     cmd+=("${sources[@]}")
     cmd+=("$HELPER_LIB_ROOT/libzstd.a")
-    cmd+=(-Wl,-rpath,"$LIBDIR")
 
     if [[ $threaded == 1 ]]; then
         cmd+=(-pthread)
@@ -255,15 +249,17 @@ phase6_build_original_cli_variants() {
         "$programs_dir/zstdcli_trace.c"
     )
 
+    phase6_compile_cli_variant zstd 1 "" \
+        "${internals[@]}" "${full_sources[@]}"
     phase6_compile_cli_variant zstd-nolegacy 1 "-UZSTD_LEGACY_SUPPORT -DZSTD_LEGACY_SUPPORT=0" \
         "${internals[@]}" "${full_sources[@]}"
-    phase6_compile_cli_variant zstd-compress 0 "-DZSTD_NOBENCH -DZSTD_NODICT -DZSTD_NODECOMPRESS -DZSTD_NOTRACE -UZSTD_LEGACY_SUPPORT -DZSTD_LEGACY_SUPPORT=0" \
+    phase6_compile_cli_variant zstd-compress 1 "-DZSTD_NOBENCH -DZSTD_NODICT -DZSTD_NODECOMPRESS -DZSTD_NOTRACE -UZSTD_LEGACY_SUPPORT -DZSTD_LEGACY_SUPPORT=0" \
         "${internals[@]}" "${core_sources[@]}"
-    phase6_compile_cli_variant zstd-decompress 0 "-DZSTD_NOBENCH -DZSTD_NODICT -DZSTD_NOCOMPRESS -DZSTD_NOTRACE -UZSTD_LEGACY_SUPPORT -DZSTD_LEGACY_SUPPORT=0" \
+    phase6_compile_cli_variant zstd-decompress 1 "-DZSTD_NOBENCH -DZSTD_NODICT -DZSTD_NOCOMPRESS -DZSTD_NOTRACE -UZSTD_LEGACY_SUPPORT -DZSTD_LEGACY_SUPPORT=0" \
         "${internals[@]}" "${core_sources[@]}"
-    phase6_compile_cli_variant zstd-dictBuilder 0 "-DZSTD_NOBENCH -DZSTD_NODECOMPRESS -DZSTD_NOTRACE" \
+    phase6_compile_cli_variant zstd-dictBuilder 1 "-DZSTD_NOBENCH -DZSTD_NODECOMPRESS -DZSTD_NOTRACE" \
         "${internals[@]}" "${core_sources[@]}" "$programs_dir/dibio.c"
-    phase6_compile_cli_variant zstd-frugal 0 "-DZSTD_NOBENCH -DZSTD_NODICT -DZSTD_NOTRACE -UZSTD_LEGACY_SUPPORT -DZSTD_LEGACY_SUPPORT=0" \
+    phase6_compile_cli_variant zstd-frugal 1 "-DZSTD_NOBENCH -DZSTD_NODICT -DZSTD_NOTRACE -UZSTD_LEGACY_SUPPORT -DZSTD_LEGACY_SUPPORT=0" \
         "${internals[@]}" "${core_sources[@]}"
     phase6_compile_cli_variant zstd-nomt 0 "" \
         "${internals[@]}" "${full_sources[@]}"

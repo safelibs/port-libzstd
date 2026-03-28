@@ -13,11 +13,79 @@
 #include "utils/ScopeGuard.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 #include <cstdint>
 #include <memory>
+#include <vector>
+#include <sys/wait.h>
+#include <unistd.h>
 
 namespace pzstd {
+
+inline bool check(std::string source, std::string decompressed);
+
+inline int runProgram(const std::string& binary,
+                      const std::vector<std::string>& args) {
+  std::vector<char*> argv;
+  argv.reserve(args.size() + 2);
+  argv.push_back(const_cast<char*>(binary.c_str()));
+  for (const auto& arg : args) {
+    argv.push_back(const_cast<char*>(arg.c_str()));
+  }
+  argv.push_back(nullptr);
+
+  pid_t pid = fork();
+  if (pid < 0) {
+    return -1;
+  }
+  if (pid == 0) {
+    execvp(binary.c_str(), argv.data());
+    _exit(127);
+  }
+
+  int status = 0;
+  if (waitpid(pid, &status, 0) < 0) {
+    return -1;
+  }
+  if (!WIFEXITED(status)) {
+    return -1;
+  }
+  return WEXITSTATUS(status);
+}
+
+inline bool roundTripWithExternalBin(const std::string& binary,
+                                     const Options& options,
+                                     const std::string& source,
+                                     const std::string& compressedFile,
+                                     const std::string& decompressedFile) {
+  unsigned threads = options.numThreads == 0 ? 1 : options.numThreads;
+  std::vector<std::string> compressArgs = {
+      "-q",
+      "-f",
+      "-T" + std::to_string(threads),
+      "-" + std::to_string(options.compressionLevel),
+      "-o",
+      compressedFile,
+      source,
+  };
+  if (runProgram(binary, compressArgs) != 0) {
+    return false;
+  }
+
+  std::vector<std::string> decompressArgs = {
+      "-q",
+      "-f",
+      "-d",
+      "-o",
+      decompressedFile,
+      compressedFile,
+  };
+  if (runProgram(binary, decompressArgs) != 0) {
+    return false;
+  }
+  return check(source, decompressedFile);
+}
 
 inline bool check(std::string source, std::string decompressed) {
   std::unique_ptr<std::uint8_t[]> sBuf(new std::uint8_t[1024]);
@@ -65,6 +133,12 @@ inline bool roundTrip(Options& options) {
     std::remove(compressedFile.c_str());
     std::remove(decompressedFile.c_str());
   });
+
+  const char* externalBin = std::getenv("PZSTD_ROUNDTRIP_BIN");
+  if (externalBin != nullptr && *externalBin != '\0') {
+    return roundTripWithExternalBin(
+        externalBin, options, source, compressedFile, decompressedFile);
+  }
 
   {
     options.outputFile = compressedFile;

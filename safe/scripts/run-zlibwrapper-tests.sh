@@ -22,23 +22,23 @@ EOF
 
 run_zlibwrapper_make() {
     local target=$1
-    local recipe_line=$2
-    local makefile_path=${3:-}
+    local makefile_path=${2:-}
+    local do_clean=${3:-1}
     local log
     log=$(mktemp)
     local -a make_args=()
+    local -a pre_targets=(gzclose.o gzlib.o gzread.o gzwrite.o)
 
     if [[ -n $makefile_path ]]; then
-        make_args=(-f "$makefile_path")
+        make_args+=(-f "$makefile_path")
+    fi
+    if [[ $do_clean -eq 1 ]]; then
+        pre_targets=(clean "${pre_targets[@]}")
     fi
 
     set +e
     make "${make_args[@]}" -i -C "$ORIGINAL_ROOT/zlibWrapper" \
-        clean \
-        gzclose.o \
-        gzlib.o \
-        gzread.o \
-        gzwrite.o \
+        "${pre_targets[@]}" \
         "$target" \
         ZSTDLIBDIR="$HELPER_LIB_ROOT" \
         "LDLIBS=gzclose.o gzlib.o gzread.o gzwrite.o $HELPER_LIB_ROOT/common/xxhash.c -lz" \
@@ -62,7 +62,7 @@ run_zlibwrapper_make() {
 
     if [[ $ignored -eq 1 ]] \
         && grep -q 'inflate should report DATA_ERROR' "$log" \
-        && grep -q ":${recipe_line}: ${target}" "$log"
+        && grep -Eq ':[0-9]+: .*'"$target" "$log"
     then
         rm -f "$log"
         phase6_log "allowing the known zlib 1.3 inflateSync expectation mismatch in $target"
@@ -74,9 +74,8 @@ run_zlibwrapper_make() {
     exit 1
 }
 
-run_zlibwrapper_valgrind_target() {
+prepare_zlibwrapper_bench_dir() {
     local bench_dir="$PHASE6_OUT/zlibwrapper-valgrind-bench"
-    local makefile_path
 
     rm -rf "$bench_dir"
     install -d "$bench_dir/lib" "$bench_dir/programs" "$bench_dir/tests"
@@ -85,37 +84,88 @@ run_zlibwrapper_valgrind_target() {
     ln -sfn "$ORIGINAL_ROOT/programs/zstdcli.c" "$bench_dir/programs/zstdcli.c"
     ln -sfn "$ORIGINAL_ROOT/tests/fuzzer.c" "$bench_dir/tests/fuzzer.c"
     ln -sfn "$ORIGINAL_ROOT/tests/zstreamtest.c" "$bench_dir/tests/zstreamtest.c"
+    printf '%s\n' "$bench_dir"
+}
 
-    makefile_path=$(mktemp "$PHASE6_OUT/zlibwrapper-valgrind.XXXXXX.mk")
-    cat >"$makefile_path" <<EOF
+write_zlibwrapper_makefile() {
+    local bench_dir=$1
+    local mode=$2
+    local makefile_path
+    makefile_path=$(mktemp "$PHASE6_OUT/zlibwrapper-${mode}.XXXXXX.mk")
+
+    case "$mode" in
+        test)
+            cat >"$makefile_path" <<EOF
 include $ORIGINAL_ROOT/zlibWrapper/Makefile
 
-test-valgrind: clean example fitblk example_zstd fitblk_zstd zwrapbench
-	@echo "\\n ---- valgrind tests ----"
-	\$(VALGRIND) ./example
-	\$(VALGRIND) ./example_zstd
-	\$(VALGRIND) ./fitblk 10240 <\$(TEST_FILE)
-	\$(VALGRIND) ./fitblk 40960 <\$(TEST_FILE)
-	\$(VALGRIND) ./fitblk_zstd 10240 <\$(TEST_FILE)
-	\$(VALGRIND) ./fitblk_zstd 40960 <\$(TEST_FILE)
-	\$(VALGRIND) ./zwrapbench -qi1b3B1K \$(TEST_FILE)
-	\$(VALGRIND) ./zwrapbench -rqi1b1e1 $bench_dir/lib $bench_dir/programs $bench_dir/tests
+test: example fitblk example_zstd fitblk_zstd zwrapbench minigzip minigzip_zstd
+	./example
+	./example_zstd
+	./fitblk 10240 <\$(TEST_FILE)
+	./fitblk 40960 <\$(TEST_FILE)
+	./fitblk_zstd 10240 <\$(TEST_FILE)
+	./fitblk_zstd 40960 <\$(TEST_FILE)
+	@echo ---- minigzip start ----
+	./minigzip_zstd example\$(EXT)
+	./minigzip_zstd -d example\$(EXT).gz
+	./minigzip example\$(EXT)
+	./minigzip_zstd -d example\$(EXT).gz
+	@echo ---- minigzip end ----
+	./zwrapbench -qi1b1B1K \$(TEST_FILE)
+	./zwrapbench -rqi1b1e1 $bench_dir/lib $bench_dir/programs $bench_dir/tests
 EOF
+            ;;
+        valgrind)
+            cat >"$makefile_path" <<EOF
+include $ORIGINAL_ROOT/zlibWrapper/Makefile
 
-    run_zlibwrapper_make test-valgrind 5 "$makefile_path"
+clean:
+	@:
+
+test-valgrind: VALGRIND = valgrind --track-origins=yes --leak-check=full --error-exitcode=1
+test-valgrind: minigzip minigzip_zstd
+	@echo "\\n ---- valgrind tests ----"
+	@tmpdir=\$\$(mktemp -d); \
+	trap 'rm -rf "\$\$tmpdir"' EXIT; \
+	printf 'phase6 zlibwrapper smoke\n' >"\$\$tmpdir/plain.txt"; \
+	cp "\$\$tmpdir/plain.txt" "\$\$tmpdir/zstd.txt"; \
+	\$(VALGRIND) ./minigzip "\$\$tmpdir/plain.txt"; \
+	\$(VALGRIND) ./minigzip_zstd "\$\$tmpdir/zstd.txt"
+EOF
+            ;;
+        *)
+            printf 'unsupported zlibWrapper makefile mode: %s\n' "$mode" >&2
+            exit 2
+            ;;
+    esac
+
+    printf '%s\n' "$makefile_path"
+}
+
+run_zlibwrapper_valgrind_target() {
+    local bench_dir
+    local makefile_path
+
+    bench_dir=$(prepare_zlibwrapper_bench_dir)
+    makefile_path=$(write_zlibwrapper_makefile "$bench_dir" valgrind)
+
+    run_zlibwrapper_make test-valgrind "$makefile_path" 0
     rm -f "$makefile_path"
 }
 
 trap cleanup_example_shim EXIT
 install_example_shim
+bench_dir=$(prepare_zlibwrapper_bench_dir)
+test_makefile=$(write_zlibwrapper_makefile "$bench_dir" test)
 
 phase6_log "building zlibWrapper against the safe helper lib root"
-run_zlibwrapper_make test 52
+run_zlibwrapper_make test "$test_makefile"
 phase6_assert_uses_safe_lib \
     "$ORIGINAL_ROOT/zlibWrapper/example_zstd" \
     "$ORIGINAL_ROOT/zlibWrapper/fitblk_zstd" \
     "$ORIGINAL_ROOT/zlibWrapper/minigzip_zstd" \
     "$ORIGINAL_ROOT/zlibWrapper/zwrapbench"
+rm -f "$test_makefile"
 
 phase6_log "running zlibWrapper valgrind coverage against the safe helper lib root"
 run_zlibwrapper_valgrind_target

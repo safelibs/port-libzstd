@@ -13,9 +13,11 @@ extern "C" {
 #include "test/RoundTrip.h"
 #include "utils/ScopeGuard.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 #include <memory>
 #include <random>
 
@@ -59,19 +61,39 @@ Options generateOptions(Generator& gen, const string& inputFile) {
 
   return options;
 }
+
+unsigned readPositiveEnvOrDefault(const char* name, unsigned fallback) {
+  const char* value = std::getenv(name);
+  if (value == nullptr || *value == '\0') {
+    return fallback;
+  }
+
+  char* end = nullptr;
+  unsigned long parsed = std::strtoul(value, &end, 10);
+  if (end == value || *end != '\0' || parsed == 0 ||
+      parsed > std::numeric_limits<unsigned>::max()) {
+    return fallback;
+  }
+  return static_cast<unsigned>(parsed);
+}
 }
 
 int main() {
   std::mt19937 gen(std::random_device{}());
+  const unsigned inputCount =
+      readPositiveEnvOrDefault("PZSTD_ROUNDTRIP_CASES", 10000);
+  const unsigned optionsPerInput =
+      readPositiveEnvOrDefault("PZSTD_ROUNDTRIP_OPTIONS_PER_INPUT", 10);
+  const unsigned progressInterval = std::max(1U, inputCount / 100);
 
   auto newlineGuard = makeScopeGuard([] { std::fprintf(stderr, "\n"); });
-  for (unsigned i = 0; i < 10000; ++i) {
-    if (i % 100 == 0) {
-      std::fprintf(stderr, "Progress: %u%%\r", i / 100);
+  for (unsigned i = 0; i < inputCount; ++i) {
+    if (i % progressInterval == 0) {
+      std::fprintf(stderr, "Progress: %u/%u\r", i, inputCount);
     }
     auto inputFile = generateInputFile(gen);
     auto inputGuard = makeScopeGuard([&] { std::remove(inputFile.c_str()); });
-    for (unsigned i = 0; i < 10; ++i) {
+    for (unsigned j = 0; j < optionsPerInput; ++j) {
       auto options = generateOptions(gen, inputFile);
       if (!roundTrip(options)) {
         std::fprintf(stderr, "numThreads: %u\n", options.numThreads);
@@ -82,5 +104,6 @@ int main() {
       }
     }
   }
+  std::fprintf(stderr, "Progress: %u/%u\r", inputCount, inputCount);
   return 0;
 }
