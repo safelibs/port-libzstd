@@ -35,7 +35,8 @@ PRGDIR = ../../programs
 CONTRIBDIR = ../../contrib
 
 DEFAULT_SEQ_PROD_DIR = $(CONTRIBDIR)/externalSequenceProducer
-DEFAULT_SEQ_PROD_SRC = $(DEFAULT_SEQ_PROD_DIR)/sequence_producer.c
+# Public-only fuzz targets no longer depend on the static-only sequence producer API.
+DEFAULT_SEQ_PROD_SRC =
 THIRD_PARTY_SEQ_PROD_OBJ ?=
 
 FUZZ_CPPFLAGS := -I$(ZSTDDIR) -I$(ZSTDDIR)/common -I$(ZSTDDIR)/compress \

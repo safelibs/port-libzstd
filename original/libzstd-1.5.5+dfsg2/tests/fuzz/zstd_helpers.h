@@ -14,12 +14,8 @@
 #ifndef ZSTD_HELPERS_H
 #define ZSTD_HELPERS_H
 
-#define ZSTD_STATIC_LINKING_ONLY
-
 #include "zstd.h"
-#include "zstd_errors.h"
 #include "fuzz_data_producer.h"
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,10 +25,6 @@ extern const int kMinClevel;
 extern const int kMaxClevel;
 
 void FUZZ_setRandomParameters(ZSTD_CCtx *cctx, size_t srcSize, FUZZ_dataProducer_t *producer);
-
-ZSTD_compressionParameters FUZZ_randomCParams(size_t srcSize, FUZZ_dataProducer_t *producer);
-ZSTD_frameParameters FUZZ_randomFParams(FUZZ_dataProducer_t *producer);
-ZSTD_parameters FUZZ_randomParams(size_t srcSize, FUZZ_dataProducer_t *producer);
 
 typedef struct {
   void* buff;
@@ -44,10 +36,6 @@ typedef struct {
  * for speed, and doesn't care about dictionary quality.
  */
 FUZZ_dict_t FUZZ_train(void const* src, size_t srcSize, FUZZ_dataProducer_t *producer);
-
-#ifdef FUZZ_THIRD_PARTY_SEQ_PROD
-extern void* FUZZ_seqProdState;
-#endif
 
 #ifdef __cplusplus
 }

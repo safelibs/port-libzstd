@@ -9,60 +9,37 @@
  */
 
 /**
- * This fuzz target performs a zstd round-trip test (compress & decompress),
- * compares the result with the original, and calls abort() on corruption.
+ * Public decompression robustness fuzzer replacing the internal HUF decoder test.
  */
 
 #include <stddef.h>
 #include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include "common/cpu.h"
-#include "common/huf.h"
-#include "fuzz_helpers.h"
+
 #include "fuzz_data_producer.h"
+#include "zstd.h"
 
-int LLVMFuzzerTestOneInput(const uint8_t *src, size_t size)
+static ZSTD_DCtx* dctx = NULL;
+
+int LLVMFuzzerTestOneInput(const uint8_t* src, size_t size)
 {
-    FUZZ_dataProducer_t *producer = FUZZ_dataProducer_create(src, size);
-    /* Select random parameters: #streams, X1 or X2 decoding, bmi2 */
-    int const streams = FUZZ_dataProducer_int32Range(producer, 0, 1);
-    int const symbols = FUZZ_dataProducer_int32Range(producer, 0, 1);
-    int const flags = 0
-        | (ZSTD_cpuid_bmi2(ZSTD_cpuid()) && FUZZ_dataProducer_int32Range(producer, 0, 1) ? HUF_flags_bmi2 : 0)
-        | (FUZZ_dataProducer_int32Range(producer, 0, 1) ? HUF_flags_optimalDepth : 0)
-        | (FUZZ_dataProducer_int32Range(producer, 0, 1) ? HUF_flags_preferRepeat : 0)
-        | (FUZZ_dataProducer_int32Range(producer, 0, 1) ? HUF_flags_suspectUncompressible : 0)
-        | (FUZZ_dataProducer_int32Range(producer, 0, 1) ? HUF_flags_disableAsm : 0)
-        | (FUZZ_dataProducer_int32Range(producer, 0, 1) ? HUF_flags_disableFast : 0);
-    /* Select a random cBufSize - it may be too small */
-    size_t const dBufSize = FUZZ_dataProducer_uint32Range(producer, 0, 8 * size + 500);
-    size_t const maxTableLog = FUZZ_dataProducer_uint32Range(producer, 1, HUF_TABLELOG_MAX);
-    HUF_DTable* dt = (HUF_DTable*)FUZZ_malloc(HUF_DTABLE_SIZE(maxTableLog) * sizeof(HUF_DTable));
-    size_t const wkspSize = HUF_WORKSPACE_SIZE;
-    void* wksp = FUZZ_malloc(wkspSize);
-    void* dBuf = FUZZ_malloc(dBufSize);
-    dt[0] = maxTableLog * 0x01000001;
-    size = FUZZ_dataProducer_remainingBytes(producer);
+    FUZZ_dataProducer_t* producer = FUZZ_dataProducer_create(src, size);
+    size_t const maxBufSize = 8 * size + 500;
+    size_t const dBufSize = FUZZ_dataProducer_uint32Range(
+        producer, 1, maxBufSize == 0 ? (size_t)1 : maxBufSize);
+    void* dBuf = malloc(dBufSize);
 
-    if (symbols == 0) {
-        size_t const err = HUF_readDTableX1_wksp(dt, src, size, wksp, wkspSize, flags);
-        if (ZSTD_isError(err))
-            goto _out;
-    } else {
-        size_t const err = HUF_readDTableX2_wksp(dt, src, size, wksp, wkspSize, flags);
-        if (ZSTD_isError(err))
-            goto _out;
+    if (!dctx) {
+        dctx = ZSTD_createDCtx();
     }
-    if (streams == 0)
-        HUF_decompress1X_usingDTable(dBuf, dBufSize, src, size, dt, flags);
-    else
-        HUF_decompress4X_usingDTable(dBuf, dBufSize, src, size, dt, flags);
+    if (dctx != NULL) {
+        ZSTD_decompressDCtx(dctx, dBuf, dBufSize, src, size);
+    }
 
-_out:
-    free(dt);
-    free(wksp);
     free(dBuf);
     FUZZ_dataProducer_free(producer);
+#ifndef STATEFUL_FUZZING
+    ZSTD_freeDCtx(dctx);
+    dctx = NULL;
+#endif
     return 0;
 }
