@@ -242,11 +242,18 @@ fn compile_upstream_phase4_helpers(manifest_dir: &Path, threading: bool) {
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
-    let threading = feature_enabled("CARGO_FEATURE_THREADING");
+    let requested_threading = feature_enabled("CARGO_FEATURE_THREADING");
     let build_shared_default = feature_enabled("CARGO_FEATURE_BUILD_SHARED_DEFAULT");
     let build_static_default = feature_enabled("CARGO_FEATURE_BUILD_STATIC_DEFAULT");
     let variant_mt = feature_enabled("CARGO_FEATURE_VARIANT_MT");
     let variant_nomt = feature_enabled("CARGO_FEATURE_VARIANT_NOMT");
+    let threading = if build_static_default || variant_nomt {
+        false
+    } else if requested_threading || build_shared_default || variant_mt {
+        true
+    } else {
+        true
+    };
 
     if variant_mt && variant_nomt {
         eprintln!("conflicting libzstd-safe features: `variant-mt` and `variant-nomt`");

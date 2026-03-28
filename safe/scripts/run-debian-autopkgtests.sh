@@ -83,7 +83,11 @@ while IFS=$'\t' read -r feature command; do
     printf 'running autopkgtest: %s\n' "$feature"
     (
         cd "$STAGE_ROOT"
-        sh -ec "$command" </dev/null
+        if [[ $feature == test-name=zstd-selftest ]]; then
+            env -u LD_LIBRARY_PATH sh -ec "$command" </dev/null
+        else
+            sh -ec "$command" </dev/null
+        fi
     ) || {
         printf 'autopkgtest failed: %s\n' "$feature" >&2
         exit 1

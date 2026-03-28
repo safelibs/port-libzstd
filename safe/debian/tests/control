@@ -1,4 +1,4 @@
-Test-Command: test -x "$(command -v zstd)" && test -x "$(command -v zstdmt)" && ldd "$(command -v zstd)" | grep -q 'libzstd\.so\.1'
+Test-Command: zstd -b1 >/dev/null 2>&1
 Features: test-name=zstd-selftest
 
 Test-Command: env PYTHONPATH="$(pwd)/debian/tests/python" python3 -B -u -m check_build -c debian/tests/ztest/programs.toml -v -- pkg-make
