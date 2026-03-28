@@ -1,0 +1,223 @@
+{
+  "library": "libzstd",
+  "distribution": "Ubuntu",
+  "release": "24.04",
+  "suite": "noble",
+  "generated_on": "2026-03-27",
+  "selection_kind": "representative_diverse_subset",
+  "notes": "This is a curated sample of Ubuntu 24.04 packages that build against libzstd and also ship runtime functionality that relies on libzstd. It is intentionally not exhaustive.",
+  "packages": [
+    {
+      "binary_package": "libapt-pkg6.0t64",
+      "source_package": "apt",
+      "category": "package-management",
+      "used_by": [
+        "apt"
+      ],
+      "dependency_kind": [
+        "build",
+        "runtime"
+      ],
+      "runtime_functionality": "APT's core package-management library can fetch zstd-compressed repository metadata via Acquire::CompressionTypes::zst and can read .deb members such as control.tar.zst and data.tar.zst.",
+      "evidence": {
+        "build_dependency": "The apt source package Build-Depends on libzstd-dev.",
+        "runtime_dependency": "libapt-pkg6.0t64 Depends on libzstd1.",
+        "feature_refs": [
+          "doc/apt.conf.5.xml",
+          "apt-pkg/aptconfiguration.cc",
+          "apt-pkg/deb/debfile.cc"
+        ]
+      }
+    },
+    {
+      "binary_package": "dpkg",
+      "source_package": "dpkg",
+      "category": "package-management",
+      "dependency_kind": [
+        "build",
+        "runtime"
+      ],
+      "runtime_functionality": "dpkg-deb can build and extract Debian packages whose control and data tar members use zstd, and dpkg can install packages that use .zst-compressed .deb members.",
+      "evidence": {
+        "build_dependency": "The dpkg source package Build-Depends on libzstd-dev.",
+        "runtime_dependency": "dpkg Pre-Depends on libzstd1.",
+        "feature_refs": [
+          "man/deb.pod",
+          "man/dpkg-deb.pod",
+          "src/at/deb-format.at"
+        ]
+      }
+    },
+    {
+      "binary_package": "rsync",
+      "source_package": "rsync",
+      "category": "file-transfer",
+      "dependency_kind": [
+        "build",
+        "runtime"
+      ],
+      "runtime_functionality": "Rsync can negotiate zstd as a transfer compression algorithm and users can force it with --compress-choice=zstd/--zc=zstd, with zstd-specific compression levels via --zl.",
+      "evidence": {
+        "build_dependency": "The rsync source package Build-Depends on libzstd-dev.",
+        "runtime_dependency": "rsync Depends on libzstd1.",
+        "feature_refs": [
+          "INSTALL.md",
+          "NEWS.md",
+          "rsync.1.html"
+        ]
+      }
+    },
+    {
+      "binary_package": "libsystemd-shared",
+      "source_package": "systemd",
+      "category": "init-and-logging",
+      "used_by": [
+        "systemd",
+        "systemd-journald",
+        "systemd-coredump"
+      ],
+      "dependency_kind": [
+        "build",
+        "runtime"
+      ],
+      "runtime_functionality": "Systemd components use zstd-backed compression for journal data and coredumps; journald can compress large fields and systemd-coredump can store compressed coredumps.",
+      "evidence": {
+        "build_dependency": "The systemd source package Build-Depends on libzstd-dev.",
+        "runtime_dependency": "libsystemd-shared Depends on libzstd1.",
+        "feature_refs": [
+          "NEWS",
+          "man/journald.conf.xml",
+          "src/libsystemd/sd-journal/journal-file.c",
+          "src/coredump/coredump.conf"
+        ]
+      }
+    },
+    {
+      "binary_package": "libarchive13t64",
+      "source_package": "libarchive",
+      "category": "archiving",
+      "used_by": [
+        "libarchive-tools",
+        "applications embedding libarchive"
+      ],
+      "dependency_kind": [
+        "build",
+        "runtime"
+      ],
+      "runtime_functionality": "Libarchive can read and write zstd-compressed streams; bsdtar and bsdcpio can extract .zst input and create archives with --zstd.",
+      "evidence": {
+        "build_dependency": "The libarchive source package Build-Depends on libzstd-dev.",
+        "runtime_dependency": "libarchive13t64 Depends on libzstd1.",
+        "feature_refs": [
+          "debian/control",
+          "libarchive/archive_read_support_filter_zstd.c",
+          "libarchive/archive_write_add_filter_zstd.c",
+          "cpio/bsdcpio.1"
+        ]
+      }
+    },
+    {
+      "binary_package": "btrfs-progs",
+      "source_package": "btrfs-progs",
+      "category": "filesystem-tools",
+      "dependency_kind": [
+        "build",
+        "runtime"
+      ],
+      "runtime_functionality": "Btrfs userspace tools expose zstd filesystem compression controls such as mount -o compress=zstd[:level], btrfs filesystem defrag -czstd, and btrfs property set ... compression zstd.",
+      "evidence": {
+        "build_dependency": "The btrfs-progs source package Build-Depends on libzstd-dev.",
+        "runtime_dependency": "btrfs-progs Depends on libzstd1.",
+        "feature_refs": [
+          "Documentation/ch-compression.rst",
+          "Documentation/ch-mount-options.rst",
+          "Documentation/btrfs-filesystem.rst"
+        ]
+      }
+    },
+    {
+      "binary_package": "squashfs-tools",
+      "source_package": "squashfs-tools",
+      "category": "filesystem-image-tools",
+      "dependency_kind": [
+        "build",
+        "runtime"
+      ],
+      "runtime_functionality": "mksquashfs and sqfstar can create zstd-compressed Squashfs images with -comp zstd, and unsquashfs and sqfscat can read or extract zstd-compressed Squashfs filesystems.",
+      "evidence": {
+        "build_dependency": "The squashfs-tools source package Build-Depends on libzstd-dev.",
+        "runtime_dependency": "squashfs-tools Depends on libzstd1.",
+        "feature_refs": [
+          "INSTALL",
+          "manpages/mksquashfs.1",
+          "manpages/unsquashfs.1",
+          "manpages/sqfstar.1"
+        ]
+      }
+    },
+    {
+      "binary_package": "qemu-utils",
+      "source_package": "qemu",
+      "category": "virtualization",
+      "dependency_kind": [
+        "build",
+        "runtime"
+      ],
+      "runtime_functionality": "qemu-img can create or convert qcow2 images with zstd-compressed clusters using compression_type=zstd, typically together with the compressed image path.",
+      "evidence": {
+        "build_dependency": "The qemu source package Build-Depends on libzstd-dev.",
+        "runtime_dependency": "qemu-utils Depends on libzstd1.",
+        "feature_refs": [
+          "docs/tools/qemu-img.rst",
+          "docs/interop/qcow2.txt"
+        ]
+      }
+    },
+    {
+      "binary_package": "libcurl4t64",
+      "source_package": "curl",
+      "category": "networking-library",
+      "used_by": [
+        "curl",
+        "applications embedding libcurl"
+      ],
+      "dependency_kind": [
+        "build",
+        "runtime"
+      ],
+      "runtime_functionality": "Libcurl can automatically decode HTTP Content-Encoding: zstd responses; the curl CLI exposes this through --compressed, and libcurl exposes it through CURLOPT_ACCEPT_ENCODING.",
+      "evidence": {
+        "build_dependency": "The curl source package Build-Depends on libzstd-dev.",
+        "runtime_dependency": "libcurl4t64 Depends on libzstd1.",
+        "feature_refs": [
+          "docs/curl.1",
+          "docs/libcurl/opts/CURLOPT_ACCEPT_ENCODING.3",
+          "lib/content_encoding.c"
+        ]
+      }
+    },
+    {
+      "binary_package": "libtiff6",
+      "source_package": "tiff",
+      "category": "image-library",
+      "used_by": [
+        "tiffcp",
+        "applications embedding libtiff"
+      ],
+      "dependency_kind": [
+        "build",
+        "runtime"
+      ],
+      "runtime_functionality": "LibTIFF supports TIFF images using COMPRESSION_ZSTD and exposes zstd compression controls such as TIFFTAG_ZSTD_LEVEL; tiffcp can write them with -c zstd[:opts].",
+      "evidence": {
+        "build_dependency": "The tiff source package Build-Depends on libzstd-dev.",
+        "runtime_dependency": "libtiff6 Depends on libzstd1.",
+        "feature_refs": [
+          "libtiff/tiff.h",
+          "libtiff/tif_zstd.c",
+          "tools/tiffcp.c"
+        ]
+      }
+    }
+  ]
+}
