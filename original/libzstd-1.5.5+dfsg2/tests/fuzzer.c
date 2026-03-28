@@ -639,6 +639,17 @@ int main(int argc, char** argv)
 
     for (argNb = 1; argNb < (unsigned)argc; ++argNb) {
         const char* argument = argv[argNb];
+        if (!strcmp(argument, "--no-big-tests")) {
+            continue;
+        }
+        if (!strcmp(argument, "--help")) {
+            return usage(argv[0]);
+        }
+        if (argument[0] == '-' && argument[1] == '-') {
+            DISPLAY("unknown option: %s\n", argument);
+            usage(argv[0]);
+            return 1;
+        }
         if (argument[0] == '-') {
             argument++;
             while (*argument != 0) {
@@ -664,7 +675,8 @@ int main(int argc, char** argv)
                     break;
                 default:
                     DISPLAY("unknown option: -%c\n", *argument);
-                    return usage(argv[0]);
+                    usage(argv[0]);
+                    return 1;
                 }
             }
         }
