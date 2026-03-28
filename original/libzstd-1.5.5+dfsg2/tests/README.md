@@ -130,16 +130,19 @@ will choose a random seed, and for 1 minute,
 generate random test frames and ensure that the
 zstd library correctly decompresses them in both simple and streaming modes.
 
-#### `paramgrill` - public-API smoke test for stable compression parameter setters
+#### `paramgrill` - public-API tester for stable compression parameters
 
-`paramgrill` now exercises a small matrix of stable `ZSTD_CCtx_setParameter()` combinations,
-verifies frame accounting through imported metadata helpers, and checks that public
-dictionary loading is required for a dictionary-backed frame.
+`paramgrill` now keeps the stable public `--zstd=` / `--optimize=` surface, runs a
+built-in suite of public parameter profiles by default, and validates each successful
+configuration through imported frame-size helpers plus a full round-trip.
 
 Arguments
 ```
- -i# or -i #  : number of passes over the built-in parameter cases (default: 1)
- -s# or -s #  : input size in bytes; accepts K/M/G suffixes (default: 256K)
- -v           : print one line per passing case
- -h           : display help
+ -i# or -i #     : number of passes over the built-in profile suite (default: 1)
+ -s# or -s #     : input size in bytes; accepts K/M/G suffixes (default: 256K)
+ -v              : print one line per successful profile or optimizer candidate
+ --zstd=...      : run one explicit stable-parameter configuration
+ --optimize=...  : search over the selected public parameters
+ --display=...   : choose which parameters appear in the emitted --zstd= line
+ -h              : display help
 ```
