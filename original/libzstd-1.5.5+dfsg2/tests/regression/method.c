@@ -282,7 +282,83 @@ static result_t simple_compress(method_state_t* base, config_t const* config)
 
 static result_t compress_cctx_compress(method_state_t* base, config_t const* config)
 {
-    return round_trip_compress2(base, config, 0);
+    buffer_state_t* state = container_of(base, buffer_state_t, base);
+    ZSTD_CCtx* cctx = ZSTD_createCCtx();
+    ZSTD_DCtx* dctx = ZSTD_createDCtx();
+    result_data_t data = { 0 };
+    result_t result;
+    int level;
+    size_t i;
+
+    if (buffer_state_bad(state, config)) {
+        return result_error(result_error_system_error);
+    }
+    if (!config_is_level_only(config)) {
+        return result_error(result_error_skip);
+    }
+
+    level = config_get_level(config);
+    if (level == CONFIG_NO_LEVEL) {
+        return result_error(result_error_skip);
+    }
+    if (cctx == NULL || dctx == NULL) {
+        ZSTD_freeCCtx(cctx);
+        ZSTD_freeDCtx(dctx);
+        return result_error(result_error_system_error);
+    }
+
+    for (i = 0; i < state->inputs.size; ++i) {
+        data_buffer_t const input = state->inputs.buffers[i];
+        size_t cSize;
+        size_t dSize;
+
+        if (config->use_dictionary) {
+            cSize = ZSTD_compress_usingDict(cctx,
+                                            state->compressed.data,
+                                            state->compressed.capacity,
+                                            input.data,
+                                            input.size,
+                                            state->dictionary.data,
+                                            state->dictionary.size,
+                                            level);
+        } else {
+            cSize = ZSTD_compressCCtx(cctx,
+                                      state->compressed.data,
+                                      state->compressed.capacity,
+                                      input.data,
+                                      input.size,
+                                      level);
+        }
+        if (ZSTD_isError(cSize)) {
+            result = result_error(result_error_compression_error);
+            goto out;
+        }
+        if (prepare_dctx(dctx, state, config)) {
+            result = result_error(result_error_decompression_error);
+            goto out;
+        }
+        dSize = ZSTD_decompressDCtx(dctx,
+                                    state->decompressed.data,
+                                    state->decompressed.capacity,
+                                    state->compressed.data,
+                                    cSize);
+        if (ZSTD_isError(dSize)) {
+            result = result_error(result_error_decompression_error);
+            goto out;
+        }
+        state->decompressed.size = dSize;
+        if (data_buffer_compare(input, state->decompressed) != 0) {
+            result = result_error(result_error_round_trip_error);
+            goto out;
+        }
+        data.total_size += cSize;
+    }
+
+    result = result_data(data);
+out:
+    ZSTD_freeCCtx(cctx);
+    ZSTD_freeDCtx(dctx);
+    return result;
 }
 
 static result_t advanced_one_pass_compress(method_state_t* base, config_t const* config)
