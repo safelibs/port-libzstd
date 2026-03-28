@@ -15,6 +15,20 @@ CACHE_DIR="$WORK_DIR/cache"
 FRAGMENTS_DIR="$WORK_DIR/fragments"
 RESULTS_FILE="$WORK_DIR/results.csv"
 STAMP_FILE="$WORK_DIR/.stamp"
+PRIMARY_BASELINE_FILE="$ORIGINAL_ROOT/tests/regression/results.csv"
+COVERAGE_BASELINE_FILE="$ORIGINAL_ROOT/tests/regression/regression.out"
+FIXTURE_RESULTS_FILE="$REGRESSION_FIXTURE_ROOT/results-safe.csv"
+FIXTURE_HASH_FILE="$REGRESSION_FIXTURE_ROOT/results-safe.sha256"
+REGRESSION_BIN="$SAFE_ROOT/out/phase6/whitebox/regression/regression-offline"
+PHASE6_REGRESSION_JOBS=${PHASE6_REGRESSION_JOBS:-$(python3 - <<'PY'
+import os
+
+count = os.cpu_count() or 1
+print(min(32, max(4, count)))
+PY
+)}
+PHASE6_REGRESSION_CONFIGS_PER_TASK=${PHASE6_REGRESSION_CONFIGS_PER_TASK:-4}
+PHASE6_REGRESSION_GROUP_TIMEOUT=${PHASE6_REGRESSION_GROUP_TIMEOUT:-900}
 install -d "$CACHE_DIR"
 install -d "$FRAGMENTS_DIR"
 
@@ -46,98 +60,245 @@ stage_regression_cache() {
     if [[ -d $REGRESSION_FIXTURE_ROOT/cache ]]; then
         rsync -a "$REGRESSION_FIXTURE_ROOT/cache/" "$CACHE_DIR/"
     fi
+    rm -rf "$FRAGMENTS_DIR"
+    install -d "$FRAGMENTS_DIR"
 }
 
-run_regression_spot_check() {
-    local regression_bin="$SAFE_ROOT/out/phase6/whitebox/regression/regression-offline"
-    local data=${1:?missing data name}
-    local config=${2:?missing config name}
-    local method=${3:?missing method name}
-    local output="$FRAGMENTS_DIR/spot-check.csv"
-    local log="$FRAGMENTS_DIR/spot-check.log"
-    local timeout_limit=${PHASE6_REGRESSION_SPOTCHECK_TIMEOUT:-30s}
-
-    timeout "$timeout_limit" "$regression_bin" \
-        --cache "$CACHE_DIR" \
-        --zstd "$BINDIR/zstd" \
-        --method "$method" \
-        --data "$data" \
-        --config "$config" \
-        --output "$output" >"$log" 2>&1
-
-    python3 - \
-        "$output" \
-        "$ORIGINAL_ROOT/tests/regression/results.csv" \
-        "$data" \
-        "$config" \
-        "$method" <<'PY'
-import csv
+phase6_regression_source_fingerprint() {
+    python3 - "$SAFE_ROOT" "$ORIGINAL_ROOT" <<'PY'
+from pathlib import Path
+import hashlib
 import sys
 
-actual_path, baseline_path, data_name, config_name, method_name = sys.argv[1:6]
-with open(actual_path, newline="", encoding="utf-8") as handle:
-    rows = list(csv.reader(handle))
-if len(rows) != 2:
-    raise SystemExit(f"unexpected regression spot-check shape: {actual_path}")
+safe_root = Path(sys.argv[1])
+original_root = Path(sys.argv[2])
+repo_root = safe_root.parent
+files = [safe_root / "scripts" / "run-upstream-regression.sh"]
+for root in (
+    safe_root / "src",
+    safe_root / "include",
+    safe_root / "tests" / "ported" / "whitebox",
+    original_root / "tests" / "regression",
+):
+    files.extend(sorted(path for path in root.rglob("*") if path.is_file()))
 
-actual_key = tuple(part.strip() for part in rows[1][:3])
-actual_value = rows[1][3].strip()
-expected_key = (data_name, config_name, method_name)
-if actual_key != expected_key:
-    raise SystemExit(f"unexpected regression spot-check key: {actual_key!r}")
-
-expected_value = None
-with open(baseline_path, newline="", encoding="utf-8") as handle:
-    reader = csv.reader(handle)
-    next(reader)
-    for row in reader:
-        key = tuple(part.strip() for part in row[:3])
-        if key == expected_key:
-            expected_value = row[3].strip()
-            break
-
-if expected_value is None:
-    raise SystemExit(f"missing baseline regression row: {expected_key!r}")
-if actual_value != expected_value:
-    raise SystemExit(
-        f"regression spot-check drifted for {expected_key!r}: "
-        f"expected {expected_value} got {actual_value}"
-    )
+digest = hashlib.sha256()
+for path in sorted(files):
+    digest.update(path.relative_to(repo_root).as_posix().encode())
+    digest.update(b"\0")
+    digest.update(path.read_bytes())
+    digest.update(b"\0")
+print(digest.hexdigest())
 PY
 }
 
-populate_regression_results_from_baseline() {
-    python3 - \
-        "$RESULTS_FILE" \
-        "$ORIGINAL_ROOT/tests/regression/results.csv" \
-        "$ORIGINAL_ROOT/tests/regression/regression.out" <<'PY'
-import csv
-import sys
+use_cached_regression_results() {
+    [[ -f $FIXTURE_RESULTS_FILE && -f $FIXTURE_HASH_FILE ]] || return 1
 
-destination, primary_path, coverage_path = sys.argv[1:4]
+    local current_hash expected_hash
+    current_hash=$(phase6_regression_source_fingerprint)
+    expected_hash=$(tr -d '[:space:]' < "$FIXTURE_HASH_FILE")
+    [[ -n $expected_hash && $current_hash == "$expected_hash" ]] || return 1
 
-with open(primary_path, newline="", encoding="utf-8") as handle:
-    primary_rows = list(csv.reader(handle))
-with open(coverage_path, newline="", encoding="utf-8") as handle:
-    coverage_rows = list(csv.reader(handle))
-
-primary_header = [part.strip() for part in primary_rows[0]]
-coverage_header = [part.strip() for part in coverage_rows[0]]
-if primary_header != coverage_header:
-    raise SystemExit("regression baseline headers drifted")
-
-primary = {
-    tuple(part.strip() for part in row[:3]): row[3].strip()
-    for row in primary_rows[1:]
+    cp "$FIXTURE_RESULTS_FILE" "$RESULTS_FILE"
 }
 
-with open(destination, "w", newline="", encoding="utf-8") as handle:
-    writer = csv.writer(handle)
-    writer.writerow(primary_rows[0])
-    for row in coverage_rows[1:]:
+compute_regression_results() {
+    python3 - \
+        "$REGRESSION_BIN" \
+        "$CACHE_DIR" \
+        "$BINDIR/zstd" \
+        "$FRAGMENTS_DIR" \
+        "$COVERAGE_BASELINE_FILE" \
+        "$RESULTS_FILE" \
+        "$PHASE6_REGRESSION_JOBS" \
+        "$PHASE6_REGRESSION_GROUP_TIMEOUT" \
+        "$PHASE6_REGRESSION_CONFIGS_PER_TASK" <<'PY'
+import csv
+import itertools
+import os
+import re
+import subprocess
+import sys
+from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
+regression_bin = Path(sys.argv[1])
+cache_dir = Path(sys.argv[2])
+zstd_bin = Path(sys.argv[3])
+fragments_dir = Path(sys.argv[4])
+coverage_path = Path(sys.argv[5])
+results_path = Path(sys.argv[6])
+jobs = int(sys.argv[7])
+timeout_seconds = float(sys.argv[8])
+configs_per_task = int(sys.argv[9])
+
+with coverage_path.open(newline="", encoding="utf-8") as handle:
+    coverage_rows = list(csv.reader(handle))
+if not coverage_rows:
+    raise SystemExit("regression coverage baseline is empty")
+
+expected_header = [part.strip() for part in coverage_rows[0]]
+coverage_order = []
+groups = OrderedDict()
+for row in coverage_rows[1:]:
+    if len(row) != 4:
+        raise SystemExit(f"unexpected regression coverage row shape: {row!r}")
+    key = tuple(part.strip() for part in row[:3])
+    coverage_order.append(key)
+    groups.setdefault((key[0], key[2]), []).append(key[1])
+
+def sanitize(name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "_", name)
+
+def chunked(items, size):
+    iterator = iter(items)
+    while True:
+        chunk = list(itertools.islice(iterator, size))
+        if not chunk:
+            return
+        yield chunk
+
+task_plan = []
+for (data_name, method_name), configs in groups.items():
+    for config_names in chunked(configs, configs_per_task):
+        task_plan.append((data_name, method_name, config_names))
+
+def run_chunk(data_name: str, method_name: str, config_names):
+    stem = (
+        f"{sanitize(data_name)}__"
+        f"{sanitize('__'.join(config_names))}__"
+        f"{sanitize(method_name)}"
+    )
+    fragment_csv = fragments_dir / f"{stem}.csv"
+    fragment_log = fragments_dir / f"{stem}.log"
+    cmd = [
+        str(regression_bin),
+        "--cache",
+        str(cache_dir),
+        "--zstd",
+        str(zstd_bin),
+        "--data",
+        data_name,
+        "--method",
+        method_name,
+        "--output",
+        str(fragment_csv),
+    ]
+    env = dict(os.environ)
+    env["PHASE6_REGRESSION_CONFIGS"] = ",".join(config_names)
+    try:
+        completed = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as exc:
+        fragment_log.write_text(
+            (exc.stdout or "") + (exc.stderr or ""),
+            encoding="utf-8",
+        )
+        raise RuntimeError(
+            f"timed out after {timeout_seconds:.0f}s: "
+            f"{data_name}/{method_name}/{config_names!r}"
+        ) from exc
+
+    fragment_log.write_text(completed.stdout + completed.stderr, encoding="utf-8")
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"failed with exit {completed.returncode}: "
+            f"{data_name}/{method_name}/{config_names!r}\n"
+            f"see {fragment_log}"
+        )
+
+    with fragment_csv.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.reader(handle))
+    if not rows:
+        raise RuntimeError(f"empty regression fragment: {fragment_csv}")
+    if [part.strip() for part in rows[0]] != expected_header:
+        raise RuntimeError(f"regression fragment header drifted: {fragment_csv}")
+
+    results = {}
+    expected_keys = {(data_name, config_name, method_name) for config_name in config_names}
+    for row in rows[1:]:
+        if len(row) != 4:
+            raise RuntimeError(f"unexpected regression row shape in {fragment_csv}: {row!r}")
         key = tuple(part.strip() for part in row[:3])
-        value = primary.get(key, row[3].strip())
-        writer.writerow([row[0], row[1], row[2], value])
+        if key not in expected_keys:
+            raise RuntimeError(
+                f"unexpected regression fragment key {key!r} in {fragment_csv}"
+            )
+        value = row[3].strip()
+        try:
+            int(value)
+        except ValueError as exc:
+            raise RuntimeError(
+                f"non-numeric regression result for {key!r}: {value!r}"
+            ) from exc
+        if key in results:
+            raise RuntimeError(f"duplicate regression row for {key!r}")
+        results[key] = value
+    if set(results) != expected_keys:
+        missing = sorted(expected_keys - set(results))
+        extra = sorted(set(results) - expected_keys)
+        raise RuntimeError(
+            f"regression fragment coverage drifted for {data_name}/{method_name}: "
+            f"missing={missing!r} extra={extra!r}"
+        )
+    return results
+
+actual = {}
+total_rows = len(coverage_order)
+completed_rows = 0
+with ThreadPoolExecutor(max_workers=jobs) as executor:
+    futures = {
+        executor.submit(run_chunk, data_name, method_name, config_names): (
+            data_name,
+            method_name,
+            tuple(config_names),
+        )
+        for data_name, method_name, config_names in task_plan
+    }
+    for future in as_completed(futures):
+        chunk_results = future.result()
+        for key, value in chunk_results.items():
+            if key in actual:
+                raise SystemExit(f"duplicate regression key across runs: {key!r}")
+            actual[key] = value
+        completed_rows += len(chunk_results)
+        if completed_rows % 25 == 0 or completed_rows == total_rows:
+            print(
+                f"[phase6] regression rows {completed_rows}/{total_rows}",
+                file=sys.stderr,
+            )
+
+expected_keys = set(coverage_order)
+actual_keys = set(actual)
+if actual_keys != expected_keys:
+    missing = sorted(expected_keys - actual_keys)
+    extra = sorted(actual_keys - expected_keys)
+    raise SystemExit(
+        "regression matrix coverage drifted: "
+        f"missing={missing[:5]!r} extra={extra[:5]!r}"
+    )
+
+tmp_path = results_path.with_suffix(".csv.tmp")
+with tmp_path.open("w", newline="", encoding="utf-8") as handle:
+    writer = csv.writer(handle)
+    writer.writerow(coverage_rows[0])
+    for data_name, config_name, method_name in coverage_order:
+        value = actual[(data_name, config_name, method_name)]
+        writer.writerow([data_name, config_name, method_name, value])
+tmp_path.replace(results_path)
+print(
+    f"[phase6] computed regression results for {len(actual)} rows "
+    f"using {jobs} workers and config chunks of {configs_per_task}",
+    file=sys.stderr,
+)
 PY
 }
 
@@ -145,17 +306,19 @@ if regression_results_are_fresh; then
     phase6_log "regression results already fresh; skipping recomputation"
 else
     stage_regression_cache
-    phase6_log "running bounded regression harness spot checks against checked-in baselines"
-    run_regression_spot_check "silesia.tar" "level 1" "zstdcli"
-    run_regression_spot_check "github.tar" "level 1 with dict" "zstdcli"
-    populate_regression_results_from_baseline
+    if use_cached_regression_results; then
+        phase6_log "using cached safe regression results fixture"
+    else
+        phase6_log "running offline regression coverage rows against the safe harness with $PHASE6_REGRESSION_JOBS workers"
+        compute_regression_results
+    fi
 fi
 
 phase6_log "comparing regression matrix coverage against checked-in baselines"
 python3 - \
     "$RESULTS_FILE" \
-    "$ORIGINAL_ROOT/tests/regression/results.csv" \
-    "$ORIGINAL_ROOT/tests/regression/regression.out" <<'PY'
+    "$PRIMARY_BASELINE_FILE" \
+    "$COVERAGE_BASELINE_FILE" <<'PY'
 import csv
 import sys
 from pathlib import Path

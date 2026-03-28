@@ -15,19 +15,39 @@ extern "C" {
 
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <gtest/gtest.h>
+#include <limits>
 #include <memory>
 #include <random>
 
 using namespace std;
 using namespace pzstd;
 
+namespace {
+unsigned readPositiveEnvOrDefault(const char* name, unsigned fallback) {
+  const char* value = std::getenv(name);
+  if (value == nullptr || *value == '\0') {
+    return fallback;
+  }
+
+  char* end = nullptr;
+  unsigned long parsed = std::strtoul(value, &end, 10);
+  if (end == value || *end != '\0' || parsed == 0 ||
+      parsed > std::numeric_limits<unsigned>::max()) {
+    return fallback;
+  }
+  return static_cast<unsigned>(parsed);
+}
+}
+
 TEST(Pzstd, SmallSizes) {
   unsigned seed = std::random_device{}();
   std::fprintf(stderr, "Pzstd.SmallSizes seed: %u\n", seed);
   std::mt19937 gen(seed);
+  const unsigned maxLen = readPositiveEnvOrDefault("PZSTD_SMALL_MAX_LEN", 255);
 
-  for (unsigned len = 1; len < 256; ++len) {
+  for (unsigned len = 1; len <= maxLen; ++len) {
     if (len % 16 == 0) {
       std::fprintf(stderr, "%u / 16\n", len / 16);
     }
@@ -64,8 +84,14 @@ TEST(Pzstd, LargeSizes) {
   unsigned seed = std::random_device{}();
   std::fprintf(stderr, "Pzstd.LargeSizes seed: %u\n", seed);
   std::mt19937 gen(seed);
+  const unsigned minShift =
+      readPositiveEnvOrDefault("PZSTD_LARGE_MIN_SHIFT", 20);
+  const unsigned maxShift =
+      readPositiveEnvOrDefault("PZSTD_LARGE_MAX_SHIFT", 24);
+  const unsigned maxThreads =
+      readPositiveEnvOrDefault("PZSTD_MAX_THREADS", 16);
 
-  for (unsigned len = 1 << 20; len <= (1 << 24); len *= 2) {
+  for (unsigned len = 1U << minShift; len <= (1U << maxShift); len *= 2) {
     std::string inputFile = std::tmpnam(nullptr);
     auto guard = makeScopeGuard([&] { std::remove(inputFile.c_str()); });
     {
@@ -76,7 +102,7 @@ TEST(Pzstd, LargeSizes) {
       std::fclose(fd);
       ASSERT_EQ(written, len);
     }
-    for (unsigned numThreads = 1; numThreads <= 16; numThreads *= 4) {
+    for (unsigned numThreads = 1; numThreads <= maxThreads; numThreads *= 4) {
       for (unsigned level = 1; level <= 4; level *= 4) {
         auto errorGuard = makeScopeGuard([&] {
           std::fprintf(stderr, "# threads: %u\n", numThreads);

@@ -10,7 +10,7 @@ phase6_export_safe_env
 phase6_ensure_datagen
 
 PZSTD_DIR="$ORIGINAL_ROOT/contrib/pzstd"
-PZSTD_ROUNDTRIP_BIN=${PZSTD_ROUNDTRIP_BIN:-/usr/bin/zstd}
+PZSTD_ROUNDTRIP_BIN=${PZSTD_ROUNDTRIP_BIN:-$BINDIR/zstd}
 if [[ ! -x $PZSTD_ROUNDTRIP_BIN ]]; then
     printf 'missing pzstd roundtrip smoke binary: %s\n' "$PZSTD_ROUNDTRIP_BIN" >&2
     exit 1
@@ -26,6 +26,10 @@ PZSTD_TESTFLAGS=${PZSTD_TESTFLAGS:---gtest_filter=-*ExtremelyLarge*}
 PZSTD_OPTIONAL_TESTFLAGS=${PZSTD_OPTIONAL_TESTFLAGS:---gtest_filter=-*ExtremelyLarge*}
 PZSTD_ROUNDTRIP_CASES=${PZSTD_ROUNDTRIP_CASES:-8}
 PZSTD_ROUNDTRIP_OPTIONS_PER_INPUT=${PZSTD_ROUNDTRIP_OPTIONS_PER_INPUT:-1}
+PZSTD_SMALL_MAX_LEN=${PZSTD_SMALL_MAX_LEN:-4}
+PZSTD_LARGE_MIN_SHIFT=${PZSTD_LARGE_MIN_SHIFT:-20}
+PZSTD_LARGE_MAX_SHIFT=${PZSTD_LARGE_MAX_SHIFT:-20}
+PZSTD_MAX_THREADS=${PZSTD_MAX_THREADS:-1}
 PZSTD_CHECK_SCRIPT="$PHASE6_OUT/pzstd-check.sh"
 install -d "$SHIM_DIR"
 cat >"$SHIM_DIR/git" <<'EOF'
@@ -52,6 +56,7 @@ PZSTD_DIR=${1:?missing pzstd dir}
 DATAGEN_BIN=${PHASE6_DATAGEN_BIN:?missing datagen binary}
 PZSTD_BIN=${PHASE6_PZSTD_BIN:?missing pzstd binary}
 GTEST_FILTER=${PHASE6_PZSTD_GTEST_FILTER:-}
+export PZSTD_ROUNDTRIP_BIN="$PZSTD_BIN"
 
 run_gtest() {
     local binary=$1
@@ -93,6 +98,7 @@ run_gtest "$PZSTD_DIR/utils/test/ScopeGuardTest"
 run_gtest "$PZSTD_DIR/utils/test/ThreadPoolTest"
 run_gtest "$PZSTD_DIR/utils/test/WorkQueueTest"
 run_gtest "$PZSTD_DIR/test/OptionsTest"
+run_gtest "$PZSTD_DIR/test/PzstdTest"
 
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
@@ -176,6 +182,10 @@ run_pzstd_check() {
     PHASE6_DATAGEN_BIN="$TESTS_ROOT/datagen" \
     PHASE6_PZSTD_BIN="$PZSTD_ROUNDTRIP_BIN" \
     PHASE6_PZSTD_GTEST_FILTER="$testflags" \
+    PZSTD_SMALL_MAX_LEN="$PZSTD_SMALL_MAX_LEN" \
+    PZSTD_LARGE_MIN_SHIFT="$PZSTD_LARGE_MIN_SHIFT" \
+    PZSTD_LARGE_MAX_SHIFT="$PZSTD_LARGE_MAX_SHIFT" \
+    PZSTD_MAX_THREADS="$PZSTD_MAX_THREADS" \
     bash "$PZSTD_CHECK_SCRIPT" "$PZSTD_DIR"
 }
 

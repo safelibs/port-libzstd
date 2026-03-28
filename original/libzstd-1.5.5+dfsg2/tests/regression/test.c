@@ -10,6 +10,7 @@
 
 #include <assert.h>
 #include <getopt.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -66,6 +67,26 @@ static char const* g_zstdcli = NULL;
 static char const* g_config = NULL;
 static char const* g_data = NULL;
 static char const* g_method = NULL;
+static char const* g_config_list = NULL;
+
+static int config_in_list(char const* name) {
+    char const* current = g_config_list;
+    size_t const name_len = strlen(name);
+
+    if (current == NULL || *current == '\0')
+        return 1;
+
+    while (*current != '\0') {
+        char const* end = current;
+        while (*end != '\0' && *end != ',')
+            ++end;
+        if ((size_t)(end - current) == name_len &&
+            strncmp(current, name, name_len) == 0)
+            return 1;
+        current = *end == ',' ? end + 1 : end;
+    }
+    return 0;
+}
 
 typedef enum {
     required_option,
@@ -260,6 +281,8 @@ static int run_all(FILE* results) {
             for (size_t config = 0; configs[config] != NULL; ++config) {
                 if (g_config != NULL && strcmp(configs[config]->name, g_config))
                     continue;
+                if (!config_in_list(configs[config]->name))
+                    continue;
                 if (config_skip_data(configs[config], data[datum]))
                     continue;
                 /* Print the result for the (method, data, config) tuple. */
@@ -330,6 +353,7 @@ int main(int argc, char** argv) {
 
     if (are_names_bad())
         return 1;
+    g_config_list = getenv("PHASE6_REGRESSION_CONFIGS");
 
     /* Initialize modules. */
     method_set_zstdcli(g_zstdcli);
