@@ -8,6 +8,65 @@ use crate::ffi::{
 };
 use core::ffi::{c_int, c_void};
 
+unsafe extern "C" {
+    #[link_name = "libzstd_safe_internal_ZSTD_compress_usingCDict_advanced"]
+    fn internal_ZSTD_compress_usingCDict_advanced(
+        cctx: *mut ZSTD_CCtx,
+        dst: *mut c_void,
+        dstCapacity: usize,
+        src: *const c_void,
+        srcSize: usize,
+        cdict: *const ZSTD_CDict,
+        fParams: ZSTD_frameParameters,
+    ) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_createCDict_advanced"]
+    fn internal_ZSTD_createCDict_advanced(
+        dict: *const c_void,
+        dictSize: usize,
+        dictLoadMethod: ZSTD_dictLoadMethod_e,
+        dictContentType: ZSTD_dictContentType_e,
+        cParams: ZSTD_compressionParameters,
+        customMem: ZSTD_customMem,
+    ) -> *mut ZSTD_CDict;
+    #[link_name = "libzstd_safe_internal_ZSTD_CCtx_loadDictionary_byReference"]
+    fn internal_ZSTD_CCtx_loadDictionary_byReference(
+        cctx: *mut ZSTD_CCtx,
+        dict: *const c_void,
+        dictSize: usize,
+    ) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_estimateCDictSize_advanced"]
+    fn internal_ZSTD_estimateCDictSize_advanced(
+        dictSize: usize,
+        cParams: ZSTD_compressionParameters,
+        dictLoadMethod: ZSTD_dictLoadMethod_e,
+    ) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_createCDict_byReference"]
+    fn internal_ZSTD_createCDict_byReference(
+        dictBuffer: *const c_void,
+        dictSize: usize,
+        compressionLevel: c_int,
+    ) -> *mut ZSTD_CDict;
+    #[link_name = "libzstd_safe_internal_ZSTD_estimateCDictSize"]
+    fn internal_ZSTD_estimateCDictSize(dictSize: usize, compressionLevel: c_int) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_CCtx_loadDictionary_advanced"]
+    fn internal_ZSTD_CCtx_loadDictionary_advanced(
+        cctx: *mut ZSTD_CCtx,
+        dict: *const c_void,
+        dictSize: usize,
+        dictLoadMethod: ZSTD_dictLoadMethod_e,
+        dictContentType: ZSTD_dictContentType_e,
+    ) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_createCDict_advanced2"]
+    fn internal_ZSTD_createCDict_advanced2(
+        dict: *const c_void,
+        dictSize: usize,
+        dictLoadMethod: ZSTD_dictLoadMethod_e,
+        dictContentType: ZSTD_dictContentType_e,
+        cctxParams: *const ZSTD_CCtx_params,
+        customMem: ZSTD_customMem,
+    ) -> *mut ZSTD_CDict;
+}
+
 #[no_mangle]
 pub extern "C" fn ZSTD_createCDict(
     dictBuffer: *const c_void,
@@ -152,18 +211,11 @@ pub extern "C" fn ZSTD_compress_usingCDict_advanced(
     cdict: *const ZSTD_CDict,
     fParams: ZSTD_frameParameters,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(
-        *mut ZSTD_CCtx,
-        *mut c_void,
-        usize,
-        *const c_void,
-        usize,
-        *const ZSTD_CDict,
-        ZSTD_frameParameters,
-    ) -> usize;
-    match load_upstream!("ZSTD_compress_usingCDict_advanced", Fn) {
-        Some(func) => unsafe { func(cctx, dst, dstCapacity, src, srcSize, cdict, fParams) },
-        None => generic_error(),
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe {
+        internal_ZSTD_compress_usingCDict_advanced(
+            cctx, dst, dstCapacity, src, srcSize, cdict, fParams,
+        )
     }
 }
 
@@ -176,19 +228,16 @@ pub extern "C" fn ZSTD_createCDict_advanced(
     cParams: ZSTD_compressionParameters,
     customMem: ZSTD_customMem,
 ) -> *mut ZSTD_CDict {
-    type Fn = unsafe extern "C" fn(
-        *const c_void,
-        usize,
-        ZSTD_dictLoadMethod_e,
-        ZSTD_dictContentType_e,
-        ZSTD_compressionParameters,
-        ZSTD_customMem,
-    ) -> *mut ZSTD_CDict;
-    match load_upstream!("ZSTD_createCDict_advanced", Fn) {
-        Some(func) => unsafe {
-            func(dict, dictSize, dictLoadMethod, dictContentType, cParams, customMem)
-        },
-        None => null_cdict(),
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    let cdict = unsafe {
+        internal_ZSTD_createCDict_advanced(
+            dict, dictSize, dictLoadMethod, dictContentType, cParams, customMem,
+        )
+    };
+    if cdict.is_null() {
+        null_cdict()
+    } else {
+        cdict
     }
 }
 
@@ -198,11 +247,8 @@ pub extern "C" fn ZSTD_CCtx_loadDictionary_byReference(
     dict: *const c_void,
     dictSize: usize,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(*mut ZSTD_CCtx, *const c_void, usize) -> usize;
-    match load_upstream!("ZSTD_CCtx_loadDictionary_byReference", Fn) {
-        Some(func) => unsafe { func(cctx, dict, dictSize) },
-        None => generic_error(),
-    }
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe { internal_ZSTD_CCtx_loadDictionary_byReference(cctx, dict, dictSize) }
 }
 
 #[no_mangle]
@@ -211,12 +257,8 @@ pub extern "C" fn ZSTD_estimateCDictSize_advanced(
     cParams: ZSTD_compressionParameters,
     dictLoadMethod: ZSTD_dictLoadMethod_e,
 ) -> usize {
-    type Fn =
-        unsafe extern "C" fn(usize, ZSTD_compressionParameters, ZSTD_dictLoadMethod_e) -> usize;
-    match load_upstream!("ZSTD_estimateCDictSize_advanced", Fn) {
-        Some(func) => unsafe { func(dictSize, cParams, dictLoadMethod) },
-        None => generic_error(),
-    }
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe { internal_ZSTD_estimateCDictSize_advanced(dictSize, cParams, dictLoadMethod) }
 }
 
 #[no_mangle]
@@ -225,20 +267,19 @@ pub extern "C" fn ZSTD_createCDict_byReference(
     dictSize: usize,
     compressionLevel: c_int,
 ) -> *mut ZSTD_CDict {
-    type Fn = unsafe extern "C" fn(*const c_void, usize, c_int) -> *mut ZSTD_CDict;
-    match load_upstream!("ZSTD_createCDict_byReference", Fn) {
-        Some(func) => unsafe { func(dictBuffer, dictSize, compressionLevel) },
-        None => null_cdict(),
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    let cdict = unsafe { internal_ZSTD_createCDict_byReference(dictBuffer, dictSize, compressionLevel) };
+    if cdict.is_null() {
+        null_cdict()
+    } else {
+        cdict
     }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_estimateCDictSize(dictSize: usize, compressionLevel: c_int) -> usize {
-    type Fn = unsafe extern "C" fn(usize, c_int) -> usize;
-    match load_upstream!("ZSTD_estimateCDictSize", Fn) {
-        Some(func) => unsafe { func(dictSize, compressionLevel) },
-        None => generic_error(),
-    }
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe { internal_ZSTD_estimateCDictSize(dictSize, compressionLevel) }
 }
 
 #[no_mangle]
@@ -249,16 +290,11 @@ pub extern "C" fn ZSTD_CCtx_loadDictionary_advanced(
     dictLoadMethod: ZSTD_dictLoadMethod_e,
     dictContentType: ZSTD_dictContentType_e,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(
-        *mut ZSTD_CCtx,
-        *const c_void,
-        usize,
-        ZSTD_dictLoadMethod_e,
-        ZSTD_dictContentType_e,
-    ) -> usize;
-    match load_upstream!("ZSTD_CCtx_loadDictionary_advanced", Fn) {
-        Some(func) => unsafe { func(cctx, dict, dictSize, dictLoadMethod, dictContentType) },
-        None => generic_error(),
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe {
+        internal_ZSTD_CCtx_loadDictionary_advanced(
+            cctx, dict, dictSize, dictLoadMethod, dictContentType,
+        )
     }
 }
 
@@ -271,25 +307,20 @@ pub extern "C" fn ZSTD_createCDict_advanced2(
     cctxParams: *const ZSTD_CCtx_params,
     customMem: ZSTD_customMem,
 ) -> *mut ZSTD_CDict {
-    type Fn = unsafe extern "C" fn(
-        *const c_void,
-        usize,
-        ZSTD_dictLoadMethod_e,
-        ZSTD_dictContentType_e,
-        *const ZSTD_CCtx_params,
-        ZSTD_customMem,
-    ) -> *mut ZSTD_CDict;
-    match load_upstream!("ZSTD_createCDict_advanced2", Fn) {
-        Some(func) => unsafe {
-            func(
-                dict,
-                dictSize,
-                dictLoadMethod,
-                dictContentType,
-                cctxParams,
-                customMem,
-            )
-        },
-        None => null_cdict(),
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    let cdict = unsafe {
+        internal_ZSTD_createCDict_advanced2(
+            dict,
+            dictSize,
+            dictLoadMethod,
+            dictContentType,
+            cctxParams,
+            customMem,
+        )
+    };
+    if cdict.is_null() {
+        null_cdict()
+    } else {
+        cdict
     }
 }

@@ -39,6 +39,8 @@ compile_c "$SAFE_ROOT/tests/capi/zstream_driver.c" "$BUILD_DIR/zstream_driver"
 compile_c "$SAFE_ROOT/tests/capi/thread_pool_driver.c" "$BUILD_DIR/thread_pool_driver"
 compile_c "$SAFE_ROOT/tests/capi/sequence_api_driver.c" "$BUILD_DIR/sequence_api_driver"
 compile_c "$SAFE_ROOT/tests/capi/dict_builder_driver.c" "$BUILD_DIR/dict_builder_driver"
+compile_c "$UPSTREAM_ROOT/tests/zstreamtest.c" "$BUILD_DIR/upstream_zstreamtest"
+compile_c "$UPSTREAM_ROOT/tests/poolTests.c" "$BUILD_DIR/upstream_poolTests" -pthread
 compile_c "$UPSTREAM_ROOT/examples/streaming_memory_usage.c" "$BUILD_DIR/streaming_memory_usage"
 compile_c "$UPSTREAM_ROOT/examples/streaming_compression_thread_pool.c" \
     "$BUILD_DIR/streaming_compression_thread_pool" \
@@ -87,6 +89,8 @@ PY
 "$BUILD_DIR/sequence_api_driver"
 "$BUILD_DIR/thread_pool_driver"
 "$BUILD_DIR/zstream_driver"
+"$BUILD_DIR/upstream_zstreamtest" -t2
+"$BUILD_DIR/upstream_poolTests"
 "$BUILD_DIR/streaming_memory_usage"
 "$BUILD_DIR/streaming_compression_thread_pool" 2 3 \
     "$WORK_DIR/input-one.txt" \

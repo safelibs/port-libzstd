@@ -1,18 +1,77 @@
 use crate::ffi::{
-    advanced::{forward_extern, zdict_unknown_error_name},
+    advanced::zdict_unknown_error_name,
     types::{ZDICT_legacy_params_t, ZDICT_params_t},
 };
 use core::ffi::{c_char, c_uint, c_void};
 
-forward_extern! {
-    pub fn ZDICT_addEntropyTablesFromBuffer(
+unsafe extern "C" {
+    #[link_name = "libzstd_safe_internal_ZDICT_addEntropyTablesFromBuffer"]
+    fn internal_ZDICT_addEntropyTablesFromBuffer(
         dictBuffer: *mut c_void,
         dictContentSize: usize,
         dictBufferCapacity: usize,
         samplesBuffer: *const c_void,
         samplesSizes: *const usize,
         nbSamples: c_uint,
-    ) -> usize => crate::ffi::compress::generic_error()
+    ) -> usize;
+    #[link_name = "libzstd_safe_internal_ZDICT_finalizeDictionary"]
+    fn internal_ZDICT_finalizeDictionary(
+        dstDictBuffer: *mut c_void,
+        maxDictSize: usize,
+        dictContent: *const c_void,
+        dictContentSize: usize,
+        samplesBuffer: *const c_void,
+        samplesSizes: *const usize,
+        nbSamples: c_uint,
+        parameters: ZDICT_params_t,
+    ) -> usize;
+    #[link_name = "libzstd_safe_internal_ZDICT_trainFromBuffer_legacy"]
+    fn internal_ZDICT_trainFromBuffer_legacy(
+        dictBuffer: *mut c_void,
+        dictBufferCapacity: usize,
+        samplesBuffer: *const c_void,
+        samplesSizes: *const usize,
+        nbSamples: c_uint,
+        parameters: ZDICT_legacy_params_t,
+    ) -> usize;
+    #[link_name = "libzstd_safe_internal_ZDICT_getDictHeaderSize"]
+    fn internal_ZDICT_getDictHeaderSize(dictBuffer: *const c_void, dictSize: usize) -> usize;
+    #[link_name = "libzstd_safe_internal_ZDICT_getDictID"]
+    fn internal_ZDICT_getDictID(dictBuffer: *const c_void, dictSize: usize) -> c_uint;
+    #[link_name = "libzstd_safe_internal_ZDICT_trainFromBuffer"]
+    fn internal_ZDICT_trainFromBuffer(
+        dictBuffer: *mut c_void,
+        dictBufferCapacity: usize,
+        samplesBuffer: *const c_void,
+        samplesSizes: *const usize,
+        nbSamples: c_uint,
+    ) -> usize;
+    #[link_name = "libzstd_safe_internal_ZDICT_isError"]
+    fn internal_ZDICT_isError(errorCode: usize) -> c_uint;
+    #[link_name = "libzstd_safe_internal_ZDICT_getErrorName"]
+    fn internal_ZDICT_getErrorName(errorCode: usize) -> *const c_char;
+}
+
+#[no_mangle]
+pub extern "C" fn ZDICT_addEntropyTablesFromBuffer(
+    dictBuffer: *mut c_void,
+    dictContentSize: usize,
+    dictBufferCapacity: usize,
+    samplesBuffer: *const c_void,
+    samplesSizes: *const usize,
+    nbSamples: c_uint,
+) -> usize {
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe {
+        internal_ZDICT_addEntropyTablesFromBuffer(
+            dictBuffer,
+            dictContentSize,
+            dictBufferCapacity,
+            samplesBuffer,
+            samplesSizes,
+            nbSamples,
+        )
+    }
 }
 
 #[no_mangle]
@@ -26,22 +85,9 @@ pub extern "C" fn ZDICT_finalizeDictionary(
     nbSamples: c_uint,
     parameters: ZDICT_params_t,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(
-        *mut c_void,
-        usize,
-        *const c_void,
-        usize,
-        *const c_void,
-        *const usize,
-        c_uint,
-        ZDICT_params_t,
-    ) -> usize;
-    let Some(func) = crate::ffi::compress::load_upstream!("ZDICT_finalizeDictionary", Fn) else {
-        return crate::ffi::compress::generic_error();
-    };
-    // SAFETY: The loaded symbol is cached with the exact signature declared above.
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
     unsafe {
-        func(
+        internal_ZDICT_finalizeDictionary(
             dstDictBuffer,
             maxDictSize,
             dictContent,
@@ -63,49 +109,70 @@ pub extern "C" fn ZDICT_trainFromBuffer_legacy(
     nbSamples: c_uint,
     parameters: ZDICT_legacy_params_t,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(
-        *mut c_void,
-        usize,
-        *const c_void,
-        *const usize,
-        c_uint,
-        ZDICT_legacy_params_t,
-    ) -> usize;
-    let Some(func) = crate::ffi::compress::load_upstream!("ZDICT_trainFromBuffer_legacy", Fn) else {
-        return crate::ffi::compress::generic_error();
-    };
-    // SAFETY: The loaded symbol is cached with the exact signature declared above.
-    unsafe { func(dictBuffer, dictBufferCapacity, samplesBuffer, samplesSizes, nbSamples, parameters) }
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe {
+        internal_ZDICT_trainFromBuffer_legacy(
+            dictBuffer,
+            dictBufferCapacity,
+            samplesBuffer,
+            samplesSizes,
+            nbSamples,
+            parameters,
+        )
+    }
 }
 
-forward_extern! {
-    pub fn ZDICT_getDictHeaderSize(
-        dictBuffer: *const c_void,
-        dictSize: usize,
-    ) -> usize => crate::ffi::compress::generic_error()
+#[no_mangle]
+pub extern "C" fn ZDICT_getDictHeaderSize(
+    dictBuffer: *const c_void,
+    dictSize: usize,
+) -> usize {
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe { internal_ZDICT_getDictHeaderSize(dictBuffer, dictSize) }
 }
 
-forward_extern! {
-    pub fn ZDICT_getDictID(
-        dictBuffer: *const c_void,
-        dictSize: usize,
-    ) -> c_uint => 0
+#[no_mangle]
+pub extern "C" fn ZDICT_getDictID(
+    dictBuffer: *const c_void,
+    dictSize: usize,
+) -> c_uint {
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe { internal_ZDICT_getDictID(dictBuffer, dictSize) }
 }
 
-forward_extern! {
-    pub fn ZDICT_trainFromBuffer(
-        dictBuffer: *mut c_void,
-        dictBufferCapacity: usize,
-        samplesBuffer: *const c_void,
-        samplesSizes: *const usize,
-        nbSamples: c_uint,
-    ) -> usize => crate::ffi::compress::generic_error()
+#[no_mangle]
+pub extern "C" fn ZDICT_trainFromBuffer(
+    dictBuffer: *mut c_void,
+    dictBufferCapacity: usize,
+    samplesBuffer: *const c_void,
+    samplesSizes: *const usize,
+    nbSamples: c_uint,
+) -> usize {
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe {
+        internal_ZDICT_trainFromBuffer(
+            dictBuffer,
+            dictBufferCapacity,
+            samplesBuffer,
+            samplesSizes,
+            nbSamples,
+        )
+    }
 }
 
-forward_extern! {
-    pub fn ZDICT_isError(errorCode: usize) -> c_uint => 1
+#[no_mangle]
+pub extern "C" fn ZDICT_isError(errorCode: usize) -> c_uint {
+    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
+    unsafe { internal_ZDICT_isError(errorCode) }
 }
 
-forward_extern! {
-    pub fn ZDICT_getErrorName(errorCode: usize) -> *const c_char => zdict_unknown_error_name()
+#[no_mangle]
+pub extern "C" fn ZDICT_getErrorName(errorCode: usize) -> *const c_char {
+    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
+    let name = unsafe { internal_ZDICT_getErrorName(errorCode) };
+    if name.is_null() {
+        zdict_unknown_error_name()
+    } else {
+        name
+    }
 }

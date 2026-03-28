@@ -14,6 +14,17 @@ use crate::{
 };
 use core::ffi::c_void;
 
+unsafe extern "C" {
+    #[link_name = "libzstd_safe_internal_ZSTD_estimateDStreamSize_fromFrame"]
+    fn internal_ZSTD_estimateDStreamSize_fromFrame(src: *const c_void, srcSize: usize) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_estimateDStreamSize"]
+    fn internal_ZSTD_estimateDStreamSize(windowSize: usize) -> usize;
+}
+
+fn custom_mem_supported(custom_mem: ZSTD_customMem) -> bool {
+    custom_mem.customAlloc.is_none() && custom_mem.customFree.is_none()
+}
+
 #[no_mangle]
 pub extern "C" fn ZSTD_createDStream() -> *mut ZSTD_DStream {
     decompress::create_dctx().cast()
@@ -103,20 +114,14 @@ pub extern "C" fn ZSTD_estimateDStreamSize_fromFrame(
     src: *const c_void,
     srcSize: usize,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(*const c_void, usize) -> usize;
-    match crate::ffi::compress::load_upstream!("ZSTD_estimateDStreamSize_fromFrame", Fn) {
-        Some(func) => unsafe { func(src, srcSize) },
-        None => error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_GENERIC),
-    }
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe { internal_ZSTD_estimateDStreamSize_fromFrame(src, srcSize) }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_estimateDStreamSize(windowSize: usize) -> usize {
-    type Fn = unsafe extern "C" fn(usize) -> usize;
-    match crate::ffi::compress::load_upstream!("ZSTD_estimateDStreamSize", Fn) {
-        Some(func) => unsafe { func(windowSize) },
-        None => error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_GENERIC),
-    }
+    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
+    unsafe { internal_ZSTD_estimateDStreamSize(windowSize) }
 }
 
 #[no_mangle]
@@ -129,24 +134,37 @@ pub extern "C" fn ZSTD_decompressStream_simpleArgs(
     srcSize: usize,
     srcPos: *mut usize,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(
-        *mut ZSTD_DCtx,
-        *mut c_void,
-        usize,
-        *mut usize,
-        *const c_void,
-        usize,
-        *mut usize,
-    ) -> usize;
-    match crate::ffi::compress::load_upstream!("ZSTD_decompressStream_simpleArgs", Fn) {
-        Some(func) => unsafe { func(dctx, dst, dstCapacity, dstPos, src, srcSize, srcPos) },
-        None => error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_GENERIC),
+    if dstPos.is_null() || srcPos.is_null() {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_GENERIC);
     }
+
+    let mut output = crate::ffi::types::ZSTD_outBuffer {
+        dst,
+        size: dstCapacity,
+        // SAFETY: The caller provided a valid `dstPos` pointer.
+        pos: unsafe { *dstPos },
+    };
+    let mut input = crate::ffi::types::ZSTD_inBuffer {
+        src,
+        size: srcSize,
+        // SAFETY: The caller provided a valid `srcPos` pointer.
+        pos: unsafe { *srcPos },
+    };
+    let ret = ZSTD_decompressStream(dctx, &mut output, &mut input);
+    // SAFETY: The caller provided valid `dstPos` and `srcPos` pointers.
+    unsafe {
+        *dstPos = output.pos;
+        *srcPos = input.pos;
+    }
+    ret
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_createDStream_advanced(
-    _customMem: ZSTD_customMem,
+    customMem: ZSTD_customMem,
 ) -> *mut ZSTD_DStream {
+    if !custom_mem_supported(customMem) {
+        return core::ptr::null_mut();
+    }
     decompress::create_dctx().cast()
 }

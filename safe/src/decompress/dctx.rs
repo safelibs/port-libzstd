@@ -11,6 +11,10 @@ use crate::{
 };
 use core::ffi::{c_int, c_void};
 
+fn custom_mem_supported(custom_mem: ZSTD_customMem) -> bool {
+    custom_mem.customAlloc.is_none() && custom_mem.customFree.is_none()
+}
+
 fn decode_with_upstream_dict(
     dst: *mut c_void,
     dst_capacity: usize,
@@ -384,7 +388,10 @@ pub extern "C" fn ZSTD_estimateDCtxSize() -> usize {
 }
 
 #[no_mangle]
-pub extern "C" fn ZSTD_createDCtx_advanced(_customMem: ZSTD_customMem) -> *mut ZSTD_DCtx {
+pub extern "C" fn ZSTD_createDCtx_advanced(customMem: ZSTD_customMem) -> *mut ZSTD_DCtx {
+    if !custom_mem_supported(customMem) {
+        return core::ptr::null_mut();
+    }
     decompress::create_dctx()
 }
 
@@ -395,11 +402,12 @@ pub extern "C" fn ZSTD_DCtx_refPrefix_advanced(
     prefixSize: usize,
     dictContentType: ZSTD_dictContentType_e,
 ) -> usize {
-    let _ = dictContentType;
     let Some(prefix_bytes) = decompress::optional_src_slice(prefix, prefixSize) else {
         return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
     };
-    match decompress::with_dctx_mut(dctx, |dctx| dctx.ref_prefix(prefix_bytes)) {
+    match decompress::with_dctx_mut(dctx, |dctx| {
+        dctx.ref_prefix_with_content_type(prefix_bytes, dictContentType)
+    }) {
         Ok(()) => 0,
         Err(code) => error_result(code),
     }

@@ -80,6 +80,39 @@ pub(crate) fn is_skippable_magic(magic: u32) -> bool {
     (magic & ZSTD_MAGIC_SKIPPABLE_MASK) == ZSTD_MAGIC_SKIPPABLE_START
 }
 
+pub(crate) fn partial_frame_prefix_is_valid(src: &[u8], format: ZSTD_format_e) -> bool {
+    const LEGACY_MAGICS: [u32; 7] = [
+        0x1EB5_2FFD,
+        0xFD2F_B522,
+        0xFD2F_B523,
+        0xFD2F_B524,
+        0xFD2F_B525,
+        0xFD2F_B526,
+        0xFD2F_B527,
+    ];
+
+    if format == ZSTD_format_e::ZSTD_f_zstd1_magicless || src.is_empty() || src.len() >= 4 {
+        return true;
+    }
+
+    if ZSTD_MAGICNUMBER.to_le_bytes().starts_with(src) {
+        return true;
+    }
+
+    if match src.len() {
+        1 => (0x50..=0x5F).contains(&src[0]),
+        2 => (0x50..=0x5F).contains(&src[0]) && src[1] == 0x2A,
+        3 => (0x50..=0x5F).contains(&src[0]) && src[1] == 0x2A && src[2] == 0x4D,
+        _ => false,
+    } {
+        return true;
+    }
+
+    LEGACY_MAGICS
+        .iter()
+        .any(|magic| magic.to_le_bytes().starts_with(src))
+}
+
 pub(crate) fn classify_frame(buffer: &[u8]) -> Option<FrameKind> {
     if buffer.len() < ZSTD_FRAMEIDSIZE {
         return None;
@@ -526,6 +559,7 @@ pub(crate) fn find_frame_size_info(
     })
 }
 
+#[allow(dead_code)]
 pub(crate) fn archive_is_complete(src: &[u8], format: ZSTD_format_e) -> Result<bool, ZSTD_ErrorCode> {
     let mut remaining = src;
     while !remaining.is_empty() {

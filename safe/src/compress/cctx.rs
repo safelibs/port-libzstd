@@ -8,6 +8,37 @@ use crate::ffi::{
 };
 use core::ffi::{c_int, c_void};
 
+unsafe extern "C" {
+    #[link_name = "libzstd_safe_internal_ZSTD_CCtx_refPrefix_advanced"]
+    fn internal_ZSTD_CCtx_refPrefix_advanced(
+        cctx: *mut ZSTD_CCtx,
+        prefix: *const c_void,
+        prefixSize: usize,
+        dictContentType: ZSTD_dictContentType_e,
+    ) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_estimateCCtxSize"]
+    fn internal_ZSTD_estimateCCtxSize(compressionLevel: c_int) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_estimateCCtxSize_usingCCtxParams"]
+    fn internal_ZSTD_estimateCCtxSize_usingCCtxParams(params: *const ZSTD_CCtx_params) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_compress_advanced"]
+    fn internal_ZSTD_compress_advanced(
+        cctx: *mut ZSTD_CCtx,
+        dst: *mut c_void,
+        dstCapacity: usize,
+        src: *const c_void,
+        srcSize: usize,
+        dict: *const c_void,
+        dictSize: usize,
+        params: ZSTD_parameters,
+    ) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_estimateCCtxSize_usingCParams"]
+    fn internal_ZSTD_estimateCCtxSize_usingCParams(
+        cParams: ZSTD_compressionParameters,
+    ) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_createCCtx_advanced"]
+    fn internal_ZSTD_createCCtx_advanced(customMem: ZSTD_customMem) -> *mut ZSTD_CCtx;
+}
+
 #[no_mangle]
 pub extern "C" fn ZSTD_createCCtx() -> *mut ZSTD_CCtx {
     type Fn = unsafe extern "C" fn() -> *mut ZSTD_CCtx;
@@ -276,32 +307,22 @@ pub extern "C" fn ZSTD_CCtx_refPrefix_advanced(
     prefixSize: usize,
     dictContentType: ZSTD_dictContentType_e,
 ) -> usize {
-    type Fn =
-        unsafe extern "C" fn(*mut ZSTD_CCtx, *const c_void, usize, ZSTD_dictContentType_e) -> usize;
-    match load_upstream!("ZSTD_CCtx_refPrefix_advanced", Fn) {
-        Some(func) => unsafe { func(cctx, prefix, prefixSize, dictContentType) },
-        None => generic_error(),
-    }
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe { internal_ZSTD_CCtx_refPrefix_advanced(cctx, prefix, prefixSize, dictContentType) }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_estimateCCtxSize(compressionLevel: c_int) -> usize {
-    type Fn = unsafe extern "C" fn(c_int) -> usize;
-    match load_upstream!("ZSTD_estimateCCtxSize", Fn) {
-        Some(func) => unsafe { func(compressionLevel) },
-        None => generic_error(),
-    }
+    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
+    unsafe { internal_ZSTD_estimateCCtxSize(compressionLevel) }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_estimateCCtxSize_usingCCtxParams(
     params: *const ZSTD_CCtx_params,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(*const ZSTD_CCtx_params) -> usize;
-    match load_upstream!("ZSTD_estimateCCtxSize_usingCCtxParams", Fn) {
-        Some(func) => unsafe { func(params) },
-        None => generic_error(),
-    }
+    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
+    unsafe { internal_ZSTD_estimateCCtxSize_usingCCtxParams(params) }
 }
 
 #[no_mangle]
@@ -315,19 +336,18 @@ pub extern "C" fn ZSTD_compress_advanced(
     dictSize: usize,
     params: ZSTD_parameters,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(
-        *mut ZSTD_CCtx,
-        *mut c_void,
-        usize,
-        *const c_void,
-        usize,
-        *const c_void,
-        usize,
-        ZSTD_parameters,
-    ) -> usize;
-    match load_upstream!("ZSTD_compress_advanced", Fn) {
-        Some(func) => unsafe { func(cctx, dst, dstCapacity, src, srcSize, dict, dictSize, params) },
-        None => generic_error(),
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe {
+        internal_ZSTD_compress_advanced(
+            cctx,
+            dst,
+            dstCapacity,
+            src,
+            srcSize,
+            dict,
+            dictSize,
+            params,
+        )
     }
 }
 
@@ -335,18 +355,17 @@ pub extern "C" fn ZSTD_compress_advanced(
 pub extern "C" fn ZSTD_estimateCCtxSize_usingCParams(
     cParams: ZSTD_compressionParameters,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(ZSTD_compressionParameters) -> usize;
-    match load_upstream!("ZSTD_estimateCCtxSize_usingCParams", Fn) {
-        Some(func) => unsafe { func(cParams) },
-        None => generic_error(),
-    }
+    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
+    unsafe { internal_ZSTD_estimateCCtxSize_usingCParams(cParams) }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_createCCtx_advanced(customMem: ZSTD_customMem) -> *mut ZSTD_CCtx {
-    type Fn = unsafe extern "C" fn(ZSTD_customMem) -> *mut ZSTD_CCtx;
-    match load_upstream!("ZSTD_createCCtx_advanced", Fn) {
-        Some(func) => unsafe { func(customMem) },
-        None => null_cctx(),
+    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
+    let cctx = unsafe { internal_ZSTD_createCCtx_advanced(customMem) };
+    if cctx.is_null() {
+        null_cctx()
+    } else {
+        cctx
     }
 }

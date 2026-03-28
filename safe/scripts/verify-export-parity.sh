@@ -67,6 +67,20 @@ if export_map["upstream_soname"] != expected_soname:
         f"export_map upstream_soname mismatch: {export_map['upstream_soname']!r} != {expected_soname!r}"
     )
 
+readelf_output = subprocess.check_output(["readelf", "-d", str(shared_object)], text=True)
+actual_soname = None
+for line in readelf_output.splitlines():
+    if "SONAME" not in line:
+        continue
+    match = re.search(r"\[(?P<soname>[^\]]+)\]", line)
+    if match:
+        actual_soname = match.group("soname")
+        break
+if actual_soname != expected_soname:
+    raise SystemExit(
+        f"{shared_object.name} SONAME mismatch: {actual_soname!r} != {expected_soname!r}"
+    )
+
 objdump_output = subprocess.check_output(["objdump", "-T", str(shared_object)], text=True)
 line_re = re.compile(
     r"^(?P<value>[0-9a-fA-F]+)\s+(?P<bind>\S+)\s+(?P<type>\S+)\s+(?P<section>\S+)\s+"

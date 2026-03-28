@@ -1,2 +1,2 @@
-//! Phase 4 keeps the multithreaded ABI compatible while reusing the upstream
-//! job-queue and worker-pool implementation through exported wrappers.
+//! The multithreaded compression ABI is backed by the upstream worker-queue
+//! implementation linked into the safe build as hidden helper objects.

@@ -5,6 +5,17 @@ use crate::{
 };
 use core::ffi::{c_uint, c_void};
 
+unsafe extern "C" {
+    #[link_name = "libzstd_safe_internal_ZSTD_writeSkippableFrame"]
+    fn internal_ZSTD_writeSkippableFrame(
+        dst: *mut c_void,
+        dstCapacity: usize,
+        src: *const c_void,
+        srcSize: usize,
+        magicVariant: c_uint,
+    ) -> usize;
+}
+
 #[no_mangle]
 pub extern "C" fn ZSTD_readSkippableFrame(
     dst: *mut c_void,
@@ -55,10 +66,6 @@ pub extern "C" fn ZSTD_writeSkippableFrame(
     srcSize: usize,
     magicVariant: c_uint,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(*mut c_void, usize, *const c_void, usize, c_uint) -> usize;
-    let Some(func) = crate::ffi::compress::load_upstream!("ZSTD_writeSkippableFrame", Fn) else {
-        return error_result(ZSTD_ErrorCode::ZSTD_error_GENERIC);
-    };
-    // SAFETY: The loaded symbol is cached with the exact signature declared above.
-    unsafe { func(dst, dstCapacity, src, srcSize, magicVariant) }
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe { internal_ZSTD_writeSkippableFrame(dst, dstCapacity, src, srcSize, magicVariant) }
 }

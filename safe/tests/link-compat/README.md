@@ -9,8 +9,9 @@ The `Makefile` keeps compilation and linking separate:
 - `*.o` files are compiled with include paths rooted in
   `original/libzstd-1.5.5+dfsg2`.
 - final binaries are linked against `safe/target/release/libzstd.so`.
-- the run target executes Debian `ztest` clients, upstream example objects, and
-  phase-4 advanced API drivers built from retained object files.
+- the run target executes Debian `ztest` clients, retained objects from
+  `original/tests/zstreamtest.c` and `original/tests/poolTests.c`, upstream
+  example objects, and phase-4 advanced API drivers.
 
 Typical usage:
 

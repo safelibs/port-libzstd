@@ -8,6 +8,32 @@ use crate::ffi::{
 };
 use core::ffi::{c_int, c_void};
 
+unsafe extern "C" {
+    #[link_name = "libzstd_safe_internal_ZSTD_estimateCStreamSize_usingCParams"]
+    fn internal_ZSTD_estimateCStreamSize_usingCParams(
+        cParams: ZSTD_compressionParameters,
+    ) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_createCStream_advanced"]
+    fn internal_ZSTD_createCStream_advanced(customMem: ZSTD_customMem) -> *mut ZSTD_CStream;
+    #[link_name = "libzstd_safe_internal_ZSTD_compressStream2_simpleArgs"]
+    fn internal_ZSTD_compressStream2_simpleArgs(
+        cctx: *mut ZSTD_CCtx,
+        dst: *mut c_void,
+        dstCapacity: usize,
+        dstPos: *mut usize,
+        src: *const c_void,
+        srcSize: usize,
+        srcPos: *mut usize,
+        endOp: ZSTD_EndDirective,
+    ) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_estimateCStreamSize"]
+    fn internal_ZSTD_estimateCStreamSize(compressionLevel: c_int) -> usize;
+    #[link_name = "libzstd_safe_internal_ZSTD_estimateCStreamSize_usingCCtxParams"]
+    fn internal_ZSTD_estimateCStreamSize_usingCCtxParams(
+        params: *const ZSTD_CCtx_params,
+    ) -> usize;
+}
+
 #[no_mangle]
 pub extern "C" fn ZSTD_createCStream() -> *mut ZSTD_CStream {
     type Fn = unsafe extern "C" fn() -> *mut ZSTD_CStream;
@@ -165,21 +191,20 @@ pub extern "C" fn ZSTD_sizeof_CStream(zcs: *const ZSTD_CStream) -> usize {
 pub extern "C" fn ZSTD_estimateCStreamSize_usingCParams(
     cParams: ZSTD_compressionParameters,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(ZSTD_compressionParameters) -> usize;
-    match load_upstream!("ZSTD_estimateCStreamSize_usingCParams", Fn) {
-        Some(func) => unsafe { func(cParams) },
-        None => generic_error(),
-    }
+    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
+    unsafe { internal_ZSTD_estimateCStreamSize_usingCParams(cParams) }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_createCStream_advanced(
     customMem: ZSTD_customMem,
 ) -> *mut ZSTD_CStream {
-    type Fn = unsafe extern "C" fn(ZSTD_customMem) -> *mut ZSTD_CStream;
-    match load_upstream!("ZSTD_createCStream_advanced", Fn) {
-        Some(func) => unsafe { func(customMem) },
-        None => null_cctx().cast(),
+    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
+    let stream = unsafe { internal_ZSTD_createCStream_advanced(customMem) };
+    if stream.is_null() {
+        null_cctx().cast()
+    } else {
+        stream
     }
 }
 
@@ -194,38 +219,24 @@ pub extern "C" fn ZSTD_compressStream2_simpleArgs(
     srcPos: *mut usize,
     endOp: ZSTD_EndDirective,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(
-        *mut ZSTD_CCtx,
-        *mut c_void,
-        usize,
-        *mut usize,
-        *const c_void,
-        usize,
-        *mut usize,
-        ZSTD_EndDirective,
-    ) -> usize;
-    match load_upstream!("ZSTD_compressStream2_simpleArgs", Fn) {
-        Some(func) => unsafe { func(cctx, dst, dstCapacity, dstPos, src, srcSize, srcPos, endOp) },
-        None => generic_error(),
+    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
+    unsafe {
+        internal_ZSTD_compressStream2_simpleArgs(
+            cctx, dst, dstCapacity, dstPos, src, srcSize, srcPos, endOp,
+        )
     }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_estimateCStreamSize(compressionLevel: c_int) -> usize {
-    type Fn = unsafe extern "C" fn(c_int) -> usize;
-    match load_upstream!("ZSTD_estimateCStreamSize", Fn) {
-        Some(func) => unsafe { func(compressionLevel) },
-        None => generic_error(),
-    }
+    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
+    unsafe { internal_ZSTD_estimateCStreamSize(compressionLevel) }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_estimateCStreamSize_usingCCtxParams(
     params: *const ZSTD_CCtx_params,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(*const ZSTD_CCtx_params) -> usize;
-    match load_upstream!("ZSTD_estimateCStreamSize_usingCCtxParams", Fn) {
-        Some(func) => unsafe { func(params) },
-        None => generic_error(),
-    }
+    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
+    unsafe { internal_ZSTD_estimateCStreamSize_usingCCtxParams(params) }
 }

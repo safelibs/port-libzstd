@@ -16,6 +16,10 @@ LINK_FLAGS := -L$(SAFE_ROOT)/target/release -Wl,-rpath,$(SAFE_ROOT)/target/relea
 OBJECTS := \
 	$(OBJ_DIR)/pkg_make_ztest.o \
 	$(OBJ_DIR)/cmake_ztest.o \
+	$(OBJ_DIR)/zstreamtest.o \
+	$(OBJ_DIR)/run_zstreamtest.o \
+	$(OBJ_DIR)/poolTests.o \
+	$(OBJ_DIR)/run_pooltests.o \
 	$(OBJ_DIR)/streaming_memory_usage.o \
 	$(OBJ_DIR)/streaming_compression_thread_pool.o \
 	$(OBJ_DIR)/dict_builder_driver.o \
@@ -25,6 +29,8 @@ OBJECTS := \
 BINARIES := \
 	$(BIN_DIR)/pkg_make_ztest_safe \
 	$(BIN_DIR)/cmake_ztest_safe \
+	$(BIN_DIR)/zstreamtest_safe \
+	$(BIN_DIR)/poolTests_safe \
 	$(BIN_DIR)/streaming_memory_usage_safe \
 	$(BIN_DIR)/streaming_compression_thread_pool_safe \
 	$(BIN_DIR)/dict_builder_driver_safe \
@@ -51,6 +57,18 @@ $(OBJ_DIR)/pkg_make_ztest.o: $(ORIGINAL_ROOT)/debian/tests/ztest/pkg-make/ztest.
 $(OBJ_DIR)/cmake_ztest.o: $(ORIGINAL_ROOT)/debian/tests/ztest/cmake/ztest.c | workdirs
 	$(CC) $(WARN_FLAGS) $(ORIGINAL_CPPFLAGS) -c $< -o $@
 
+$(OBJ_DIR)/zstreamtest.o: $(ORIGINAL_ROOT)/tests/zstreamtest.c | workdirs
+	$(CC) $(WARN_FLAGS) $(ORIGINAL_CPPFLAGS) -Dmain=upstream_zstreamtest_main -c $< -o $@
+
+$(OBJ_DIR)/run_zstreamtest.o: $(SAFE_ROOT)/tests/link-compat/run_zstreamtest.c | workdirs
+	$(CC) $(WARN_FLAGS) -c $< -o $@
+
+$(OBJ_DIR)/poolTests.o: $(ORIGINAL_ROOT)/tests/poolTests.c | workdirs
+	$(CC) $(WARN_FLAGS) $(ORIGINAL_CPPFLAGS) -Dmain=upstream_poolTests_main -c $< -o $@
+
+$(OBJ_DIR)/run_pooltests.o: $(SAFE_ROOT)/tests/link-compat/run_pooltests.c | workdirs
+	$(CC) $(WARN_FLAGS) -c $< -o $@
+
 $(OBJ_DIR)/streaming_memory_usage.o: $(ORIGINAL_ROOT)/examples/streaming_memory_usage.c | workdirs
 	$(CC) $(WARN_FLAGS) $(ORIGINAL_CPPFLAGS) -c $< -o $@
 
@@ -71,6 +89,12 @@ $(BIN_DIR)/pkg_make_ztest_safe: $(OBJ_DIR)/pkg_make_ztest.o safe-lib | workdirs
 
 $(BIN_DIR)/cmake_ztest_safe: $(OBJ_DIR)/cmake_ztest.o safe-lib | workdirs
 	$(CC) $< -o $@ $(LINK_FLAGS)
+
+$(BIN_DIR)/zstreamtest_safe: $(OBJ_DIR)/zstreamtest.o $(OBJ_DIR)/run_zstreamtest.o safe-lib | workdirs
+	$(CC) $(OBJ_DIR)/zstreamtest.o $(OBJ_DIR)/run_zstreamtest.o -o $@ $(LINK_FLAGS)
+
+$(BIN_DIR)/poolTests_safe: $(OBJ_DIR)/poolTests.o $(OBJ_DIR)/run_pooltests.o safe-lib | workdirs
+	$(CC) $(OBJ_DIR)/poolTests.o $(OBJ_DIR)/run_pooltests.o -o $@ $(LINK_FLAGS) -pthread
 
 $(BIN_DIR)/streaming_memory_usage_safe: $(OBJ_DIR)/streaming_memory_usage.o safe-lib | workdirs
 	$(CC) $< -o $@ $(LINK_FLAGS)
@@ -93,6 +117,8 @@ $(WORK_DIR)/input-one.txt $(WORK_DIR)/input-two.txt: | workdirs
 run: binaries $(WORK_DIR)/input-one.txt $(WORK_DIR)/input-two.txt
 	LD_LIBRARY_PATH=$(LD_PATH) $(BIN_DIR)/pkg_make_ztest_safe
 	LD_LIBRARY_PATH=$(LD_PATH) $(BIN_DIR)/cmake_ztest_safe
+	LD_LIBRARY_PATH=$(LD_PATH) $(BIN_DIR)/zstreamtest_safe
+	LD_LIBRARY_PATH=$(LD_PATH) $(BIN_DIR)/poolTests_safe
 	LD_LIBRARY_PATH=$(LD_PATH) $(BIN_DIR)/dict_builder_driver_safe
 	LD_LIBRARY_PATH=$(LD_PATH) $(BIN_DIR)/sequence_api_driver_safe
 	LD_LIBRARY_PATH=$(LD_PATH) $(BIN_DIR)/thread_pool_driver_safe
