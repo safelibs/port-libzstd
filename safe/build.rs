@@ -31,6 +31,22 @@ fn run_command(command: &mut Command, description: &str) {
     }
 }
 
+fn upstream_lib_root(manifest_dir: &Path) -> PathBuf {
+    for candidate in [
+        manifest_dir.join("original/libzstd-1.5.5+dfsg2/lib"),
+        manifest_dir.join("../original/libzstd-1.5.5+dfsg2/lib"),
+    ] {
+        if candidate.exists() {
+            return candidate;
+        }
+    }
+
+    panic!(
+        "could not locate the staged upstream lib sources next to {}",
+        manifest_dir.display()
+    );
+}
+
 fn upstream_phase4_sources(root: &Path) -> Vec<PathBuf> {
     let common = root.join("common");
     let compress = root.join("compress");
@@ -99,7 +115,7 @@ fn compile_source(
 }
 
 fn compile_upstream_phase4_helpers(manifest_dir: &Path) {
-    let upstream_root = manifest_dir.join("../original/libzstd-1.5.5+dfsg2/lib");
+    let upstream_root = upstream_lib_root(manifest_dir);
     let includes = vec![
         upstream_root.clone(),
         upstream_root.join("common"),
@@ -261,7 +277,7 @@ fn main() {
     println!("cargo:rustc-cdylib-link-arg=-Wl,-soname,libzstd.so.1");
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("manifest dir"));
-    let upstream_root = manifest_dir.join("../original/libzstd-1.5.5+dfsg2/lib");
+    let upstream_root = upstream_lib_root(&manifest_dir);
     let legacy_root = upstream_root.join("legacy");
     let common_root = upstream_root.join("common");
     let legacy_files = [
