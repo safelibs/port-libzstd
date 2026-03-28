@@ -222,10 +222,14 @@ def owner_module(name: str) -> str:
         "ZSTD_sizeof_DDict",
     }:
         return "crate::decompress::ddict"
+    if name in {"ZSTD_copyDCtx"}:
+        return "crate::decompress::dctx"
     if name in {"ZSTD_sizeof_DCtx", "ZSTD_estimateDCtxSize"}:
         return "crate::decompress::dctx"
     if name in {"ZSTD_sizeof_DStream", "ZSTD_estimateDStreamSize", "ZSTD_estimateDStreamSize_fromFrame"}:
         return "crate::decompress::dstream"
+    if name in {"ZSTD_copyCCtx"}:
+        return "crate::compress::cctx"
     if name.startswith("ZSTD_CCtx_") or name.startswith("ZSTD_createC") or name.startswith("ZSTD_freeC"):
         if "Dict" in name:
             return "crate::compress::cdict"
@@ -234,6 +238,8 @@ def owner_module(name: str) -> str:
         if "Params" in name:
             return "crate::compress::cctx_params"
         return "crate::compress::cctx"
+    if name in {"ZSTD_flushStream", "ZSTD_endStream"}:
+        return "crate::compress::cstream"
     if name.startswith("ZSTD_compress") or name.startswith("ZSTD_initCStream") or name.startswith("ZSTD_resetCStream"):
         if "Sequences" in name:
             return "crate::compress::sequence_api"

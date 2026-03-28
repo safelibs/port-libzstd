@@ -79,25 +79,47 @@ for symbol, expected_phase in phase_expectations.items():
     if phase_lookup.get(symbol) != expected_phase:
         raise SystemExit(f"{symbol} assigned to phase {phase_lookup.get(symbol)} instead of {expected_phase}")
 
+owner_expectations = {
+    "ZSTD_flushStream": "crate::compress::cstream",
+    "ZSTD_endStream": "crate::compress::cstream",
+    "ZSTD_copyCCtx": "crate::compress::cctx",
+    "ZSTD_copyDCtx": "crate::decompress::dctx",
+}
+owner_lookup = {entry["name"]: entry["owner_module"] for entry in symbols}
+for symbol, expected_owner in owner_expectations.items():
+    if owner_lookup.get(symbol) != expected_owner:
+        raise SystemExit(f"{symbol} assigned to owner module {owner_lookup.get(symbol)} instead of {expected_owner}")
+
 upstream_matrix = tomllib.loads((safe_root / "tests/upstream_test_matrix.toml").read_text(encoding="utf-8"))
 entries = upstream_matrix["entry"]
 entry_ids = {entry["id"] for entry in entries}
 required_entry_ids = {
+    "tests:all32",
+    "tests:allnothread",
     "tests:fuzzer",
+    "tests:fuzzer32",
     "tests:zstreamtest",
+    "tests:zstreamtest32",
+    "tests:zstreamtest_asan",
+    "tests:zstreamtest_tsan",
+    "tests:zstreamtest_ubsan",
     "tests:paramgrill",
     "tests:decodecorpus",
     "tests:poolTests",
     "tests:external_matchfinder",
     "tests:legacy",
+    "tests:longmatch",
     "tests:bigdict",
     "tests:invalidDictionaries",
     "tests:roundTripCrash",
     "tests:fullbench",
+    "tests:fullbench32",
     "tests:datagen",
+    "tests:zstd-nolegacy",
     "tests:playTests.sh",
     "tests:test-variants.sh",
     "tests:test-zstd-versions.py",
+    "tests:versionsTest",
     "tests:check_size.py",
     "tests:test-license.py",
     "tests:cli-tests",
@@ -122,6 +144,43 @@ if missing_ids:
     raise SystemExit(f"upstream_test_matrix.toml missing required entries: {missing_ids}")
 
 entry_lookup = {entry["id"]: entry for entry in entries}
+make_target_expectations = {
+    "tests:all32": "all32",
+    "tests:allnothread": "allnothread",
+    "tests:fuzzer32": "fuzzer32",
+    "tests:fullbench32": "fullbench32",
+    "tests:longmatch": "longmatch",
+    "tests:versionsTest": "versionsTest",
+    "tests:zstd-nolegacy": "zstd-nolegacy",
+    "tests:zstreamtest32": "zstreamtest32",
+    "tests:zstreamtest_asan": "zstreamtest_asan",
+    "tests:zstreamtest_tsan": "zstreamtest_tsan",
+    "tests:zstreamtest_ubsan": "zstreamtest_ubsan",
+}
+for entry_id, make_target in make_target_expectations.items():
+    entry = entry_lookup[entry_id]
+    if entry["kind"] != "make-target" or entry.get("make_target") != make_target:
+        raise SystemExit(f"{entry_id} must stay mapped to make target {make_target}")
+
+for entry_id in (
+    "tests:all32",
+    "tests:fuzzer32",
+    "tests:fullbench32",
+    "tests:zstreamtest32",
+    "tests:zstreamtest_asan",
+    "tests:zstreamtest_tsan",
+    "tests:zstreamtest_ubsan",
+):
+    entry = entry_lookup[entry_id]
+    if entry["owning_phase"] != 6 or entry["release_gate"]:
+        raise SystemExit(f"{entry_id} must be a non-gating phase-6 preserved variant")
+
+if entry_lookup["tests:longmatch"]["owning_phase"] != 3 or not entry_lookup["tests:longmatch"]["release_gate"]:
+    raise SystemExit("tests:longmatch must be a release-gating phase-3 entry")
+
+if entry_lookup["tests:versionsTest"]["owning_phase"] != 6 or not entry_lookup["tests:versionsTest"]["release_gate"]:
+    raise SystemExit("tests:versionsTest must be a release-gating phase-6 entry")
+
 for autopkgtest_id in ("debian:zstd-selftest", "debian:build-pkg-config", "debian:build-cmake"):
     entry = entry_lookup[autopkgtest_id]
     if entry["owning_phase"] != 5 or not entry["release_gate"]:

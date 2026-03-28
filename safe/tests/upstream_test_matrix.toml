@@ -24,6 +24,50 @@ release_gate = true
 prerequisites = ["pthread", "dictionary-training coverage"]
 
 [[entry]]
+id = "tests:zstreamtest32"
+path = "original/libzstd-1.5.5+dfsg2/tests/zstreamtest.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "zstreamtest32"
+execution_strategy = "compile-and-run"
+owning_phase = 6
+release_gate = false
+prerequisites = ["gcc-multilib or g++-multilib", "32-bit libc development packages", "pthread", "dictionary-training coverage"]
+
+[[entry]]
+id = "tests:zstreamtest_asan"
+path = "original/libzstd-1.5.5+dfsg2/tests/zstreamtest.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "zstreamtest_asan"
+execution_strategy = "compile-and-run"
+owning_phase = 6
+release_gate = false
+prerequisites = ["address sanitizer toolchain", "pthread", "dictionary-training coverage"]
+
+[[entry]]
+id = "tests:zstreamtest_tsan"
+path = "original/libzstd-1.5.5+dfsg2/tests/zstreamtest.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "zstreamtest_tsan"
+execution_strategy = "compile-and-run"
+owning_phase = 6
+release_gate = false
+prerequisites = ["thread sanitizer toolchain", "pthread", "dictionary-training coverage"]
+
+[[entry]]
+id = "tests:zstreamtest_ubsan"
+path = "original/libzstd-1.5.5+dfsg2/tests/zstreamtest.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "zstreamtest_ubsan"
+execution_strategy = "compile-and-run"
+owning_phase = 6
+release_gate = false
+prerequisites = ["undefined behavior sanitizer toolchain", "pthread", "dictionary-training coverage"]
+
+[[entry]]
 id = "tests:paramgrill"
 path = "original/libzstd-1.5.5+dfsg2/tests/paramgrill.c"
 source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
@@ -123,6 +167,17 @@ release_gate = false
 prerequisites = ["pthread"]
 
 [[entry]]
+id = "tests:fullbench32"
+path = "original/libzstd-1.5.5+dfsg2/tests/fullbench.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "fullbench32"
+execution_strategy = "compile-and-run"
+owning_phase = 6
+release_gate = false
+prerequisites = ["gcc-multilib or g++-multilib", "32-bit libc development packages", "pthread"]
+
+[[entry]]
 id = "tests:datagen"
 path = "original/libzstd-1.5.5+dfsg2/tests/datagencli.c"
 source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
@@ -132,6 +187,61 @@ execution_strategy = "compile-only"
 owning_phase = 3
 release_gate = false
 prerequisites = []
+
+[[entry]]
+id = "tests:fuzzer32"
+path = "original/libzstd-1.5.5+dfsg2/tests/fuzzer.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "fuzzer32"
+execution_strategy = "compile-and-run"
+owning_phase = 6
+release_gate = false
+prerequisites = ["gcc-multilib or g++-multilib", "32-bit libc development packages", "pthread"]
+
+[[entry]]
+id = "tests:longmatch"
+path = "original/libzstd-1.5.5+dfsg2/tests/longmatch.c"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "longmatch"
+execution_strategy = "compile-and-run"
+owning_phase = 3
+release_gate = true
+prerequisites = []
+
+[[entry]]
+id = "tests:all32"
+path = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "all32"
+execution_strategy = "aggregate-build-32bit-variants"
+owning_phase = 6
+release_gate = false
+prerequisites = ["gcc-multilib or g++-multilib", "32-bit libc development packages"]
+
+[[entry]]
+id = "tests:allnothread"
+path = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "allnothread"
+execution_strategy = "aggregate-build-without-multithread"
+owning_phase = 6
+release_gate = false
+prerequisites = ["single-threaded -nomt build profile"]
+
+[[entry]]
+id = "tests:zstd-nolegacy"
+path = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "zstd-nolegacy"
+execution_strategy = "build-cli-variant-for-playTests"
+owning_phase = 6
+release_gate = true
+prerequisites = ["legacy-disabled CLI build variant"]
 
 [[entry]]
 id = "tests:test-valgrind"
@@ -170,6 +280,17 @@ path = "original/libzstd-1.5.5+dfsg2/tests/test-zstd-versions.py"
 source = "original/libzstd-1.5.5+dfsg2/tests/README.md"
 kind = "script"
 execution_strategy = "offline-fixture-replay"
+owning_phase = 6
+release_gate = true
+prerequisites = ["python3", "safe/tests/fixtures/versions"]
+
+[[entry]]
+id = "tests:versionsTest"
+path = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+source = "original/libzstd-1.5.5+dfsg2/tests/Makefile"
+kind = "make-target"
+make_target = "versionsTest"
+execution_strategy = "clean-and-run-python-script"
 owning_phase = 6
 release_gate = true
 prerequisites = ["python3", "safe/tests/fixtures/versions"]

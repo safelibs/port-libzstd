@@ -98,7 +98,7 @@ binding = "g"
 type_class = "DF"
 version_class = "Base"
 originating_header = "zstd.h"
-owner_module = "crate::ffi::advanced"
+owner_module = "crate::compress::cstream"
 owning_phase = 3
 status = "planned"
 
@@ -158,7 +158,7 @@ binding = "g"
 type_class = "DF"
 version_class = "Base"
 originating_header = "zstd.h"
-owner_module = "crate::ffi::advanced"
+owner_module = "crate::compress::cctx"
 owning_phase = 3
 status = "planned"
 
@@ -458,7 +458,7 @@ binding = "g"
 type_class = "DF"
 version_class = "Base"
 originating_header = "zstd.h"
-owner_module = "crate::ffi::advanced"
+owner_module = "crate::compress::cstream"
 owning_phase = 3
 status = "planned"
 
@@ -758,7 +758,7 @@ binding = "g"
 type_class = "DF"
 version_class = "Base"
 originating_header = "zstd.h"
-owner_module = "crate::ffi::advanced"
+owner_module = "crate::decompress::dctx"
 owning_phase = 2
 status = "planned"
 
