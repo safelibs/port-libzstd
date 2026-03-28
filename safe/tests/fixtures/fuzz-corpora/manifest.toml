@@ -1,0 +1,6 @@
+schema_version = 1
+
+[fallback_sets]
+raw = "raw"
+compressed = "compressed"
+dictionary = "dictionary"

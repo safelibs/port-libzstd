@@ -20,9 +20,6 @@ pub extern "C" fn ZSTD_createDDict(dictBuffer: *const c_void, dictSize: usize) -
     let Some(dict) = decompress::optional_src_slice(dictBuffer, dictSize) else {
         return core::ptr::null_mut();
     };
-    if dict.is_empty() {
-        return core::ptr::null_mut();
-    }
     decompress::create_ddict_with_content_type(dict, ZSTD_dictContentType_e::ZSTD_dct_auto)
         .unwrap_or(core::ptr::null_mut())
 }
@@ -138,9 +135,6 @@ pub extern "C" fn ZSTD_createDDict_byReference(
     let Some(dict) = decompress::optional_src_slice(dictBuffer, dictSize) else {
         return core::ptr::null_mut();
     };
-    if dict.is_empty() {
-        return core::ptr::null_mut();
-    }
     decompress::create_ddict_with_content_type(dict, ZSTD_dictContentType_e::ZSTD_dct_auto)
         .unwrap_or(core::ptr::null_mut())
 }
@@ -159,9 +153,6 @@ pub extern "C" fn ZSTD_createDDict_advanced(
     let Some(dict_bytes) = decompress::optional_src_slice(dict, dictSize) else {
         return core::ptr::null_mut();
     };
-    if dict_bytes.is_empty() {
-        return core::ptr::null_mut();
-    }
     match dictLoadMethod {
         ZSTD_dictLoadMethod_e::ZSTD_dlm_byCopy | ZSTD_dictLoadMethod_e::ZSTD_dlm_byRef => {
             decompress::create_ddict_with_content_type(dict_bytes, dictContentType)

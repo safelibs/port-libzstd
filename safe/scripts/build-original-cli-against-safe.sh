@@ -107,6 +107,15 @@ if [[ -d $SOURCE_ROOT/lib/legacy ]]; then
     rsync -a --delete "$SOURCE_ROOT/lib/legacy/" "$HELPER_LIB_ROOT/legacy/"
 fi
 install -m 644 "$SOURCE_ROOT/lib/libzstd.mk" "$HELPER_LIB_ROOT/libzstd.mk"
+cat >"$HELPER_LIB_ROOT/Makefile" <<'EOF'
+.PHONY: clean libzstd.a libzstd
+
+clean:
+
+libzstd.a:
+
+libzstd:
+EOF
 install -m 644 "$INCLUDE_ROOT/zstd.h" "$HELPER_LIB_ROOT/zstd.h"
 install -m 644 "$INCLUDE_ROOT/zdict.h" "$HELPER_LIB_ROOT/zdict.h"
 install -m 644 "$INCLUDE_ROOT/zstd_errors.h" "$HELPER_LIB_ROOT/zstd_errors.h"

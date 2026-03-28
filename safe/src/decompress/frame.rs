@@ -279,6 +279,7 @@ fn build_modern_frame_bytes(frame: &[u8], format: ZSTD_format_e) -> Vec<u8> {
     output
 }
 
+#[allow(dead_code)]
 fn encode_window_descriptor(window_size: u64) -> Result<u8, ZSTD_ErrorCode> {
     for window_log in ZSTD_WINDOWLOG_ABSOLUTEMIN..=ZSTD_WINDOWLOG_MAX {
         let window_base = 1u64 << window_log;
@@ -296,6 +297,7 @@ fn encode_window_descriptor(window_size: u64) -> Result<u8, ZSTD_ErrorCode> {
     Err(ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge)
 }
 
+#[allow(dead_code)]
 pub(crate) fn build_synthetic_block_frame(
     frame_prefix: &[u8],
     header: ZSTD_frameHeader,

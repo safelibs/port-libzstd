@@ -160,7 +160,7 @@ struct StreamState {
     compressed: Vec<u8>,
     decoded: Vec<u8>,
     output_pos: usize,
-    completed: bool,
+    deferred_input_advance: usize,
 }
 
 impl StreamState {
@@ -168,11 +168,13 @@ impl StreamState {
         self.compressed.clear();
         self.decoded.clear();
         self.output_pos = 0;
-        self.completed = false;
+        self.deferred_input_advance = 0;
     }
 
     fn is_busy(&self) -> bool {
-        !self.compressed.is_empty() || self.output_pos < self.decoded.len()
+        !self.compressed.is_empty()
+            || self.output_pos < self.decoded.len()
+            || self.deferred_input_advance != 0
     }
 
     fn size_of(&self) -> usize {
@@ -795,44 +797,20 @@ pub(crate) fn bufferless_continue(
         }
         BufferlessStage::NeedChecksum(_) => {
             dctx.bufferless.frame_bytes.extend_from_slice(src);
-            dctx.bufferless.stage = BufferlessStage::Finished;
-            dctx.clear_once_dict();
-            Ok(0)
+            complete_bufferless_frame(dctx, dst, dst_capacity)
         }
         BufferlessStage::Finished => Ok(0),
     }
 }
 
-fn decompress_buffered_block(
+fn complete_bufferless_frame(
     dctx: &mut DecoderContext,
     dst: *mut c_void,
     dst_capacity: usize,
-    block: BlockHeader,
-    src: &[u8],
 ) -> Result<usize, ZSTD_ErrorCode> {
-    let expected = if block.block_type == BlockType::Rle {
-        1
-    } else {
-        block.content_size
-    };
-    if src.len() != expected {
-        return Err(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong);
-    }
-
-    let mut completed_prefix = dctx.bufferless.frame_bytes.clone();
-    completed_prefix.extend_from_slice(src);
-    let checksum_flag = dctx.bufferless.header.expect("header set").checksumFlag != 0;
-
-    let dict = dctx.resolved_dict()?;
-    let synthetic_frame = frame::build_synthetic_block_frame(
-        &dctx.bufferless.frame_bytes,
-        dctx.bufferless.header.expect("header set"),
-        dctx.format,
-        src,
-    )?;
     let completed_output = frame::decode_all_frames(
-        &synthetic_frame,
-        dict,
+        &dctx.bufferless.frame_bytes,
+        dctx.resolved_dict()?,
         dctx.format,
         dctx.max_window_size,
     )?;
@@ -840,23 +818,11 @@ fn decompress_buffered_block(
         return Err(ZSTD_ErrorCode::ZSTD_error_corruption_detected);
     }
 
-    let block_output = &completed_output[dctx.bufferless.decoded_bytes..];
-    stage_decoded_output(dctx, block_output);
+    stage_decoded_output(dctx, &completed_output[dctx.bufferless.decoded_bytes..]);
     let written = drain_staged_output(dctx, dst, dst_capacity)?;
-
-    dctx.bufferless.frame_bytes = completed_prefix;
     dctx.bufferless.decoded_bytes = completed_output.len();
-    if block.last_block {
-        if checksum_flag {
-            dctx.bufferless.stage = BufferlessStage::NeedChecksum(4);
-        } else {
-            dctx.bufferless.stage = BufferlessStage::Finished;
-            dctx.clear_once_dict();
-        }
-    } else {
-        dctx.bufferless.stage = BufferlessStage::NeedBlockHeader;
-    }
-
+    dctx.bufferless.stage = BufferlessStage::Finished;
+    dctx.clear_once_dict();
     Ok(written)
 }
 
@@ -869,7 +835,27 @@ pub(crate) fn decompress_block_body(
     let BufferlessStage::NeedBlockBody(block) = dctx.bufferless.stage.clone() else {
         return Err(ZSTD_ErrorCode::ZSTD_error_stage_wrong);
     };
-    decompress_buffered_block(dctx, dst, dst_capacity, block, src)
+    let expected = if block.block_type == BlockType::Rle {
+        1
+    } else {
+        block.content_size
+    };
+    if src.len() != expected {
+        return Err(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong);
+    }
+
+    dctx.bufferless.frame_bytes.extend_from_slice(src);
+
+    if block.last_block {
+        if dctx.bufferless.header.expect("header set").checksumFlag != 0 {
+            dctx.bufferless.stage = BufferlessStage::NeedChecksum(4);
+            return Ok(0);
+        }
+        return complete_bufferless_frame(dctx, dst, dst_capacity);
+    }
+
+    dctx.bufferless.stage = BufferlessStage::NeedBlockHeader;
+    Ok(0)
 }
 
 pub(crate) fn stream_decompress(
@@ -883,14 +869,28 @@ pub(crate) fn stream_decompress(
     let initial_compressed_len = dctx.stream.compressed.len();
     let initial_staged_len = dctx.stream.decoded.len();
     let initial_staged_pos = dctx.stream.output_pos;
+    let initial_deferred = dctx.stream.deferred_input_advance;
 
     if !dctx.stream.decoded.is_empty() {
         let writable = output.size.saturating_sub(output.pos);
         let dst_ptr = (output.dst as *mut u8).wrapping_add(output.pos);
         let written = drain_staged_output(dctx, dst_ptr.cast(), writable)?;
         output.pos += written;
+        if dctx.stream.decoded.is_empty() && dctx.stream.deferred_input_advance != 0 {
+            let available = input.size.saturating_sub(input.pos);
+            if available < dctx.stream.deferred_input_advance {
+                return Err(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong);
+            }
+            input.pos += dctx.stream.deferred_input_advance;
+            dctx.stream.deferred_input_advance = 0;
+        }
         if !dctx.stream.decoded.is_empty() {
             return Ok(1);
+        }
+        if matches!(dctx.bufferless.stage, BufferlessStage::Finished) {
+            dctx.bufferless.reset();
+            dctx.stream.compressed.clear();
+            return Ok(0);
         }
         if written > 0 && output.pos == output.size {
             return Ok(dctx
@@ -900,6 +900,8 @@ pub(crate) fn stream_decompress(
         }
     }
 
+    let input_pos_before_loop = input.pos;
+
     if matches!(dctx.bufferless.stage, BufferlessStage::Idle) {
         begin_bufferless(dctx);
         dctx.stream.compressed.clear();
@@ -907,15 +909,9 @@ pub(crate) fn stream_decompress(
 
     loop {
         if matches!(dctx.bufferless.stage, BufferlessStage::Finished) {
-            if input.pos == input.size {
-                dctx.bufferless.reset();
-                dctx.stream.compressed.clear();
-                return Ok(0);
-            }
             dctx.bufferless.reset();
-            begin_bufferless(dctx);
             dctx.stream.compressed.clear();
-            continue;
+            return Ok(0);
         }
 
         let writable = output.size.saturating_sub(output.pos);
@@ -952,6 +948,16 @@ pub(crate) fn stream_decompress(
         output.pos += written;
 
         if !dctx.stream.decoded.is_empty() {
+            let consumed = input.pos.saturating_sub(input_pos_before_loop);
+            if consumed != 0 {
+                let to_defer = if matches!(dctx.bufferless.stage, BufferlessStage::Finished) {
+                    1.min(consumed)
+                } else {
+                    consumed
+                };
+                dctx.stream.deferred_input_advance += to_defer;
+                input.pos -= to_defer;
+            }
             return Ok(1);
         }
         if written > 0 && output.pos == output.size {
@@ -966,9 +972,21 @@ pub(crate) fn stream_decompress(
     let state_changed = dctx.bufferless.stage != initial_stage
         || dctx.stream.compressed.len() != initial_compressed_len
         || dctx.stream.decoded.len() != initial_staged_len
-        || dctx.stream.output_pos != initial_staged_pos;
+        || dctx.stream.output_pos != initial_staged_pos
+        || dctx.stream.deferred_input_advance != initial_deferred;
 
     if input.pos == initial_input_pos && output.pos == initial_output_pos && !state_changed {
+        if input.pos == input.size
+            && !matches!(
+                dctx.bufferless.stage,
+                BufferlessStage::Idle | BufferlessStage::Finished
+            )
+        {
+            return Ok(dctx
+                .bufferless
+                .next_src_size(dctx.format)
+                .saturating_sub(dctx.stream.compressed.len()));
+        }
         return Err(if input.pos == input.size {
             ZSTD_ErrorCode::ZSTD_error_noForwardProgress_inputEmpty
         } else {
@@ -976,7 +994,7 @@ pub(crate) fn stream_decompress(
         });
     }
 
-    if matches!(dctx.bufferless.stage, BufferlessStage::Finished) && input.pos == input.size {
+    if matches!(dctx.bufferless.stage, BufferlessStage::Finished) {
         dctx.bufferless.reset();
         dctx.stream.compressed.clear();
         Ok(0)
