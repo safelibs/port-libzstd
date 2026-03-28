@@ -21,16 +21,22 @@ static const size_t kSeekableOverheadSize = ZSTD_seekTableFooterSize;
 int LLVMFuzzerTestOneInput(const uint8_t *src, size_t size)
 {
     FUZZ_dataProducer_t *producer = FUZZ_dataProducer_create(src, size);
-    size_t const compressedBufferSize = ZSTD_compressBound(size) + kSeekableOverheadSize;
+    size_t compressedBufferSize;
     uint8_t* compressedBuffer;
     uint8_t* decompressedBuffer;
-    int const cLevel = FUZZ_dataProducer_int32Range(producer, kMinClevel, kMaxClevel);
-    unsigned const checksumFlag = FUZZ_dataProducer_int32Range(producer, 0, 1);
-    size_t const uncompressedSize = FUZZ_dataProducer_uint32Range(producer, 0, size);
-    size_t const offset = size == uncompressedSize ? 0 : FUZZ_dataProducer_uint32Range(producer, 0, size - uncompressedSize);
+    int cLevel;
+    unsigned checksumFlag;
+    size_t uncompressedSize;
+    size_t offset;
     size_t seekSize;
 
     size = FUZZ_dataProducer_reserveDataPrefix(producer);
+    compressedBufferSize = ZSTD_compressBound(size) + kSeekableOverheadSize;
+    cLevel = FUZZ_dataProducer_int32Range(producer, kMinClevel, kMaxClevel);
+    checksumFlag = (unsigned)FUZZ_dataProducer_uint32Range(producer, 0, 1);
+    uncompressedSize = FUZZ_dataProducer_uint32Range(producer, 0, size);
+    offset = size == uncompressedSize ? 0
+             : FUZZ_dataProducer_uint32Range(producer, 0, size - uncompressedSize);
     compressedBuffer = (uint8_t*)malloc(compressedBufferSize);
     decompressedBuffer = (uint8_t*)malloc(size == 0 ? 1 : size);
 
