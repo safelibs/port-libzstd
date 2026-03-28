@@ -20,6 +20,8 @@
 
 static ZSTD_DCtx* dctx = NULL;
 
+int LLVMFuzzerTestOneInput(const uint8_t* src, size_t size);
+
 int LLVMFuzzerTestOneInput(const uint8_t* src, size_t size)
 {
     FUZZ_dataProducer_t* producer = FUZZ_dataProducer_create(src, size);

@@ -17,6 +17,8 @@
 
 #include "zstd.h"
 
+int LLVMFuzzerTestOneInput(const uint8_t* src, size_t size);
+
 int LLVMFuzzerTestOneInput(const uint8_t* src, size_t size)
 {
     if (size == 0) {

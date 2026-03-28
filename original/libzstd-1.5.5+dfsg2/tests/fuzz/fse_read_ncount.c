@@ -19,6 +19,8 @@
 #include "fuzz_data_producer.h"
 #include "zstd.h"
 
+int LLVMFuzzerTestOneInput(const uint8_t* src, size_t size);
+
 int LLVMFuzzerTestOneInput(const uint8_t* src, size_t size)
 {
     FUZZ_dataProducer_t* producer = FUZZ_dataProducer_create(src, size);

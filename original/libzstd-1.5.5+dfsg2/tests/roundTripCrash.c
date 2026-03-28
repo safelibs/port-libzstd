@@ -24,7 +24,6 @@
 #include <string.h>     /* strcmp */
 #include <sys/types.h>  /* stat */
 #include <sys/stat.h>   /* stat */
-#include "xxhash.h"
 
 #include "zstd.h"
 
@@ -32,6 +31,21 @@
 *   Macros
 *==========================================*/
 #define MIN(a,b)  ( (a) < (b) ? (a) : (b) )
+
+static unsigned levelSeed(const void* srcBuff, size_t srcBuffSize)
+{
+    unsigned const char* const bytes = (const unsigned char*)srcBuff;
+    size_t const sampleSize = MIN(128, srcBuffSize);
+    unsigned seed = 2166136261U;
+    size_t pos;
+
+    for (pos = 0; pos < sampleSize; ++pos) {
+        seed ^= bytes[pos];
+        seed *= 16777619U;
+    }
+
+    return seed;
+}
 
 static void crash(int errorCode){
     /* abort if AFL/libfuzzer, exit otherwise */
@@ -64,9 +78,8 @@ static size_t roundTripTest(void* resultBuff, size_t resultBuffCapacity,
                       const void* srcBuff, size_t srcBuffSize)
 {
     static const int maxClevel = 19;
-    size_t const hashLength = MIN(128, srcBuffSize);
-    unsigned const h32 = XXH32(srcBuff, hashLength, 0);
-    int const cLevel = h32 % maxClevel;
+    unsigned const seed = levelSeed(srcBuff, srcBuffSize);
+    int const cLevel = (int)(seed % maxClevel);
     size_t const cSize = ZSTD_compress(compressedBuff, compressedBuffCapacity, srcBuff, srcBuffSize, cLevel);
     if (ZSTD_isError(cSize)) {
         fprintf(stderr, "Compression error : %s \n", ZSTD_getErrorName(cSize));
@@ -83,9 +96,8 @@ static size_t advancedParamRoundTripTest(void* resultBuff, size_t resultBuffCapa
 {
     ZSTD_CCtx* const cctx = ZSTD_createCCtx();
     static const int maxClevel = 19;
-    size_t const hashLength = MIN(128, srcBuffSize);
-    unsigned const h32 = XXH32(srcBuff, hashLength, 0);
-    int const cLevel = h32 % maxClevel;
+    unsigned const seed = levelSeed(srcBuff, srcBuffSize);
+    int const cLevel = (int)(seed % maxClevel);
     size_t cSize;
 
     if (cctx == NULL) {
