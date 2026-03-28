@@ -222,6 +222,7 @@ static result_t round_trip_compress2(method_state_t* base, config_t const* confi
             result = result_error(result_error_decompression_error);
             goto out;
         }
+        state->decompressed.size = dSize;
         if (data_buffer_compare(input, state->decompressed) != 0) {
             result = result_error(result_error_round_trip_error);
             goto out;
@@ -271,6 +272,7 @@ static result_t simple_compress(method_state_t* base, config_t const* config)
     if (ZSTD_isError(dSize)) {
         return result_error(result_error_decompression_error);
     }
+    state->decompressed.size = dSize;
     if (data_buffer_compare(input, state->decompressed) != 0) {
         return result_error(result_error_round_trip_error);
     }
@@ -335,7 +337,7 @@ static result_t advanced_streaming_compress(method_state_t* base, config_t const
                 cSize += out.pos;
             }
         }
-        while (ret != 0) {
+        do {
             ZSTD_inBuffer in = { NULL, 0, 0 };
             ZSTD_outBuffer out = { state->compressed.data + cSize,
                                    state->compressed.capacity - cSize, 0 };
@@ -345,7 +347,7 @@ static result_t advanced_streaming_compress(method_state_t* base, config_t const
                 goto out;
             }
             cSize += out.pos;
-        }
+        } while (ret != 0);
         if (prepare_dctx(dctx, state, config)) {
             result = result_error(result_error_decompression_error);
             goto out;
@@ -358,6 +360,7 @@ static result_t advanced_streaming_compress(method_state_t* base, config_t const
                 result = result_error(result_error_decompression_error);
                 goto out;
             }
+            state->decompressed.size = dSize;
         }
         if (data_buffer_compare(state->inputs.buffers[i], state->decompressed) != 0) {
             result = result_error(result_error_round_trip_error);
