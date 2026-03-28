@@ -138,9 +138,11 @@ enum BufferlessStage {
     Idle,
     NeedStart,
     NeedHeaderRemainder(usize),
+    NeedSkippableHeaderRemainder(usize),
     NeedBlockHeader,
     NeedBlockBody(BlockHeader),
     NeedChecksum(usize),
+    NeedSkippablePayload(usize),
     Finished,
 }
 
@@ -181,6 +183,7 @@ impl BufferlessState {
             BufferlessStage::Idle => 0,
             BufferlessStage::NeedStart => frame::starting_input_length(format),
             BufferlessStage::NeedHeaderRemainder(size) => size,
+            BufferlessStage::NeedSkippableHeaderRemainder(size) => size,
             BufferlessStage::NeedBlockHeader => BLOCK_HEADER_SIZE,
             BufferlessStage::NeedBlockBody(header) => {
                 if header.block_type == BlockType::Rle {
@@ -190,6 +193,7 @@ impl BufferlessState {
                 }
             }
             BufferlessStage::NeedChecksum(size) => size,
+            BufferlessStage::NeedSkippablePayload(size) => size,
             BufferlessStage::Finished => 0,
         }
     }
@@ -203,6 +207,8 @@ impl BufferlessState {
             BufferlessStage::NeedStart | BufferlessStage::NeedHeaderRemainder(_) => {
                 Next::ZSTDnit_frameHeader
             }
+            BufferlessStage::NeedSkippableHeaderRemainder(_)
+            | BufferlessStage::NeedSkippablePayload(_) => Next::ZSTDnit_skippableFrame,
             BufferlessStage::NeedBlockHeader => Next::ZSTDnit_blockHeader,
             BufferlessStage::NeedBlockBody(header) => {
                 if header.last_block {
@@ -566,13 +572,34 @@ pub(crate) fn bufferless_continue(
             }
             match frame::parse_frame_header(&dctx.bufferless.frame_bytes, dctx.format)? {
                 frame::HeaderProbe::Need(size) => {
-                    dctx.bufferless.stage =
-                        BufferlessStage::NeedHeaderRemainder(size - dctx.bufferless.frame_bytes.len());
+                    dctx.bufferless.stage = if matches!(
+                        frame::classify_frame(&dctx.bufferless.frame_bytes),
+                        Some(frame::FrameKind::Skippable)
+                    ) {
+                        BufferlessStage::NeedSkippableHeaderRemainder(
+                            size - dctx.bufferless.frame_bytes.len(),
+                        )
+                    } else {
+                        BufferlessStage::NeedHeaderRemainder(size - dctx.bufferless.frame_bytes.len())
+                    };
                     Ok(0)
                 }
                 frame::HeaderProbe::Header(header) => {
                     dctx.bufferless.header = Some(header);
-                    dctx.bufferless.stage = BufferlessStage::NeedBlockHeader;
+                    if header.frameType
+                        == crate::ffi::types::ZSTD_frameType_e::ZSTD_skippableFrame
+                    {
+                        let payload_size = usize::try_from(header.frameContentSize)
+                            .map_err(|_| ZSTD_ErrorCode::ZSTD_error_frameParameter_unsupported)?;
+                        dctx.bufferless.stage = if payload_size == 0 {
+                            dctx.clear_once_dict();
+                            BufferlessStage::Finished
+                        } else {
+                            BufferlessStage::NeedSkippablePayload(payload_size)
+                        };
+                    } else {
+                        dctx.bufferless.stage = BufferlessStage::NeedBlockHeader;
+                    }
                     Ok(0)
                 }
             }
@@ -588,6 +615,29 @@ pub(crate) fn bufferless_continue(
                 frame::HeaderProbe::Header(header) => {
                     dctx.bufferless.header = Some(header);
                     dctx.bufferless.stage = BufferlessStage::NeedBlockHeader;
+                    Ok(0)
+                }
+            }
+        }
+        BufferlessStage::NeedSkippableHeaderRemainder(_) => {
+            dctx.bufferless.frame_bytes.extend_from_slice(src);
+            match frame::parse_frame_header(&dctx.bufferless.frame_bytes, dctx.format)? {
+                frame::HeaderProbe::Need(size) => {
+                    dctx.bufferless.stage = BufferlessStage::NeedSkippableHeaderRemainder(
+                        size - dctx.bufferless.frame_bytes.len(),
+                    );
+                    Ok(0)
+                }
+                frame::HeaderProbe::Header(header) => {
+                    let payload_size = usize::try_from(header.frameContentSize)
+                        .map_err(|_| ZSTD_ErrorCode::ZSTD_error_frameParameter_unsupported)?;
+                    dctx.bufferless.header = Some(header);
+                    dctx.bufferless.stage = if payload_size == 0 {
+                        dctx.clear_once_dict();
+                        BufferlessStage::Finished
+                    } else {
+                        BufferlessStage::NeedSkippablePayload(payload_size)
+                    };
                     Ok(0)
                 }
             }
@@ -647,6 +697,12 @@ pub(crate) fn bufferless_continue(
                 dctx.bufferless.stage = BufferlessStage::NeedBlockHeader;
                 Ok(0)
             }
+        }
+        BufferlessStage::NeedSkippablePayload(_) => {
+            dctx.bufferless.frame_bytes.extend_from_slice(src);
+            dctx.bufferless.stage = BufferlessStage::Finished;
+            dctx.clear_once_dict();
+            Ok(0)
         }
         BufferlessStage::NeedChecksum(_) => {
             dctx.bufferless.frame_bytes.extend_from_slice(src);

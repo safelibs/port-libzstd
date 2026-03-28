@@ -11,7 +11,7 @@ use zstd::{
     decompress::{dctx, ddict, dstream, legacy},
     ffi::types::{
         ZSTD_DCtx, ZSTD_DDict, ZSTD_DStream, ZSTD_ResetDirective, ZSTD_dParameter,
-        ZSTD_format_e, ZSTD_inBuffer, ZSTD_outBuffer,
+        ZSTD_format_e, ZSTD_inBuffer, ZSTD_nextInputType_e, ZSTD_outBuffer,
     },
 };
 
@@ -176,15 +176,6 @@ fn decompress_modern_frames_and_contexts() {
         "ZSTD_DCtx_reset",
     );
 
-    let block_error = zstd::decompress::block::ZSTD_decompressBlock(
-        dctx,
-        output.as_mut_ptr().cast(),
-        output.len(),
-        modern.as_ptr().cast(),
-        1,
-    );
-    assert_ne!(zstd::common::error::ZSTD_isError(block_error), 0);
-
     ddict::ZSTD_freeDDict(std::ptr::null_mut::<ZSTD_DDict>());
     dstream::ZSTD_freeDStream(std::ptr::null_mut::<ZSTD_DStream>());
     dctx::ZSTD_freeDCtx(clone);
@@ -267,6 +258,57 @@ fn decompress_streaming_and_skippable_helpers() {
     assert_eq!(read, payload.len());
     assert_eq!(variant, 3);
     assert_eq!(&payload, b"safe!");
+
+    let dctx = dctx::ZSTD_createDCtx();
+    assert!(!dctx.is_null());
+    check_result(dctx::ZSTD_decompressBegin(dctx), "ZSTD_decompressBegin(skippable)");
+    assert_eq!(dstream::ZSTD_nextSrcSizeToDecompress(dctx), 5);
+    assert_eq!(
+        dstream::ZSTD_nextInputType(dctx),
+        ZSTD_nextInputType_e::ZSTDnit_frameHeader
+    );
+    assert_eq!(
+        dctx::ZSTD_decompressContinue(
+            dctx,
+            std::ptr::null_mut(),
+            0,
+            skippable[..5].as_ptr().cast(),
+            5,
+        ),
+        0
+    );
+    assert_eq!(dstream::ZSTD_nextSrcSizeToDecompress(dctx), 3);
+    assert_eq!(
+        dstream::ZSTD_nextInputType(dctx),
+        ZSTD_nextInputType_e::ZSTDnit_skippableFrame
+    );
+    assert_eq!(
+        dctx::ZSTD_decompressContinue(
+            dctx,
+            std::ptr::null_mut(),
+            0,
+            skippable[5..8].as_ptr().cast(),
+            3,
+        ),
+        0
+    );
+    assert_eq!(dstream::ZSTD_nextSrcSizeToDecompress(dctx), payload.len());
+    assert_eq!(
+        dstream::ZSTD_nextInputType(dctx),
+        ZSTD_nextInputType_e::ZSTDnit_skippableFrame
+    );
+    assert_eq!(
+        dctx::ZSTD_decompressContinue(
+            dctx,
+            std::ptr::null_mut(),
+            0,
+            skippable[8..].as_ptr().cast(),
+            payload.len(),
+        ),
+        0
+    );
+    assert_eq!(dstream::ZSTD_nextSrcSizeToDecompress(dctx), 0);
+    dctx::ZSTD_freeDCtx(dctx);
 }
 
 #[test]

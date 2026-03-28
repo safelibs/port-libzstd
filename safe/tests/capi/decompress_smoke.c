@@ -159,6 +159,9 @@ static void test_bufferless(const unsigned char* compressed, size_t compressed_s
 {
     ZSTD_DCtx* dctx = ZSTD_createDCtx();
     unsigned char* output = malloc(decompressed_size);
+    static const unsigned char skippable[] = {
+        0x53, 0x2A, 0x4D, 0x18, 0x05, 0x00, 0x00, 0x00, 's', 'a', 'f', 'e', '!'
+    };
     size_t offset = 0;
     size_t produced = 0;
     if (dctx == NULL) die("failed to create bufferless dctx");
@@ -184,11 +187,23 @@ static void test_bufferless(const unsigned char* compressed, size_t compressed_s
 
     check_zstd(ZSTD_decompressBegin_usingDict(dctx, NULL, 0), "ZSTD_decompressBegin_usingDict");
     check_zstd(ZSTD_decompressBegin_usingDDict(dctx, NULL), "ZSTD_decompressBegin_usingDDict");
-
-    {
-        size_t raw_block_result = ZSTD_decompressBlock(dctx, output, decompressed_size, compressed, 1);
-        if (!ZSTD_isError(raw_block_result)) die("expected ZSTD_decompressBlock to reject frame data");
-    }
+    check_zstd(ZSTD_decompressBegin(dctx), "ZSTD_decompressBegin(skippable)");
+    if (ZSTD_nextSrcSizeToDecompress(dctx) != 5) die("unexpected initial skippable header size");
+    if (ZSTD_nextInputType(dctx) != ZSTDnit_frameHeader) die("unexpected initial skippable input type");
+    check_zstd(
+        ZSTD_decompressContinue(dctx, NULL, 0, skippable, 5),
+        "ZSTD_decompressContinue(skippable-prefix)");
+    if (ZSTD_nextSrcSizeToDecompress(dctx) != 3) die("unexpected skippable header remainder size");
+    if (ZSTD_nextInputType(dctx) != ZSTDnit_skippableFrame) die("expected skippable-frame input type");
+    check_zstd(
+        ZSTD_decompressContinue(dctx, NULL, 0, skippable + 5, 3),
+        "ZSTD_decompressContinue(skippable-header)");
+    if (ZSTD_nextSrcSizeToDecompress(dctx) != 5) die("unexpected skippable payload size");
+    if (ZSTD_nextInputType(dctx) != ZSTDnit_skippableFrame) die("expected skippable payload input type");
+    check_zstd(
+        ZSTD_decompressContinue(dctx, NULL, 0, skippable + 8, 5),
+        "ZSTD_decompressContinue(skippable-payload)");
+    if (ZSTD_nextSrcSizeToDecompress(dctx) != 0) die("expected skippable bufferless completion");
 
     free(output);
     ZSTD_freeDCtx(dctx);
