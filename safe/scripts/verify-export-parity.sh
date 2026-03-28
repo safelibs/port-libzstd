@@ -92,9 +92,7 @@ for line in objdump_output.splitlines():
     if not match:
         continue
     row = match.groupdict()
-    if row["section"].startswith("*"):
-        continue
-    if not row["name"].startswith(("ZSTD_", "ZDICT_")):
+    if row["section"] == "*UND*":
         continue
     actual_rows.append(row)
 
