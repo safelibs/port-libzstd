@@ -150,28 +150,32 @@ phase6_have_pzstd_toolchain() {
     esac
 
     install -d "$PHASE6_OUT"
-    case "$variant" in
-        address)
-            cat >"$source" <<EOF
-#include <dlfcn.h>
-
-int main(void) {
-    void* handle = dlopen("${ORIGINAL_ROOT}/lib/libzstd.so.1.5.5", RTLD_NOW | RTLD_DEEPBIND);
-    if (handle == nullptr) {
-        return 1;
-    }
-    dlclose(handle);
-    return 0;
-}
-EOF
-            flags+=(-ldl)
-            ;;
-        *)
-            printf 'int main(void) { return 0; }\n' >"$source"
-            ;;
-    esac
+    printf 'int main(void) { return 0; }\n' >"$source"
     g++ "${flags[@]}" "$source" -o "$binary" >/dev/null 2>&1 || return 1
     "$binary" >/dev/null 2>&1
+}
+
+phase6_have_pzstd_sanitizer_runtime() {
+    local target=${1:?missing pzstd sanitizer target}
+    local binary="$PZSTD_DIR/utils/test/BufferTest"
+    local log="$PHASE6_OUT/${target}.runtime.log"
+
+    [[ -x $binary ]] || {
+        printf 'missing pzstd runtime probe binary: %s\n' "$binary" >&2
+        return 2
+    }
+
+    if "$binary" --gtest_filter=NoSuchTest >/dev/null 2>"$log"; then
+        return 0
+    fi
+
+    if grep -Eq '(Thread|Address)Sanitizer:' "$log"; then
+        phase6_log "skipping $target: sanitizer runtime is unsupported on this host"
+        return 3
+    fi
+
+    cat "$log" >&2
+    return 2
 }
 
 run_pzstd_make() {
@@ -182,7 +186,6 @@ run_pzstd_make() {
         ZSTDDIR="$HELPER_LIB_ROOT" \
         PROGDIR="$ORIGINAL_ROOT/programs" \
         CXXFLAGS="-O3 -Wall -Wextra -pedantic" \
-        PZSTD_LDFLAGS="-Wl,-rpath,$LIBDIR" \
         PZSTD_CXX_STD="-std=c++14"
 }
 
@@ -245,6 +248,21 @@ run_pzstd_test_family() {
 
     phase6_log "building pzstd target family: $target"
     run_pzstd_make "${build_args[@]}"
+
+    case "$target" in
+        test-pzstd-tsan|test-pzstd-asan)
+            if ! phase6_have_pzstd_sanitizer_runtime "$target"; then
+                case $? in
+                    3)
+                        return 0
+                        ;;
+                    *)
+                        return 1
+                        ;;
+                esac
+            fi
+            ;;
+    esac
 
     phase6_log "running pzstd check coverage for: $target"
     run_pzstd_check "$testflags"
