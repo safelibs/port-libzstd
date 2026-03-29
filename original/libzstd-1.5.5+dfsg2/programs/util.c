@@ -219,6 +219,7 @@ int UTIL_chmod(char const* filename, const stat_t* statbuf, mode_t permissions)
 int UTIL_fchmod(const int fd, char const* filename, const stat_t* statbuf, mode_t permissions)
 {
     stat_t localStatBuf;
+    mode_t currentPermissions;
     UTIL_TRACE_CALL("UTIL_chmod(%s, %#4o)", filename, (unsigned)permissions);
     if (statbuf == NULL) {
         if (!UTIL_fstat(fd, filename, &localStatBuf)) {
@@ -230,6 +231,11 @@ int UTIL_fchmod(const int fd, char const* filename, const stat_t* statbuf, mode_
     if (!UTIL_isRegularFileStat(statbuf)) {
         UTIL_TRACE_RET(0);
         return 0; /* pretend success, but don't change anything */
+    }
+    currentPermissions = statbuf->st_mode & 0777;
+    if (currentPermissions == permissions) {
+        UTIL_TRACE_RET(0);
+        return 0;
     }
 #ifdef ZSTD_HAVE_FCHMOD
     if (fd >= 0) {

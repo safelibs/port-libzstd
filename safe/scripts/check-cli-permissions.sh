@@ -12,6 +12,26 @@ WORK_DIR="$PHASE6_OUT/cli-permissions"
 rm -rf "$WORK_DIR"
 install -d "$WORK_DIR"
 
+require_atomic_mode() {
+    local trace_prefix=${1:?missing trace prefix}
+    local target_regex=${2:?missing target regex}
+    local final_mode=${3:?missing final mode}
+    local description=${4:?missing description}
+
+    if ! grep -E "(open(at)?|creat)\\(.*${target_regex}.*0${final_mode}" "$WORK_DIR"/"${trace_prefix}".trace* >/dev/null; then
+        printf 'missing atomic create mode 0%s for %s\n' "$final_mode" "$description" >&2
+        exit 1
+    fi
+    if grep -E "(open(at)?|creat)\\(.*${target_regex}.*0600" "$WORK_DIR"/"${trace_prefix}".trace* >/dev/null; then
+        printf 'detected temporary 0600 create mode for %s\n' "$description" >&2
+        exit 1
+    fi
+    if grep -E "(fchmod|fchmodat|chmod)\\(.*${target_regex}.*0[0-7]{3}" "$WORK_DIR"/"${trace_prefix}".trace* >/dev/null; then
+        printf 'detected a post-open chmod on %s\n' "$description" >&2
+        exit 1
+    fi
+}
+
 source_file="$WORK_DIR/source.bin"
 compressed_file="$WORK_DIR/source.bin.zst"
 decompressed_file="$WORK_DIR/source.bin.out"
@@ -23,7 +43,7 @@ phase6_log "checking CVE-2021-24031 creation mode on compression output"
 (
     cd "$WORK_DIR"
     umask 0000
-    strace -ff -qq \
+    strace -ff -qq -y \
         -e trace=open,openat,creat,chmod,fchmod,fchmodat \
         -o "$WORK_DIR/compress.trace" \
         "$BINDIR/zstd" -q -f "$source_file" -o "$compressed_file"
@@ -33,11 +53,7 @@ phase6_log "checking CVE-2021-24031 creation mode on compression output"
     printf 'unexpected final mode for compressed file: %s\n' "$(stat -c %a "$compressed_file")" >&2
     exit 1
 }
-grep -E 'open(at)?\(.*source\.bin\.zst.*0600' "$WORK_DIR"/compress.trace* >/dev/null
-if grep -E '([cf]h?mod(at)?\(.*source\.bin\.zst.*0600)' "$WORK_DIR"/compress.trace* >/dev/null; then
-    printf 'detected a post-open restrictive chmod on compression output\n' >&2
-    exit 1
-fi
+require_atomic_mode compress 'source\.bin\.zst' 400 'compression output'
 
 chmod 0400 "$compressed_file"
 
@@ -45,7 +61,7 @@ phase6_log "checking CVE-2021-24032 creation mode on decompression output"
 (
     cd "$WORK_DIR"
     umask 0000
-    strace -ff -qq \
+    strace -ff -qq -y \
         -e trace=open,openat,creat,chmod,fchmod,fchmodat \
         -o "$WORK_DIR/decompress.trace" \
         "$BINDIR/zstd" -q -f -d "$compressed_file" -o "$decompressed_file"
@@ -55,8 +71,4 @@ phase6_log "checking CVE-2021-24032 creation mode on decompression output"
     printf 'unexpected final mode for decompressed file: %s\n' "$(stat -c %a "$decompressed_file")" >&2
     exit 1
 }
-grep -E 'open(at)?\(.*source\.bin\.out.*0600' "$WORK_DIR"/decompress.trace* >/dev/null
-if grep -E '([cf]h?mod(at)?\(.*source\.bin\.out.*0600)' "$WORK_DIR"/decompress.trace* >/dev/null; then
-    printf 'detected a post-open restrictive chmod on decompression output\n' >&2
-    exit 1
-fi
+require_atomic_mode decompress 'source\.bin\.out' 400 'decompression output'

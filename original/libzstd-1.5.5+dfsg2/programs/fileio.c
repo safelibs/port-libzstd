@@ -113,16 +113,14 @@ char const* FIO_lzmaVersion(void)
 
 #define FNSPACE 30
 
-/* Default file permissions 0666 (modulated by umask) */
-/* Temporary restricted file permissions are used when we're going to
- * chmod/chown at the end of the operation. */
+/* Default file permissions 0666 (modulated by umask). When metadata
+ * transfer is requested we open the destination with the final permission
+ * bits atomically, then transfer ownership and timestamps separately. */
 #if !defined(_WIN32)
 /* These macros aren't defined on windows. */
 #define DEFAULT_FILE_PERMISSIONS (S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)
-#define TEMPORARY_FILE_PERMISSIONS (S_IRUSR|S_IWUSR)
 #else
 #define DEFAULT_FILE_PERMISSIONS (0666)
-#define TEMPORARY_FILE_PERMISSIONS (0600)
 #endif
 
 /*-************************************
@@ -1849,7 +1847,7 @@ static int FIO_compressFilename_dstFile(FIO_ctx_t* const fCtx,
           && strcmp (dstFileName, stdoutmark)
           && UTIL_isRegularFileStat(srcFileStat) ) {
             transferStat = 1;
-            dstFileInitialPermissions = TEMPORARY_FILE_PERMISSIONS;
+            dstFileInitialPermissions = srcFileStat->st_mode & 0777;
         }
 
         closeDstFile = 1;
@@ -2731,7 +2729,7 @@ static int FIO_decompressDstFile(FIO_ctx_t* const fCtx,
           && strcmp(dstFileName, stdoutmark)
           && UTIL_isRegularFileStat(srcFileStat) ) {
             transferStat = 1;
-            dstFilePermissions = TEMPORARY_FILE_PERMISSIONS;
+            dstFilePermissions = srcFileStat->st_mode & 0777;
         }
 
         releaseDstFile = 1;
