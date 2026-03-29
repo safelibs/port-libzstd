@@ -21,6 +21,9 @@ fuzz_results_are_fresh() {
         "$SCRIPT_DIR/run-upstream-fuzz-tests.sh" \
         "$SAFE_ROOT/tests/ported/whitebox" \
         "$ORIGINAL_ROOT/tests/fuzz" \
+        "$ORIGINAL_ROOT/tests/golden-compression" \
+        "$ORIGINAL_ROOT/tests/golden-decompression" \
+        "$ORIGINAL_ROOT/tests/golden-dictionaries" \
         "$FUZZ_FIXTURE_ROOT" \
         "$SAFE_ROOT/out/phase6/whitebox/fuzz"
     do
@@ -81,10 +84,25 @@ stage_corpus() {
     fi
     if printf '%s\n' "${raw_targets[@]}" | grep -qx "$target"; then
         rsync -a "$FUZZ_FIXTURE_ROOT/raw/" "$dest/"
+        install -m 0644 \
+            "$ORIGINAL_ROOT/tests/golden-compression/http" \
+            "$dest/http"
     elif printf '%s\n' "${compressed_targets[@]}" | grep -qx "$target"; then
         rsync -a "$FUZZ_FIXTURE_ROOT/compressed/" "$dest/"
+        install -m 0644 \
+            "$ORIGINAL_ROOT/tests/golden-decompression/empty-block.zst" \
+            "$dest/empty-block.zst"
+        install -m 0644 \
+            "$ORIGINAL_ROOT/tests/golden-decompression/rle-first-block.zst" \
+            "$dest/rle-first-block.zst"
+        install -m 0644 \
+            "$ORIGINAL_ROOT/tests/fuzz/corpora/block_decompress-seed/z000000.zst" \
+            "$dest/z000000.zst"
     else
         rsync -a "$FUZZ_FIXTURE_ROOT/dictionary/" "$dest/"
+        install -m 0644 \
+            "$ORIGINAL_ROOT/tests/golden-dictionaries/http-dict-missing-symbols" \
+            "$dest/http-dict-missing-symbols"
     fi
 
     if ! find "$dest" -type f -print -quit | grep -q .; then

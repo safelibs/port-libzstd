@@ -3,8 +3,8 @@ schema_version = 1
 [fixtures]
 hello = "hello.zst"
 helloworld = "helloworld.zst"
-empty_block = "empty-block.zst"
-rle_first_block = "rle-first-block.zst"
-huffman_compressed_larger = "huffman-compressed-larger"
-http_sample = "http"
-http_dict = "http-dict-missing-symbols"
+empty_block = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-decompression/empty-block.zst"
+rle_first_block = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-decompression/rle-first-block.zst"
+huffman_compressed_larger = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-compression/huffman-compressed-larger"
+http_sample = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-compression/http"
+http_dict = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-dictionaries/http-dict-missing-symbols"

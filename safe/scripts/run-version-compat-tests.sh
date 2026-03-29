@@ -16,8 +16,12 @@ version_compat_is_fresh() {
     local dep
     for dep in \
         "$SCRIPT_DIR/run-version-compat-tests.sh" \
+        "$ORIGINAL_ROOT/tests/test-zstd-versions.py" \
         "$BINDIR/zstd" \
-        "$VERSIONS_FIXTURE_ROOT"
+        "$VERSIONS_FIXTURE_ROOT" \
+        "$ORIGINAL_ROOT/tests/golden-compression" \
+        "$ORIGINAL_ROOT/tests/golden-decompression" \
+        "$ORIGINAL_ROOT/tests/golden-dictionaries"
     do
         if [[ -d $dep ]]; then
             if find "$dep" -type f -newer "$STAMP_FILE" -print -quit | grep -q .; then
