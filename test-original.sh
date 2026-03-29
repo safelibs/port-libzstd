@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$SCRIPT_DIR
 DEPENDENTS_JSON="$REPO_ROOT/dependents.json"
+DEPENDENT_MATRIX="$REPO_ROOT/safe/tests/dependents/dependent_matrix.toml"
 SOURCE_DIR="$REPO_ROOT/original/libzstd-1.5.5+dfsg2"
 DOCKER_IMAGE=${DOCKER_IMAGE:-ubuntu:24.04}
 
@@ -22,9 +23,11 @@ if [ ! -d "$SOURCE_DIR" ]; then
   exit 1
 fi
 
-python3 - "$DEPENDENTS_JSON" <<'PY'
+python3 - "$DEPENDENTS_JSON" "$DEPENDENT_MATRIX" "$REPO_ROOT" <<'PY'
 import json
+import pathlib
 import sys
+import tomllib
 
 expected = {
     "apt",
@@ -41,20 +44,36 @@ expected = {
 
 with open(sys.argv[1], "r", encoding="utf-8") as f:
     data = json.load(f)
+with open(sys.argv[2], "rb") as f:
+    matrix = tomllib.load(f)
+
+repo_root = pathlib.Path(sys.argv[3])
 
 actual = {pkg["source_package"] for pkg in data["packages"]}
+matrix_lookup = {entry["source_package"]: entry for entry in matrix["dependent"]}
+matrix_sources = set(matrix_lookup)
 
 missing = sorted(expected - actual)
 extra = sorted(actual - expected)
+matrix_missing = sorted(actual - matrix_sources)
+matrix_extra = sorted(matrix_sources - actual)
 
-if missing or extra:
+if missing or extra or matrix_missing or matrix_extra:
     raise SystemExit(
         "dependents.json mismatch: "
-        f"missing={missing or '[]'} extra={extra or '[]'}"
+        f"missing={missing or '[]'} extra={extra or '[]'} "
+        f"matrix_missing={matrix_missing or '[]'} matrix_extra={matrix_extra or '[]'}"
     )
+
+for source_package, entry in matrix_lookup.items():
+    probe = repo_root / entry["compile_probe"]
+    if not probe.is_file():
+        raise SystemExit(f"missing dependent compile probe for {source_package}: {probe}")
 PY
 
 docker run --rm --privileged -i \
+  -e HOST_UID="$(id -u)" \
+  -e HOST_GID="$(id -g)" \
   -v "$REPO_ROOT:/work" \
   -w /work \
   "$DOCKER_IMAGE" \
@@ -62,45 +81,102 @@ docker run --rm --privileged -i \
 set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
+
+cleanup() {
+  if [[ -d /work/safe/out ]]; then
+    chown -R "$HOST_UID:$HOST_GID" /work/safe/out
+  fi
+}
+trap cleanup EXIT
+
 apt-get update >/dev/null
 apt-get install -y --no-install-recommends \
   apt \
   apt-utils \
   btrfs-progs \
   build-essential \
+  ca-certificates \
+  cargo \
+  cmake \
   curl \
+  debhelper \
+  devscripts \
+  dh-package-notes \
   dpkg-dev \
+  fakeroot \
+  help2man \
   jq \
   libarchive-tools \
+  liblz4-dev \
+  liblzma-dev \
   libtiff-tools \
+  less \
+  pkgconf \
   python3 \
   python3-pil \
   qemu-utils \
   rsync \
+  rustc \
   squashfs-tools \
   systemd \
+  zlib1g-dev \
   zstd >/dev/null
 
-make -j"$(nproc)" -C /work/original/libzstd-1.5.5+dfsg2 install prefix=/opt/libzstd >/dev/null
+export CARGO_HOME=/root/.cargo
+export RUSTUP_HOME=/root/.rustup
+export PATH="$CARGO_HOME/bin:$PATH"
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+  | sh -s -- -y --profile minimal --default-toolchain stable >/dev/null
+cargo --version
+rustc --version
 
-export PATH="/opt/libzstd/bin:$PATH"
-export LD_LIBRARY_PATH="/opt/libzstd/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export PKG_CONFIG_PATH="/opt/libzstd/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+DEB_HOST_MULTIARCH=$(dpkg-architecture -qDEB_HOST_MULTIARCH)
+SAFE_UPSTREAM_LIB=/opt/safelibs/upstream/libzstd-upstream.so.1
+install -d -m 0755 "$(dirname "$SAFE_UPSTREAM_LIB")"
+cp -Lf "/usr/lib/$DEB_HOST_MULTIARCH/libzstd.so.1" "$SAFE_UPSTREAM_LIB"
+chmod 0644 "$SAFE_UPSTREAM_LIB"
+export SAFE_UPSTREAM_LIB
+
+bash /work/safe/scripts/build-deb.sh
+bash /work/safe/scripts/install-safe-debs.sh --skip-build
+
+SAFE_VERSION=$(dpkg-query -W -f='${Version}' libzstd1)
+for pkg in libzstd1 libzstd-dev zstd; do
+  version=$(dpkg-query -W -f='${Version}' "$pkg")
+  [[ $version == "$SAFE_VERSION" ]] || {
+    echo "$pkg installed as $version instead of $SAFE_VERSION" >&2
+    exit 1
+  }
+  [[ $version == *safelibs* ]] || {
+    echo "$pkg is not using the safe package version: $version" >&2
+    exit 1
+  }
+done
+
+SAFE_LIB=/usr/lib/$DEB_HOST_MULTIARCH/libzstd.so.1
+SAFE_LIB_REAL=$(readlink -f "$SAFE_LIB")
+
+bash /work/safe/scripts/check-dependent-compile-compat.sh
 
 TEST_ROOT=/tmp/libzstd-dependent-tests
 rm -rf "$TEST_ROOT"
 mkdir -p "$TEST_ROOT"
 
-LOCAL_LIB=/opt/libzstd/lib/libzstd.so.1
-
 log() {
   printf '\n== %s ==\n' "$*"
 }
 
-assert_uses_local_lib() {
+assert_uses_safe_lib() {
   local target=$1
-  if ! ldd "$target" | grep -F "$LOCAL_LIB" >/dev/null; then
-    echo "expected $target to resolve libzstd through $LOCAL_LIB" >&2
+  local resolved
+  resolved=$(ldd "$target" 2>/dev/null | awk '/libzstd\.so\.1/ {print $3; exit}')
+  if [[ -z $resolved ]]; then
+    echo "expected $target to link against libzstd.so.1" >&2
+    ldd "$target" >&2 || true
+    return 1
+  fi
+  if [[ $(readlink -f "$resolved") != "$SAFE_LIB_REAL" ]]; then
+    echo "expected $target to resolve libzstd through $SAFE_LIB_REAL" >&2
     ldd "$target" >&2 || true
     return 1
   fi
@@ -122,7 +198,7 @@ test_apt() {
   rm -rf "$dir"
   mkdir -p "$dir/pkg/DEBIAN" "$dir/pkg/usr/share/testpkg" "$dir/repo"
 
-  assert_uses_local_lib /usr/lib/x86_64-linux-gnu/libapt-pkg.so.6.0
+  assert_uses_safe_lib "/usr/lib/$DEB_HOST_MULTIARCH/libapt-pkg.so.6.0"
 
   cat >"$dir/pkg/DEBIAN/control" <<'CONTROL'
 Package: testpkg
@@ -197,7 +273,7 @@ test_dpkg() {
   rm -rf "$dir"
   mkdir -p "$dir/pkg/DEBIAN" "$dir/pkg/usr/share/testpkg" "$dir/extract"
 
-  assert_uses_local_lib "$(command -v dpkg-deb)"
+  assert_uses_safe_lib "$(command -v dpkg-deb)"
 
   cat >"$dir/pkg/DEBIAN/control" <<'CONTROL'
 Package: testpkg
@@ -222,7 +298,7 @@ test_rsync() {
   rm -rf "$dir"
   mkdir -p "$dir/src" "$dir/dst"
 
-  assert_uses_local_lib "$(command -v rsync)"
+  assert_uses_safe_lib "$(command -v rsync)"
 
   printf 'hello via rsync zstd\n' >"$dir/src/file.txt"
   cat >"$dir/rsyncd.conf" <<EOF2
@@ -252,7 +328,7 @@ test_systemd() {
   rm -rf "$dir"
   mkdir -p "$dir"
 
-  assert_uses_local_lib /usr/lib/systemd/systemd-journald
+  assert_uses_safe_lib /usr/lib/systemd/systemd-journald
 
   rm -rf /run/log/journal /run/systemd/journal
   mkdir -p /etc/systemd /run/systemd/journal
@@ -311,7 +387,7 @@ test_libarchive() {
   rm -rf "$dir"
   mkdir -p "$dir/input/sub" "$dir/out"
 
-  assert_uses_local_lib "$(command -v bsdtar)"
+  assert_uses_safe_lib "$(command -v bsdtar)"
 
   printf 'alpha\n' >"$dir/input/a.txt"
   printf 'beta\n' >"$dir/input/sub/b.txt"
@@ -328,7 +404,7 @@ test_btrfs() {
   rm -rf "$dir"
   mkdir -p "$dir/mnt-src" "$dir/mnt-dst"
 
-  assert_uses_local_lib "$(command -v btrfs)"
+  assert_uses_safe_lib "$(command -v btrfs)"
 
   ensure_loop_node
   truncate -s 256M "$dir/src.img"
@@ -361,7 +437,7 @@ test_squashfs() {
   rm -rf "$dir"
   mkdir -p "$dir/input/sub"
 
-  assert_uses_local_lib "$(command -v mksquashfs)"
+  assert_uses_safe_lib "$(command -v mksquashfs)"
 
   printf 'gamma\n' >"$dir/input/g.txt"
   printf 'delta\n' >"$dir/input/sub/d.txt"
@@ -379,7 +455,7 @@ test_qemu() {
   rm -rf "$dir"
   mkdir -p "$dir"
 
-  assert_uses_local_lib "$(command -v qemu-img)"
+  assert_uses_safe_lib "$(command -v qemu-img)"
 
   truncate -s 4M "$dir/raw.img"
   printf 'qcow-zstd\n' | dd of="$dir/raw.img" conv=notrunc status=none
@@ -395,7 +471,7 @@ test_curl() {
   rm -rf "$dir"
   mkdir -p "$dir"
 
-  assert_uses_local_lib "$(command -v curl)"
+  assert_uses_safe_lib "$(command -v curl)"
 
   printf 'curl zstd response\n' >"$dir/body.txt"
   zstd -q -f "$dir/body.txt" -o "$dir/body.zst"
@@ -436,7 +512,7 @@ test_tiff() {
   rm -rf "$dir"
   mkdir -p "$dir"
 
-  assert_uses_local_lib "$(command -v tiffcp)"
+  assert_uses_safe_lib "$(command -v tiffcp)"
 
   python3 - <<'PY'
 from PIL import Image
@@ -448,35 +524,31 @@ PY
   tiffcmp "$dir/input.tif" "$dir/zstd.tif" >/dev/null
 }
 
-log "APT"
-test_apt
+mapfile -t runtime_tests < <(python3 - <<'PY'
+from __future__ import annotations
 
-log "dpkg"
-test_dpkg
+import json
+import tomllib
 
-log "rsync"
-test_rsync
+with open("/work/dependents.json", "r", encoding="utf-8") as handle:
+    dependents = json.load(handle)
+with open("/work/safe/tests/dependents/dependent_matrix.toml", "rb") as handle:
+    matrix = tomllib.load(handle)
 
-log "systemd"
-test_systemd
+runtime_lookup = {entry["source_package"]: entry["runtime_test"] for entry in matrix["dependent"]}
+binary_lookup = {entry["source_package"]: entry["binary_package"] for entry in matrix["dependent"]}
 
-log "libarchive"
-test_libarchive
+for entry in dependents["packages"]:
+    source_package = entry["source_package"]
+    print(f"{source_package}\t{binary_lookup[source_package]}\t{runtime_lookup[source_package]}")
+PY
+)
 
-log "btrfs-progs"
-test_btrfs
-
-log "squashfs-tools"
-test_squashfs
-
-log "qemu-utils"
-test_qemu
-
-log "curl"
-test_curl
-
-log "libtiff"
-test_tiff
+for entry in "${runtime_tests[@]}"; do
+  IFS=$'\t' read -r source_package binary_package runtime_test <<<"$entry"
+  log "$source_package ($binary_package)"
+  "$runtime_test"
+done
 
 log "all dependent tests passed"
 EOF

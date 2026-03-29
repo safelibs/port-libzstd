@@ -6,6 +6,7 @@ use crate::{
     },
 };
 use core::ffi::{c_char, c_int, c_void};
+use std::ffi::CString;
 use std::sync::OnceLock;
 
 const PRIMARY_LIBZSTD_PATH: &[u8] =
@@ -32,6 +33,15 @@ fn upstream_handle() -> Option<*mut c_void> {
     HANDLE
         .get_or_init(|| {
             let flags = RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND;
+            if let Some(path) = std::env::var_os("SAFE_UPSTREAM_LIB") {
+                if let Ok(path) = CString::new(path.to_string_lossy().into_owned()) {
+                    // SAFETY: `path` is NUL-terminated and owned for the duration of the call.
+                    let handle = unsafe { dlopen(path.as_ptr().cast(), flags) };
+                    if !handle.is_null() {
+                        return Some(handle as usize);
+                    }
+                }
+            }
             for path in [PRIMARY_LIBZSTD_PATH, FALLBACK_LIBZSTD_PATH] {
                 // SAFETY: `path` is NUL-terminated and valid for the duration of the program.
                 let handle = unsafe { dlopen(path.as_ptr().cast(), flags) };

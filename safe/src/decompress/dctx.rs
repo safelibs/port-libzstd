@@ -302,7 +302,7 @@ pub extern "C" fn ZSTD_decompressContinue(
         return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
     };
     match decompress::with_dctx_mut(dctx, |dctx| {
-        decompress::bufferless_continue(dctx, dst, dstCapacity, src_bytes)
+        decompress::bufferless_continue(dctx, dst, dstCapacity, src_bytes, false)
     }) {
         Ok(size) => size,
         Err(code) => error_result(code),

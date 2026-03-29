@@ -5,13 +5,15 @@ BUILD_DIR ?= $(SAFE_ROOT)/target/link-compat
 OBJ_DIR := $(BUILD_DIR)/obj
 BIN_DIR := $(BUILD_DIR)/bin
 WORK_DIR := $(BUILD_DIR)/work
+RUNTIME_DIR := $(BUILD_DIR)/runtime
 SHARED_LIB := $(SAFE_ROOT)/target/release/libzstd.so
-LD_PATH := $(SAFE_ROOT)/target/release$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}
+RUNTIME_LIB := $(RUNTIME_DIR)/libzstd.so.1
+LD_PATH := $(RUNTIME_DIR)$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}
 
 CC ?= cc
 WARN_FLAGS := -std=c11 -Wall -Wextra -Werror -Wno-deprecated-declarations -Wno-sign-compare -Wno-unused-function -Wno-unused-parameter -D_POSIX_C_SOURCE=200809L
 ORIGINAL_CPPFLAGS := -I$(ORIGINAL_ROOT)/lib -I$(ORIGINAL_ROOT)/examples
-LINK_FLAGS := -L$(SAFE_ROOT)/target/release -Wl,-rpath,$(SAFE_ROOT)/target/release -lzstd
+LINK_FLAGS := -L$(SAFE_ROOT)/target/release -Wl,-rpath,$(RUNTIME_DIR) -lzstd
 
 OBJECTS := \
 	$(OBJ_DIR)/pkg_make_ztest.o \
@@ -42,10 +44,11 @@ BINARIES := \
 all: run
 
 workdirs:
-	mkdir -p $(OBJ_DIR) $(BIN_DIR) $(WORK_DIR)
+	mkdir -p $(OBJ_DIR) $(BIN_DIR) $(WORK_DIR) $(RUNTIME_DIR)
 
-safe-lib:
+safe-lib: | workdirs
 	cargo rustc --manifest-path $(SAFE_ROOT)/Cargo.toml --release --crate-type cdylib
+	ln -sf $(SHARED_LIB) $(RUNTIME_LIB)
 
 objects: $(OBJECTS)
 

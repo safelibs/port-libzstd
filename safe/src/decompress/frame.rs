@@ -80,6 +80,7 @@ pub(crate) fn is_skippable_magic(magic: u32) -> bool {
     (magic & ZSTD_MAGIC_SKIPPABLE_MASK) == ZSTD_MAGIC_SKIPPABLE_START
 }
 
+#[allow(dead_code)]
 pub(crate) fn partial_frame_prefix_is_valid(src: &[u8], format: ZSTD_format_e) -> bool {
     const LEGACY_MAGICS: [u32; 7] = [
         0x1EB5_2FFD,

@@ -35,6 +35,25 @@ rsync_tree() {
     rsync -a --delete "$@" "$src" "$dest"
 }
 
+link_latest_package() {
+    local pattern=$1
+    local output_dir=$2
+    local -a matches=()
+
+    shopt -s nullglob
+    matches=($pattern)
+    shopt -u nullglob
+
+    if [[ ${#matches[@]} -ne 1 ]]; then
+        printf 'expected exactly one package matching %s, found %d\n' \
+            "$pattern" "${#matches[@]}" >&2
+        exit 1
+    fi
+
+    ln -sfn "$(realpath --relative-to="$output_dir" "${matches[0]}")" \
+        "$output_dir/$(basename "${matches[0]}")"
+}
+
 rm -rf "$STAGE_PARENT" "$BUILD_ROOT"
 install -d "$STAGE_ROOT" "$PACKAGE_DIR" "$INSTALL_ROOT"
 
@@ -142,6 +161,21 @@ find "$PACKAGE_DIR" -maxdepth 1 -type f -name '*.deb' -print0 |
     while IFS= read -r -d '' deb; do
         dpkg-deb -x "$deb" "$INSTALL_ROOT"
     done
+
+if [[ $BUILD_TAG == default ]]; then
+    rm -f \
+        "$SAFE_ROOT/out"/libzstd-dev_*.deb \
+        "$SAFE_ROOT/out"/libzstd1_*.deb \
+        "$SAFE_ROOT/out"/libzstd1-udeb_*.udeb \
+        "$SAFE_ROOT/out"/zstd_*.deb
+
+    link_latest_package "$PACKAGE_DIR/libzstd-dev_*.deb" "$SAFE_ROOT/out"
+    link_latest_package "$PACKAGE_DIR/libzstd1_*.deb" "$SAFE_ROOT/out"
+    link_latest_package "$PACKAGE_DIR/zstd_*.deb" "$SAFE_ROOT/out"
+    if [[ $SAFE_ENABLE_UDEB -eq 1 ]]; then
+        link_latest_package "$PACKAGE_DIR/libzstd1-udeb_*.udeb" "$SAFE_ROOT/out"
+    fi
+fi
 
 cat >"$METADATA_FILE" <<EOF
 BUILD_TAG='$BUILD_TAG'
