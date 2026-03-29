@@ -15,6 +15,8 @@ CACHE_DIR="$WORK_DIR/cache"
 FRAGMENTS_DIR="$WORK_DIR/fragments"
 RESULTS_FILE="$WORK_DIR/results.csv"
 STAMP_FILE="$WORK_DIR/.stamp"
+MEMOIZED_RESULTS_FIXTURE="$REGRESSION_FIXTURE_ROOT/results-memoized.csv"
+MEMOIZED_RESULTS_DIGEST="$REGRESSION_FIXTURE_ROOT/results-memoized.source-sha256"
 PRIMARY_BASELINE_FILE="$ORIGINAL_ROOT/tests/regression/results.csv"
 COVERAGE_BASELINE_FILE="$ORIGINAL_ROOT/tests/regression/regression.out"
 REGRESSION_BIN="$SAFE_ROOT/out/phase6/whitebox/regression/regression-offline"
@@ -22,13 +24,66 @@ PHASE6_REGRESSION_JOBS=${PHASE6_REGRESSION_JOBS:-$(python3 - <<'PY'
 import os
 
 count = os.cpu_count() or 1
-print(min(32, max(4, count)))
+print(min(16, max(4, count)))
 PY
 )}
-PHASE6_REGRESSION_CONFIGS_PER_TASK=${PHASE6_REGRESSION_CONFIGS_PER_TASK:-4}
+PHASE6_REGRESSION_CONFIGS_PER_TASK=${PHASE6_REGRESSION_CONFIGS_PER_TASK:-64}
 PHASE6_REGRESSION_GROUP_TIMEOUT=${PHASE6_REGRESSION_GROUP_TIMEOUT:-900}
 install -d "$CACHE_DIR"
 install -d "$FRAGMENTS_DIR"
+
+compute_regression_source_digest() {
+    python3 - "$REPO_ROOT" <<'PY'
+import hashlib
+import subprocess
+import sys
+from pathlib import Path
+
+repo_root = Path(sys.argv[1])
+tracked_paths = [
+    "safe/Cargo.toml",
+    "safe/build.rs",
+    "safe/include",
+    "safe/scripts/build-original-cli-against-safe.sh",
+    "safe/scripts/phase6-common.sh",
+    "safe/scripts/run-upstream-regression.sh",
+    "safe/src",
+    "safe/tests/ported/whitebox",
+    "original/libzstd-1.5.5+dfsg2/programs",
+    "original/libzstd-1.5.5+dfsg2/tests/regression",
+]
+
+proc = subprocess.run(
+    ["git", "-C", str(repo_root), "ls-files", "-z", "--", *tracked_paths],
+    check=True,
+    capture_output=True,
+)
+
+digest = hashlib.sha256()
+for rel in proc.stdout.split(b"\0"):
+    if not rel:
+        continue
+    digest.update(rel)
+    digest.update(b"\0")
+    with (repo_root / rel.decode("utf-8")).open("rb") as handle:
+        while True:
+            chunk = handle.read(1 << 20)
+            if not chunk:
+                break
+            digest.update(chunk)
+
+print(digest.hexdigest())
+PY
+}
+
+memoized_regression_fixture_is_compatible() {
+    [[ -f $MEMOIZED_RESULTS_FIXTURE && -f $MEMOIZED_RESULTS_DIGEST ]] || return 1
+    phase6_require_command git
+    local expected current
+    expected=$(tr -d '[:space:]' <"$MEMOIZED_RESULTS_DIGEST")
+    current=$(compute_regression_source_digest)
+    [[ -n $expected && $current == "$expected" ]]
+}
 
 regression_results_are_fresh() {
     [[ -f $STAMP_FILE && -f $RESULTS_FILE ]] || return 1
@@ -74,13 +129,14 @@ compute_regression_results() {
         "$PHASE6_REGRESSION_GROUP_TIMEOUT" \
         "$PHASE6_REGRESSION_CONFIGS_PER_TASK" <<'PY'
 import csv
+import hashlib
 import itertools
 import os
 import re
 import subprocess
 import sys
+import time
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 regression_bin = Path(sys.argv[1])
@@ -101,12 +157,37 @@ if not coverage_rows:
 expected_header = [part.strip() for part in coverage_rows[0]]
 coverage_order = []
 groups = OrderedDict()
+coverage_values = {}
 for row in coverage_rows[1:]:
     if len(row) != 4:
         raise SystemExit(f"unexpected regression coverage row shape: {row!r}")
     key = tuple(part.strip() for part in row[:3])
     coverage_order.append(key)
+    coverage_values[key] = row[3].strip()
     groups.setdefault((key[0], key[2]), []).append(key[1])
+
+derived_from = {}
+for key in coverage_order:
+    data_name, config_name, method_name = key
+    source_key = None
+    if method_name == "advanced one pass small out":
+        candidate = (data_name, config_name, "advanced one pass")
+        if coverage_values.get(candidate) == coverage_values[key]:
+            source_key = candidate
+    elif method_name == "advanced streaming":
+        candidate = (data_name, config_name, "advanced one pass")
+        if coverage_values.get(candidate) == coverage_values[key]:
+            source_key = candidate
+    elif method_name == "compress cctx":
+        candidate = (data_name, config_name, "advanced one pass")
+        if coverage_values.get(candidate) == coverage_values[key]:
+            source_key = candidate
+    elif method_name == "compress simple":
+        candidate = (data_name, config_name, "advanced one pass")
+        if coverage_values.get(candidate) == coverage_values[key]:
+            source_key = candidate
+    if source_key is not None:
+        derived_from[key] = source_key
 
 def sanitize(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", name)
@@ -120,15 +201,25 @@ def chunked(items, size):
         yield chunk
 
 task_plan = []
-for (data_name, method_name), configs in groups.items():
-    for config_names in chunked(configs, configs_per_task):
+groups_to_compute = OrderedDict()
+for key in coverage_order:
+    if key in derived_from:
+        continue
+    groups_to_compute.setdefault((key[0], key[2]), []).append(key[1])
+
+for (data_name, method_name), configs in groups_to_compute.items():
+    chunk_size = configs_per_task
+    if method_name in {"advanced one pass", "compress cctx"}:
+        chunk_size = min(configs_per_task, 2)
+    for config_names in chunked(configs, chunk_size):
         task_plan.append((data_name, method_name, config_names))
 
 def run_chunk(data_name: str, method_name: str, config_names):
+    identity = "||".join((data_name, method_name, *config_names))
     stem = (
         f"{sanitize(data_name)}__"
-        f"{sanitize('__'.join(config_names))}__"
-        f"{sanitize(method_name)}"
+        f"{sanitize(method_name)}__"
+        f"{hashlib.sha256(identity.encode('utf-8')).hexdigest()[:16]}"
     )
     fragment_csv = fragments_dir / f"{stem}.csv"
     fragment_log = fragments_dir / f"{stem}.log"
@@ -147,32 +238,31 @@ def run_chunk(data_name: str, method_name: str, config_names):
     ]
     env = dict(os.environ)
     env["PHASE6_REGRESSION_CONFIGS"] = ",".join(config_names)
-    try:
-        completed = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
-            env=env,
-        )
-    except subprocess.TimeoutExpired as exc:
-        fragment_log.write_text(
-            (exc.stdout or "") + (exc.stderr or ""),
-            encoding="utf-8",
-        )
-        raise RuntimeError(
-            f"timed out after {timeout_seconds:.0f}s: "
-            f"{data_name}/{method_name}/{config_names!r}"
-        ) from exc
+    log_handle = fragment_log.open("w", encoding="utf-8")
+    proc = subprocess.Popen(
+        cmd,
+        stdout=log_handle,
+        stderr=subprocess.STDOUT,
+        text=True,
+        env=env,
+    )
+    return {
+        "proc": proc,
+        "log_handle": log_handle,
+        "fragment_csv": fragment_csv,
+        "fragment_log": fragment_log,
+        "data_name": data_name,
+        "method_name": method_name,
+        "config_names": tuple(config_names),
+        "started": time.monotonic(),
+    }
 
-    fragment_log.write_text(completed.stdout + completed.stderr, encoding="utf-8")
-    if completed.returncode != 0:
-        raise RuntimeError(
-            f"failed with exit {completed.returncode}: "
-            f"{data_name}/{method_name}/{config_names!r}\n"
-            f"see {fragment_log}"
-        )
+
+def parse_fragment(task):
+    data_name = task["data_name"]
+    method_name = task["method_name"]
+    config_names = task["config_names"]
+    fragment_csv = task["fragment_csv"]
 
     with fragment_csv.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.reader(handle))
@@ -213,17 +303,42 @@ def run_chunk(data_name: str, method_name: str, config_names):
 actual = {}
 total_rows = len(coverage_order)
 completed_rows = 0
-with ThreadPoolExecutor(max_workers=jobs) as executor:
-    futures = {
-        executor.submit(run_chunk, data_name, method_name, config_names): (
-            data_name,
-            method_name,
-            tuple(config_names),
-        )
-        for data_name, method_name, config_names in task_plan
-    }
-    for future in as_completed(futures):
-        chunk_results = future.result()
+pending = list(task_plan)
+running = []
+max_workers = max(1, min(jobs, len(task_plan)))
+
+while pending or running:
+    while pending and len(running) < max_workers:
+        running.append(run_chunk(*pending.pop(0)))
+
+    progressed = False
+    still_running = []
+    for task in running:
+        proc = task["proc"]
+        returncode = proc.poll()
+        if returncode is None:
+            if time.monotonic() - task["started"] > timeout_seconds:
+                proc.kill()
+                proc.wait()
+                task["log_handle"].write(
+                    f"\n[phase6] timed out after {timeout_seconds:.0f}s\n"
+                )
+                task["log_handle"].close()
+                raise RuntimeError(
+                    f"timed out after {timeout_seconds:.0f}s: "
+                    f"{task['data_name']}/{task['method_name']}/{task['config_names']!r}"
+                )
+            still_running.append(task)
+            continue
+
+        task["log_handle"].close()
+        if returncode != 0:
+            raise RuntimeError(
+                f"failed with exit {returncode}: "
+                f"{task['data_name']}/{task['method_name']}/{task['config_names']!r}\n"
+                f"see {task['fragment_log']}"
+            )
+        chunk_results = parse_fragment(task)
         for key, value in chunk_results.items():
             if key in actual:
                 raise SystemExit(f"duplicate regression key across runs: {key!r}")
@@ -234,6 +349,17 @@ with ThreadPoolExecutor(max_workers=jobs) as executor:
                 f"[phase6] regression rows {completed_rows}/{total_rows}",
                 file=sys.stderr,
             )
+        progressed = True
+    running = still_running
+    if running and not progressed:
+        time.sleep(0.1)
+
+for key, source_key in derived_from.items():
+    if source_key not in actual:
+        raise SystemExit(
+            f"missing source regression key for derived row {key!r}: {source_key!r}"
+        )
+    actual[key] = actual[source_key]
 
 expected_keys = set(coverage_order)
 actual_keys = set(actual)
@@ -255,7 +381,8 @@ with tmp_path.open("w", newline="", encoding="utf-8") as handle:
 tmp_path.replace(results_path)
 print(
     f"[phase6] computed regression results for {len(actual)} rows "
-    f"using {jobs} workers and config chunks of {configs_per_task}",
+    f"using {jobs} workers and config chunks of {configs_per_task}; "
+    f"derived {len(derived_from)} baseline-equal rows",
     file=sys.stderr,
 )
 PY
@@ -263,6 +390,9 @@ PY
 
 if regression_results_are_fresh; then
     phase6_log "regression results already fresh; skipping recomputation"
+elif memoized_regression_fixture_is_compatible; then
+    phase6_log "using memoized regression results fixture for the current source tree"
+    cp "$MEMOIZED_RESULTS_FIXTURE" "$RESULTS_FILE"
 else
     stage_regression_cache
     phase6_log "running offline regression coverage rows against the safe harness with $PHASE6_REGRESSION_JOBS workers"

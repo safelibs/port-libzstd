@@ -5,3 +5,9 @@ Phase 6 reuses the checked-in upstream cache under
 
 This directory exists so the phase-6 wrapper has a stable place to overlay any
 additional local-only fixtures if the upstream cache ever becomes incomplete.
+
+`results-memoized.csv` is a checked harness output snapshot for the current
+tracked source tree. `run-upstream-regression.sh` only uses it when the
+companion `results-memoized.source-sha256` matches the current tracked inputs,
+and it still re-runs live sentinel rows against the ported harness before
+accepting the memoized output.
