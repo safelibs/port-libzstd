@@ -7,6 +7,9 @@ DEPENDENTS_JSON="$REPO_ROOT/dependents.json"
 DEPENDENT_MATRIX="$REPO_ROOT/safe/tests/dependents/dependent_matrix.toml"
 SOURCE_DIR="$REPO_ROOT/original/libzstd-1.5.5+dfsg2"
 DOCKER_IMAGE=${DOCKER_IMAGE:-ubuntu:24.04}
+HOST_CARGO_HOME=${HOST_CARGO_HOME:-$HOME/.cargo}
+HOST_RUSTUP_HOME=${HOST_RUSTUP_HOME:-$HOME/.rustup}
+HOST_RUST_TOOLCHAIN=${HOST_RUST_TOOLCHAIN:-$(rustup show active-toolchain | awk '{print $1}')}
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker is required" >&2
@@ -20,6 +23,16 @@ fi
 
 if [ ! -d "$SOURCE_DIR" ]; then
   echo "missing source tree: $SOURCE_DIR" >&2
+  exit 1
+fi
+
+if [ ! -x "$HOST_RUSTUP_HOME/toolchains/$HOST_RUST_TOOLCHAIN/bin/cargo" ]; then
+  echo "missing host cargo toolchain: $HOST_RUSTUP_HOME/toolchains/$HOST_RUST_TOOLCHAIN/bin/cargo" >&2
+  exit 1
+fi
+
+if [ ! -d "$HOST_CARGO_HOME" ]; then
+  echo "missing host cargo home: $HOST_CARGO_HOME" >&2
   exit 1
 fi
 
@@ -74,7 +87,10 @@ PY
 docker run --rm --privileged -i \
   -e HOST_UID="$(id -u)" \
   -e HOST_GID="$(id -g)" \
+  -e HOST_RUST_TOOLCHAIN="$HOST_RUST_TOOLCHAIN" \
   -v "$REPO_ROOT:/work" \
+  -v "$HOST_CARGO_HOME:/opt/host-cargo:ro" \
+  -v "$HOST_RUSTUP_HOME:/opt/host-rustup:ro" \
   -w /work \
   "$DOCKER_IMAGE" \
   bash <<'EOF'
@@ -122,11 +138,20 @@ apt-get install -y --no-install-recommends \
   zlib1g-dev \
   zstd >/dev/null
 
-export CARGO_HOME=/root/.cargo
-export RUSTUP_HOME=/root/.rustup
-export PATH="$CARGO_HOME/bin:$PATH"
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-  | sh -s -- -y --profile minimal --default-toolchain stable >/dev/null
+export CARGO_HOME=/tmp/cargo-home
+export CARGO_NET_OFFLINE=true
+install -d "$CARGO_HOME"
+for dir in git registry; do
+  if [[ -e /opt/host-cargo/$dir && ! -e $CARGO_HOME/$dir ]]; then
+    ln -s "/opt/host-cargo/$dir" "$CARGO_HOME/$dir"
+  fi
+done
+for file in config.toml credentials.toml; do
+  if [[ -f /opt/host-cargo/$file && ! -e $CARGO_HOME/$file ]]; then
+    cp "/opt/host-cargo/$file" "$CARGO_HOME/$file"
+  fi
+done
+export PATH="/opt/host-rustup/toolchains/$HOST_RUST_TOOLCHAIN/bin:$PATH"
 cargo --version
 rustc --version
 
