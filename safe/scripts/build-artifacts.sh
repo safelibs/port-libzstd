@@ -16,6 +16,91 @@ DESTDIR=
 OBJDIR=
 INSTALL_CMAKE=1
 
+compute_build_signature() {
+    python3 - "$SAFE_ROOT" "$PROFILE" "$VARIANT" "$PREFIX" "$LIBDIR" "$INCLUDEDIR" "$MULTIARCH" "$INSTALL_CMAKE" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import pathlib
+import sys
+
+safe_root = pathlib.Path(sys.argv[1])
+params = sys.argv[2:]
+
+h = hashlib.sha256()
+for value in params:
+    h.update(value.encode("utf-8"))
+    h.update(b"\0")
+
+paths = [
+    safe_root / "Cargo.toml",
+    safe_root / "build.rs",
+    safe_root / "src",
+    safe_root / "include",
+    safe_root / "pkgconfig",
+    safe_root / "cmake",
+    safe_root / "scripts" / "build-artifacts.sh",
+]
+
+for optional in ("Cargo.lock", "rust-toolchain.toml"):
+    path = safe_root / optional
+    if path.exists():
+        paths.append(path)
+
+for path in paths:
+    if path.is_dir():
+        files = sorted(entry for entry in path.rglob("*") if entry.is_file())
+    else:
+        files = [path]
+    for entry in files:
+        rel = entry.relative_to(safe_root)
+        h.update(str(rel).encode("utf-8"))
+        h.update(b"\0")
+        h.update(entry.read_bytes())
+        h.update(b"\0")
+
+print(h.hexdigest())
+PY
+}
+
+artifacts_are_current() {
+    local signature=$1
+    local stamp_file=$2
+    local -a required=(
+        "$DESTDIR$LIBDIR/libzstd.so.$VERSION"
+        "$DESTDIR$LIBDIR/libzstd.so.$SONAME"
+        "$DESTDIR$LIBDIR/libzstd.so"
+        "$DESTDIR$LIBDIR/libzstd.a"
+        "$DESTDIR$LIBDIR/pkgconfig/libzstd.pc"
+        "$DESTDIR$INCLUDEDIR/zstd.h"
+        "$DESTDIR$INCLUDEDIR/zdict.h"
+        "$DESTDIR$INCLUDEDIR/zstd_errors.h"
+    )
+
+    local path
+    for path in "${required[@]}"; do
+        [[ -e $path ]] || return 1
+    done
+
+    [[ $(readlink "$DESTDIR$LIBDIR/libzstd.so.$SONAME") == "libzstd.so.$VERSION" ]] || return 1
+    [[ $(readlink "$DESTDIR$LIBDIR/libzstd.so") == "libzstd.so.$VERSION" ]] || return 1
+
+    if [[ $INSTALL_CMAKE -eq 1 ]]; then
+        required+=(
+            "$DESTDIR$LIBDIR/cmake/zstd/zstdConfig.cmake"
+            "$DESTDIR$LIBDIR/cmake/zstd/zstdConfigVersion.cmake"
+            "$DESTDIR$LIBDIR/cmake/zstd/zstdTargets.cmake"
+            "$DESTDIR$LIBDIR/cmake/zstd/zstdTargets-noconfig.cmake"
+        )
+        for path in "${required[@]:8}"; do
+            [[ -e $path ]] || return 1
+        done
+    fi
+
+    [[ -f $stamp_file ]] || return 1
+    [[ $(<"$stamp_file") == "$signature" ]]
+}
+
 usage() {
     cat <<'EOF'
 usage: build-artifacts.sh [--release|--debug] [--variant default|mt|nomt]
@@ -157,6 +242,13 @@ SHARED_TARGET_DIR="$BUILD_ROOT/shared"
 STATIC_TARGET_DIR="$BUILD_ROOT/static"
 STATIC_RUSTFLAGS=${RUSTFLAGS:-}
 STATIC_RUSTFLAGS="${STATIC_RUSTFLAGS:+$STATIC_RUSTFLAGS }-C panic=abort -C embed-bitcode=no"
+STAMP_FILE="$OBJDIR/.build-artifacts.signature"
+BUILD_SIGNATURE=$(compute_build_signature)
+
+if artifacts_are_current "$BUILD_SIGNATURE" "$STAMP_FILE"; then
+    printf 'reusing up-to-date build artifacts: %s\n' "$DESTDIR"
+    exit 0
+fi
 
 rm -rf "$DESTDIR" "$OBJDIR"
 rm -rf "$BUILD_ROOT"
@@ -268,3 +360,5 @@ if [[ $INSTALL_CMAKE -eq 1 ]]; then
     install -m 644 "$TARGETS_NOCONFIG" \
         "$DESTDIR$LIBDIR/cmake/zstd/zstdTargets-noconfig.cmake"
 fi
+
+printf '%s\n' "$BUILD_SIGNATURE" >"$STAMP_FILE"

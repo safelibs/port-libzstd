@@ -28,6 +28,136 @@ PACKAGE_DIR="$BUILD_ROOT/packages"
 INSTALL_ROOT="$BUILD_ROOT/stage-root"
 METADATA_FILE="$BUILD_ROOT/metadata.env"
 
+compute_build_signature() {
+    python3 - "$SAFE_ROOT" "$UPSTREAM_ROOT" "$BUILD_TAG" "$SAFE_ENABLE_UDEB" "$MULTIARCH" "$VERSION" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import pathlib
+import sys
+
+safe_root = pathlib.Path(sys.argv[1])
+upstream_root = pathlib.Path(sys.argv[2])
+params = sys.argv[3:]
+
+h = hashlib.sha256()
+for value in params:
+    h.update(value.encode("utf-8"))
+    h.update(b"\0")
+
+paths = [
+    safe_root / "Cargo.toml",
+    safe_root / "build.rs",
+    safe_root / "include",
+    safe_root / "src",
+    safe_root / "scripts",
+    safe_root / "pkgconfig",
+    safe_root / "cmake",
+    safe_root / "debian",
+    upstream_root / "lib",
+    upstream_root / "programs",
+    upstream_root / "zlibWrapper",
+    upstream_root / "examples",
+    upstream_root / "contrib" / "pzstd",
+    upstream_root / "doc" / "educational_decoder",
+]
+
+for optional in (
+    safe_root / "Cargo.lock",
+    safe_root / "rust-toolchain.toml",
+    upstream_root / "CHANGELOG",
+    upstream_root / "CODE_OF_CONDUCT.md",
+    upstream_root / "CONTRIBUTING.md",
+    upstream_root / "COPYING",
+    upstream_root / "LICENSE",
+    upstream_root / "README.md",
+    upstream_root / "TESTING.md",
+):
+    if optional.exists():
+        paths.append(optional)
+
+for path in paths:
+    if path.is_dir():
+        files = sorted(entry for entry in path.rglob("*") if entry.is_file())
+    else:
+        files = [path]
+    root = safe_root if safe_root in path.parents or path == safe_root else upstream_root
+    for entry in files:
+        rel = entry.relative_to(root)
+        h.update(root.name.encode("utf-8"))
+        h.update(b":")
+        h.update(str(rel).encode("utf-8"))
+        h.update(b"\0")
+        h.update(entry.read_bytes())
+        h.update(b"\0")
+
+print(h.hexdigest())
+PY
+}
+
+build_outputs_present() {
+    local package_dir=$1
+    local install_root=$2
+    local enable_udeb=$3
+    local pkg
+
+    [[ -d $package_dir ]] || return 1
+    [[ -d $install_root ]] || return 1
+
+    for pkg in libzstd1 libzstd-dev zstd; do
+        compgen -G "$package_dir/${pkg}_*.deb" >/dev/null || return 1
+    done
+
+    if [[ $enable_udeb -eq 1 ]]; then
+        compgen -G "$package_dir/libzstd1-udeb_*.udeb" >/dev/null || return 1
+    fi
+}
+
+reuse_existing_build() {
+    local desired_signature=$1
+    local -a meta=()
+
+    [[ -f $METADATA_FILE ]] || return 1
+
+    mapfile -t meta < <(
+        bash -c '
+            set -euo pipefail
+            source "$1"
+            printf "%s\n%s\n%s\n%s\n%s\n" \
+                "${BUILD_SIGNATURE:-}" \
+                "$STAGE_ROOT" \
+                "$PACKAGE_DIR" \
+                "$INSTALL_ROOT" \
+                "$SAFE_ENABLE_UDEB"
+        ' bash "$METADATA_FILE"
+    )
+
+    [[ ${#meta[@]} -eq 5 ]] || return 1
+    [[ ${meta[0]} == "$desired_signature" ]] || return 1
+    build_outputs_present "${meta[2]}" "${meta[3]}" "${meta[4]}" || return 1
+
+    if [[ $BUILD_TAG == default ]]; then
+        rm -f \
+            "$SAFE_ROOT/out"/libzstd-dev_*.deb \
+            "$SAFE_ROOT/out"/libzstd1_*.deb \
+            "$SAFE_ROOT/out"/libzstd1-udeb_*.udeb \
+            "$SAFE_ROOT/out"/zstd_*.deb
+
+        link_latest_package "${meta[2]}/libzstd-dev_*.deb" "$SAFE_ROOT/out"
+        link_latest_package "${meta[2]}/libzstd1_*.deb" "$SAFE_ROOT/out"
+        link_latest_package "${meta[2]}/zstd_*.deb" "$SAFE_ROOT/out"
+        if [[ ${meta[4]} -eq 1 ]]; then
+            link_latest_package "${meta[2]}/libzstd1-udeb_*.udeb" "$SAFE_ROOT/out"
+        fi
+    fi
+
+    printf 'reusing up-to-date deb build: %s\n' "${meta[1]}"
+    printf 'staged source tree: %s\n' "${meta[1]}"
+    printf 'package outputs: %s\n' "${meta[2]}"
+    printf 'stage install root: %s\n' "${meta[3]}"
+    return 0
+}
+
 rsync_tree() {
     local src=$1
     local dest=$2
@@ -53,6 +183,11 @@ link_latest_package() {
     ln -sfn "$(realpath --relative-to="$output_dir" "${matches[0]}")" \
         "$output_dir/$(basename "${matches[0]}")"
 }
+
+BUILD_SIGNATURE=$(compute_build_signature)
+if reuse_existing_build "$BUILD_SIGNATURE"; then
+    exit 0
+fi
 
 rm -rf "$STAGE_PARENT" "$BUILD_ROOT"
 install -d "$STAGE_ROOT" "$PACKAGE_DIR" "$INSTALL_ROOT"
@@ -187,6 +322,7 @@ MULTIARCH='$MULTIARCH'
 GNU_TYPE='$GNU_TYPE'
 VERSION='$VERSION'
 SAFE_ENABLE_UDEB='$SAFE_ENABLE_UDEB'
+BUILD_SIGNATURE='$BUILD_SIGNATURE'
 EOF
 
 printf 'staged source tree: %s\n' "$STAGE_ROOT"
