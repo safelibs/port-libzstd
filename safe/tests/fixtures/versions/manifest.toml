@@ -1,10 +1,41 @@
-schema_version = 1
+schema_version = 3
 
-[fixtures]
-hello = "hello.zst"
-helloworld = "helloworld.zst"
+[roundtrip]
+hello_plain = "hello"
+hello_frame = "hello.zst"
+helloworld_plain = "helloworld"
+helloworld_frame = "helloworld.zst"
+
+[modern_compat]
 empty_block = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-decompression/empty-block.zst"
 rle_first_block = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-decompression/rle-first-block.zst"
 huffman_compressed_larger = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-compression/huffman-compressed-larger"
 http_sample = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-compression/http"
 http_dict = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-dictionaries/http-dict-missing-symbols"
+
+[[historical_release_fixture]]
+id = "http-v1.0.0"
+release = "v1.0.0"
+plain = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-compression/http"
+frame = "http-v1.0.0.zst"
+generator = "programs/zstd -5"
+sha256 = "756a2ececd00f9ce267da6805d2b787ae1dc1d430cc6eb85a3d43159af090bf5"
+provenance = "Generated once from upstream release tag v1.0.0 against the checked-in golden-compression/http sample."
+
+[[historical_release_fixture]]
+id = "http-v1.3.8"
+release = "v1.3.8"
+plain = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-compression/http"
+frame = "http-v1.3.8.zst"
+generator = "programs/zstd -5"
+sha256 = "b7fda021fda03bef983546fc55e376aa3a725c9aef38e9b41dc7fd8bb15feb08"
+provenance = "Generated once from upstream release tag v1.3.8 against the checked-in golden-compression/http sample."
+
+[[historical_release_fixture]]
+id = "http-v1.4.10"
+release = "v1.4.10"
+plain = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-compression/http"
+frame = "http-v1.4.10.zst"
+generator = "programs/zstd -5"
+sha256 = "1dd4c151632aab4918db2a273e006b9f7fd7b447882b1689bd3e148b02b0b8fb"
+provenance = "Generated once from upstream release tag v1.4.10 against the checked-in golden-compression/http sample."

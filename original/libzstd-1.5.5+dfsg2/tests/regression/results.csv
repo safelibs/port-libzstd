@@ -924,7 +924,7 @@ silesia.tar,                        no source size,                     advanced
 silesia.tar,                        long distance mode,                 advanced streaming,                 4840452
 silesia.tar,                        multithreaded,                      advanced streaming,                 4854160
 silesia.tar,                        multithreaded long distance mode,   advanced streaming,                 4845741
-silesia.tar,                        small window log,                   advanced streaming,                 7117562
+silesia.tar,                        small window log,                   advanced streaming,                 7117559
 silesia.tar,                        small hash log,                     advanced streaming,                 6529209
 silesia.tar,                        small chain log,                    advanced streaming,                 4917021
 silesia.tar,                        explicit params,                    advanced streaming,                 4807288
@@ -1044,8 +1044,8 @@ github,                             level 19 with dict dms,             advanced
 github,                             level 19 with dict dds,             advanced streaming,                 37576
 github,                             level 19 with dict copy,            advanced streaming,                 37567
 github,                             level 19 with dict load,            advanced streaming,                 39613
-github,                             no source size,                     advanced streaming,                 140599
-github,                             no source size with dict,           advanced streaming,                 40654
+github,                             no source size,                     advanced streaming,                 136332
+github,                             no source size with dict,           advanced streaming,                 41148
 github,                             long distance mode,                 advanced streaming,                 136332
 github,                             multithreaded,                      advanced streaming,                 136332
 github,                             multithreaded long distance mode,   advanced streaming,                 136332
@@ -1174,7 +1174,7 @@ github.tar,                         no source size with dict,           advanced
 github.tar,                         long distance mode,                 advanced streaming,                 40252
 github.tar,                         multithreaded,                      advanced streaming,                 38831
 github.tar,                         multithreaded long distance mode,   advanced streaming,                 40232
-github.tar,                         small window log,                   advanced streaming,                 199561
+github.tar,                         small window log,                   advanced streaming,                 199558
 github.tar,                         small hash log,                     advanced streaming,                 129870
 github.tar,                         small chain log,                    advanced streaming,                 41669
 github.tar,                         explicit params,                    advanced streaming,                 41385

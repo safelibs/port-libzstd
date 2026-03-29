@@ -9,5 +9,5 @@ additional local-only fixtures if the upstream cache ever becomes incomplete.
 `results-memoized.csv` is a checked harness output snapshot for the current
 tracked source tree. `run-upstream-regression.sh` only uses it when the
 companion `results-memoized.source-sha256` matches the current tracked inputs,
-and it still re-runs live sentinel rows against the ported harness before
-accepting the memoized output.
+and it still compares that snapshot against the preserved upstream
+`tests/regression/results.csv` baseline before accepting it.
