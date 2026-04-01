@@ -4,8 +4,8 @@ use crate::{
     ffi::{
         decompress::{self, DictionaryUse},
         types::{
-            ZSTD_DCtx, ZSTD_DDict, ZSTD_DStream, ZSTD_customMem,
-            ZSTD_dictContentType_e, ZSTD_dictLoadMethod_e,
+            ZSTD_DCtx, ZSTD_DDict, ZSTD_DStream, ZSTD_customMem, ZSTD_dictContentType_e,
+            ZSTD_dictLoadMethod_e,
         },
     },
 };

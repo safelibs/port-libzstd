@@ -123,19 +123,13 @@ pub extern "C" fn ZDICT_trainFromBuffer_legacy(
 }
 
 #[no_mangle]
-pub extern "C" fn ZDICT_getDictHeaderSize(
-    dictBuffer: *const c_void,
-    dictSize: usize,
-) -> usize {
+pub extern "C" fn ZDICT_getDictHeaderSize(dictBuffer: *const c_void, dictSize: usize) -> usize {
     // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
     unsafe { internal_ZDICT_getDictHeaderSize(dictBuffer, dictSize) }
 }
 
 #[no_mangle]
-pub extern "C" fn ZDICT_getDictID(
-    dictBuffer: *const c_void,
-    dictSize: usize,
-) -> c_uint {
+pub extern "C" fn ZDICT_getDictID(dictBuffer: *const c_void, dictSize: usize) -> c_uint {
     // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
     unsafe { internal_ZDICT_getDictID(dictBuffer, dictSize) }
 }

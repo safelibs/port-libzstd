@@ -87,7 +87,9 @@ pub extern "C" fn ZSTD_getFrameHeader_advanced(
         Ok(frame::HeaderProbe::Header(header)) => {
             if !zfhPtr.is_null() {
                 // SAFETY: The caller provided a valid writable header pointer.
-                unsafe { *zfhPtr = header; }
+                unsafe {
+                    *zfhPtr = header;
+                }
             }
             0
         }

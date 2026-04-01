@@ -89,7 +89,7 @@ static int compress_and_roundtrip(ZSTD_CCtx* cctx,
     ZSTD_inBuffer in = { src, src_size, 0 };
     int finished = 0;
 
-    while (!finished && (in.pos < in.size || out_buffer[0] || end == ZSTD_e_end)) {
+    while (!finished) {
         ZSTD_outBuffer out = { out_buffer, sizeof(out_buffer), 0 };
         size_t const remaining = ZSTD_compressStream2(cctx, &out, &in, end);
         CHECK(!ZSTD_isError(remaining), "ZSTD_compressStream2 failed: %s\n",

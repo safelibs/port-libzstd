@@ -81,6 +81,7 @@ execution_strategy = "compile-and-run"
 owning_phase = 2
 release_gate = true
 prerequisites = []
+helper_paths = ["safe/scripts/run-capi-roundtrip.sh"]
 
 [[entry]]
 id = "tests:decodecorpus"
@@ -114,6 +115,7 @@ execution_strategy = "compile-and-run"
 owning_phase = 2
 release_gate = true
 prerequisites = []
+helper_paths = ["safe/scripts/run-capi-roundtrip.sh"]
 
 [[entry]]
 id = "tests:legacy"
@@ -136,6 +138,7 @@ execution_strategy = "compile-and-run"
 owning_phase = 2
 release_gate = true
 prerequisites = ["pthread"]
+helper_paths = ["safe/scripts/run-capi-roundtrip.sh"]
 
 [[entry]]
 id = "tests:invalidDictionaries"
@@ -147,6 +150,7 @@ execution_strategy = "compile-and-run"
 owning_phase = 2
 release_gate = true
 prerequisites = []
+helper_paths = ["safe/scripts/run-capi-roundtrip.sh"]
 
 [[entry]]
 id = "tests:roundTripCrash"

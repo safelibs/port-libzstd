@@ -58,16 +58,12 @@ pub(crate) fn error_string(code: ZSTD_ErrorCode) -> &'static [u8] {
         ZSTD_ErrorCode::ZSTD_error_GENERIC => b"Error (generic)\0",
         ZSTD_ErrorCode::ZSTD_error_prefix_unknown => b"Unknown frame descriptor\0",
         ZSTD_ErrorCode::ZSTD_error_version_unsupported => b"Version not supported\0",
-        ZSTD_ErrorCode::ZSTD_error_frameParameter_unsupported => {
-            b"Unsupported frame parameter\0"
-        }
+        ZSTD_ErrorCode::ZSTD_error_frameParameter_unsupported => b"Unsupported frame parameter\0",
         ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge => {
             b"Frame requires too much memory for decoding\0"
         }
         ZSTD_ErrorCode::ZSTD_error_corruption_detected => b"Data corruption detected\0",
-        ZSTD_ErrorCode::ZSTD_error_checksum_wrong => {
-            b"Restored data doesn't match checksum\0"
-        }
+        ZSTD_ErrorCode::ZSTD_error_checksum_wrong => b"Restored data doesn't match checksum\0",
         ZSTD_ErrorCode::ZSTD_error_literals_headerWrong => {
             b"Header of Literals' block doesn't respect format specification\0"
         }
@@ -97,15 +93,9 @@ pub(crate) fn error_string(code: ZSTD_ErrorCode) -> &'static [u8] {
             b"Operation not authorized at current processing stage\0"
         }
         ZSTD_ErrorCode::ZSTD_error_init_missing => b"Context should be init first\0",
-        ZSTD_ErrorCode::ZSTD_error_memory_allocation => {
-            b"Allocation error : not enough memory\0"
-        }
-        ZSTD_ErrorCode::ZSTD_error_workSpace_tooSmall => {
-            b"workSpace buffer is not large enough\0"
-        }
-        ZSTD_ErrorCode::ZSTD_error_dstSize_tooSmall => {
-            b"Destination buffer is too small\0"
-        }
+        ZSTD_ErrorCode::ZSTD_error_memory_allocation => b"Allocation error : not enough memory\0",
+        ZSTD_ErrorCode::ZSTD_error_workSpace_tooSmall => b"workSpace buffer is not large enough\0",
+        ZSTD_ErrorCode::ZSTD_error_dstSize_tooSmall => b"Destination buffer is too small\0",
         ZSTD_ErrorCode::ZSTD_error_srcSize_wrong => b"Src size is incorrect\0",
         ZSTD_ErrorCode::ZSTD_error_dstBuffer_null => b"Operation on NULL destination buffer\0",
         ZSTD_ErrorCode::ZSTD_error_noForwardProgress_destFull => {
@@ -115,9 +105,7 @@ pub(crate) fn error_string(code: ZSTD_ErrorCode) -> &'static [u8] {
             b"Operation made no progress over multiple calls, due to input being empty\0"
         }
         ZSTD_ErrorCode::ZSTD_error_frameIndex_tooLarge => b"Frame index is too large\0",
-        ZSTD_ErrorCode::ZSTD_error_seekableIO => {
-            b"An I/O error occurred when reading/seeking\0"
-        }
+        ZSTD_ErrorCode::ZSTD_error_seekableIO => b"An I/O error occurred when reading/seeking\0",
         ZSTD_ErrorCode::ZSTD_error_dstBuffer_wrong => b"Destination buffer is wrong\0",
         ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong => b"Source buffer is wrong\0",
         ZSTD_ErrorCode::ZSTD_error_sequenceProducer_failed => {

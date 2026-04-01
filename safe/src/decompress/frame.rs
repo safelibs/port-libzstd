@@ -498,11 +498,8 @@ fn decode_single_modern_frame(
     }
 
     let frame_bytes = build_modern_frame_bytes(frame, format);
-    let mut input = frame_bytes.as_slice();
-    let mut decoder = FrameDecoder::new();
-
-    decoder.init(&mut input).map_err(map_structured_error)?;
-    collect_structured_output(&mut decoder, &mut input)
+    let mut decoder = oxiarc_zstd::ZstdDecoder::new();
+    decoder.decode_frame(&frame_bytes).map_err(map_oxiarc_error)
 }
 
 pub(crate) fn find_frame_size_info(

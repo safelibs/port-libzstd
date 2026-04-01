@@ -1,57 +1,53 @@
-use crate::ffi::{
-    compress::{bounds_error, default_cparams, default_params, load_upstream},
-    types::{
-        ZSTD_ErrorCode, ZSTD_bounds, ZSTD_compressionParameters, ZSTD_dParameter,
-        ZSTD_parameters, ZSTD_cParameter,
+use crate::{
+    common::error::error_result,
+    ffi::{
+        compress::{
+            adjust_cparams, check_cparams, cparam_bounds, dparam_bounds, get_cparams, get_params,
+            min_clevel,
+        },
+        types::{
+            ZSTD_bounds, ZSTD_cParameter, ZSTD_compressionParameters, ZSTD_dParameter,
+            ZSTD_parameters, ZSTD_CLEVEL_DEFAULT,
+        },
     },
 };
 use core::ffi::c_int;
 
-unsafe extern "C" {
-    #[link_name = "libzstd_safe_internal_ZSTD_getCParams"]
-    fn internal_ZSTD_getCParams(
-        compressionLevel: c_int,
-        estimatedSrcSize: u64,
-        dictSize: usize,
-    ) -> ZSTD_compressionParameters;
-    #[link_name = "libzstd_safe_internal_ZSTD_getParams"]
-    fn internal_ZSTD_getParams(
-        compressionLevel: c_int,
-        estimatedSrcSize: u64,
-        dictSize: usize,
-    ) -> ZSTD_parameters;
-    #[link_name = "libzstd_safe_internal_ZSTD_checkCParams"]
-    fn internal_ZSTD_checkCParams(params: ZSTD_compressionParameters) -> usize;
-    #[link_name = "libzstd_safe_internal_ZSTD_adjustCParams"]
-    fn internal_ZSTD_adjustCParams(
-        cPar: ZSTD_compressionParameters,
-        srcSize: u64,
-        dictSize: usize,
-    ) -> ZSTD_compressionParameters;
-    #[link_name = "libzstd_safe_internal_ZSTD_maxCLevel"]
-    fn internal_ZSTD_maxCLevel() -> c_int;
-    #[link_name = "libzstd_safe_internal_ZSTD_minCLevel"]
-    fn internal_ZSTD_minCLevel() -> c_int;
-    #[link_name = "libzstd_safe_internal_ZSTD_defaultCLevel"]
-    fn internal_ZSTD_defaultCLevel() -> c_int;
+#[inline]
+fn native_core_shim_verifier_guard() {
+    #[cfg(debug_assertions)]
+    {
+        static VERIFIED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+        VERIFIED.get_or_init(|| {
+            let upstream_macro: String = [
+                'l', 'o', 'a', 'd', '_', 'u', 'p', 's', 't', 'r', 'e', 'a', 'm', '!',
+            ]
+            .into_iter()
+            .collect();
+            for (path, source) in [
+                ("block.rs", include_str!("block.rs")),
+                ("cctx.rs", include_str!("cctx.rs")),
+                ("cstream.rs", include_str!("cstream.rs")),
+                ("params.rs", include_str!("params.rs")),
+            ] {
+                debug_assert!(
+                    !source.contains(upstream_macro.as_str()),
+                    "{path} still contains upstream shim macros"
+                );
+            }
+        });
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_cParam_getBounds(cParam: ZSTD_cParameter) -> ZSTD_bounds {
-    type Fn = unsafe extern "C" fn(ZSTD_cParameter) -> ZSTD_bounds;
-    match load_upstream!("ZSTD_cParam_getBounds", Fn) {
-        Some(func) => unsafe { func(cParam) },
-        None => bounds_error(),
-    }
+    native_core_shim_verifier_guard();
+    cparam_bounds(cParam)
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_dParam_getBounds(dParam: ZSTD_dParameter) -> ZSTD_bounds {
-    type Fn = unsafe extern "C" fn(ZSTD_dParameter) -> ZSTD_bounds;
-    match load_upstream!("ZSTD_dParam_getBounds", Fn) {
-        Some(func) => unsafe { func(dParam) },
-        None => bounds_error(),
-    }
+    dparam_bounds(dParam)
 }
 
 #[no_mangle]
@@ -60,13 +56,7 @@ pub extern "C" fn ZSTD_getCParams(
     estimatedSrcSize: u64,
     dictSize: usize,
 ) -> ZSTD_compressionParameters {
-    // SAFETY: The linked helper uses the same ABI and returns the upstream result directly.
-    let params = unsafe { internal_ZSTD_getCParams(compressionLevel, estimatedSrcSize, dictSize) };
-    if params.windowLog == 0 {
-        default_cparams()
-    } else {
-        params
-    }
+    get_cparams(compressionLevel, estimatedSrcSize, dictSize)
 }
 
 #[no_mangle]
@@ -75,19 +65,15 @@ pub extern "C" fn ZSTD_getParams(
     estimatedSrcSize: u64,
     dictSize: usize,
 ) -> ZSTD_parameters {
-    // SAFETY: The linked helper uses the same ABI and returns the upstream result directly.
-    let params = unsafe { internal_ZSTD_getParams(compressionLevel, estimatedSrcSize, dictSize) };
-    if params.cParams.windowLog == 0 {
-        default_params()
-    } else {
-        params
-    }
+    get_params(compressionLevel, estimatedSrcSize, dictSize)
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_checkCParams(params: ZSTD_compressionParameters) -> usize {
-    // SAFETY: The linked helper uses the same ABI and validates the parameters directly.
-    unsafe { internal_ZSTD_checkCParams(params) }
+    match check_cparams(params) {
+        Ok(()) => 0,
+        Err(error) => error_result(error),
+    }
 }
 
 #[no_mangle]
@@ -96,34 +82,20 @@ pub extern "C" fn ZSTD_adjustCParams(
     srcSize: u64,
     dictSize: usize,
 ) -> ZSTD_compressionParameters {
-    // SAFETY: The linked helper uses the same ABI and returns the adjusted parameters directly.
-    unsafe { internal_ZSTD_adjustCParams(cPar, srcSize, dictSize) }
+    adjust_cparams(cPar, srcSize, dictSize)
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_maxCLevel() -> c_int {
-    // SAFETY: The linked helper uses the same ABI and returns the upstream maximum directly.
-    unsafe { internal_ZSTD_maxCLevel() }
+    22
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_minCLevel() -> c_int {
-    // SAFETY: The linked helper uses the same ABI and returns the upstream minimum directly.
-    let level = unsafe { internal_ZSTD_minCLevel() };
-    if level == 0 {
-        0i32.wrapping_sub(ZSTD_ErrorCode::ZSTD_error_GENERIC as c_int)
-    } else {
-        level
-    }
+    min_clevel()
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_defaultCLevel() -> c_int {
-    // SAFETY: The linked helper uses the same ABI and returns the upstream default directly.
-    let level = unsafe { internal_ZSTD_defaultCLevel() };
-    if level == 0 {
-        crate::ffi::types::ZSTD_CLEVEL_DEFAULT
-    } else {
-        level
-    }
+    ZSTD_CLEVEL_DEFAULT
 }

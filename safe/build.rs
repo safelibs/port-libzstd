@@ -49,7 +49,6 @@ fn upstream_lib_root(manifest_dir: &Path) -> PathBuf {
 
 fn upstream_phase4_sources(root: &Path, threading: bool) -> Vec<PathBuf> {
     let common = root.join("common");
-    let compress = root.join("compress");
     let decompress = root.join("decompress");
     let dict_builder = root.join("dictBuilder");
     let mut sources = vec![
@@ -59,18 +58,6 @@ fn upstream_phase4_sources(root: &Path, threading: bool) -> Vec<PathBuf> {
         common.join("fse_decompress.c"),
         common.join("xxhash.c"),
         common.join("zstd_common.c"),
-        compress.join("fse_compress.c"),
-        compress.join("hist.c"),
-        compress.join("huf_compress.c"),
-        compress.join("zstd_compress.c"),
-        compress.join("zstd_compress_literals.c"),
-        compress.join("zstd_compress_sequences.c"),
-        compress.join("zstd_compress_superblock.c"),
-        compress.join("zstd_double_fast.c"),
-        compress.join("zstd_fast.c"),
-        compress.join("zstd_lazy.c"),
-        compress.join("zstd_ldm.c"),
-        compress.join("zstd_opt.c"),
         decompress.join("huf_decompress.c"),
         decompress.join("zstd_ddict.c"),
         decompress.join("zstd_decompress.c"),
@@ -82,11 +69,7 @@ fn upstream_phase4_sources(root: &Path, threading: bool) -> Vec<PathBuf> {
     ];
 
     if threading {
-        sources.extend([
-            common.join("pool.c"),
-            common.join("threading.c"),
-            compress.join("zstdmt_compress.c"),
-        ]);
+        sources.extend([common.join("pool.c"), common.join("threading.c")]);
     }
 
     sources
@@ -184,7 +167,9 @@ fn compile_upstream_phase4_helpers(manifest_dir: &Path, threading: bool) {
             .arg("--defined-only")
             .arg(object)
             .output()
-            .unwrap_or_else(|error| panic!("failed to inspect {} with nm: {error}", object.display()));
+            .unwrap_or_else(|error| {
+                panic!("failed to inspect {} with nm: {error}", object.display())
+            });
         if !output.status.success() {
             panic!("nm failed for {}", object.display());
         }

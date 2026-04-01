@@ -4,8 +4,8 @@ use crate::{
     ffi::{
         decompress::{self, DictionaryUse},
         types::{
-            ZSTD_DCtx, ZSTD_DDict, ZSTD_ResetDirective, ZSTD_customMem,
-            ZSTD_dParameter, ZSTD_dictContentType_e, ZSTD_format_e,
+            ZSTD_DCtx, ZSTD_DDict, ZSTD_ResetDirective, ZSTD_customMem, ZSTD_dParameter,
+            ZSTD_dictContentType_e, ZSTD_format_e,
         },
     },
 };
@@ -46,7 +46,8 @@ pub extern "C" fn ZSTD_freeDCtx(dctx: *mut ZSTD_DCtx) -> usize {
 
 #[no_mangle]
 pub extern "C" fn ZSTD_copyDCtx(dctx: *mut ZSTD_DCtx, preparedDCtx: *const ZSTD_DCtx) {
-    let Ok(snapshot) = decompress::with_dctx_ref(preparedDCtx, |prepared| Ok(prepared.clone())) else {
+    let Ok(snapshot) = decompress::with_dctx_ref(preparedDCtx, |prepared| Ok(prepared.clone()))
+    else {
         return;
     };
     let _ = decompress::with_dctx_mut(dctx, |target| {
@@ -318,10 +319,7 @@ pub extern "C" fn ZSTD_DCtx_setFormat(dctx: *mut ZSTD_DCtx, format: ZSTD_format_
 }
 
 #[no_mangle]
-pub extern "C" fn ZSTD_DCtx_setMaxWindowSize(
-    dctx: *mut ZSTD_DCtx,
-    maxWindowSize: usize,
-) -> usize {
+pub extern "C" fn ZSTD_DCtx_setMaxWindowSize(dctx: *mut ZSTD_DCtx, maxWindowSize: usize) -> usize {
     match decompress::with_dctx_mut(dctx, |dctx| dctx.set_max_window_size(maxWindowSize)) {
         Ok(()) => 0,
         Err(code) => error_result(code),

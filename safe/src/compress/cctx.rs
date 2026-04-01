@@ -1,85 +1,33 @@
-use crate::ffi::{
-    compress::{generic_error, load_upstream, null_cctx},
-    types::{
-        ZSTD_CCtx, ZSTD_CCtx_params, ZSTD_ResetDirective, ZSTD_cParameter,
-        ZSTD_compressionParameters, ZSTD_customMem, ZSTD_dictContentType_e,
-        ZSTD_parameters,
+use crate::{
+    common::error::error_result,
+    ffi::{
+        compress::{
+            create_cctx, finalize_stream, flush_pending_to_dst, free_cctx, get_cparams,
+            load_dictionary, normalize_cparams, null_cctx, optional_src_slice, sizeof_cctx,
+            stage_legacy_input, stage_src_slice, to_result, validate_custom_mem, with_cctx_mut,
+            with_cctx_ref, write_frame_to_dst, EncoderContext,
+        },
+        types::{
+            ZSTD_CCtx, ZSTD_CCtx_params, ZSTD_ErrorCode, ZSTD_ResetDirective, ZSTD_cParameter,
+            ZSTD_compressionParameters, ZSTD_customMem, ZSTD_dictContentType_e, ZSTD_parameters,
+        },
     },
 };
 use core::ffi::{c_int, c_void};
 
-unsafe extern "C" {
-    #[link_name = "libzstd_safe_internal_ZSTD_createCCtx"]
-    fn internal_ZSTD_createCCtx() -> *mut ZSTD_CCtx;
-    #[link_name = "libzstd_safe_internal_ZSTD_freeCCtx"]
-    fn internal_ZSTD_freeCCtx(cctx: *mut ZSTD_CCtx) -> usize;
-    #[link_name = "libzstd_safe_internal_ZSTD_compressBound"]
-    fn internal_ZSTD_compressBound(srcSize: usize) -> usize;
-    #[link_name = "libzstd_safe_internal_ZSTD_CCtx_refPrefix_advanced"]
-    fn internal_ZSTD_CCtx_refPrefix_advanced(
-        cctx: *mut ZSTD_CCtx,
-        prefix: *const c_void,
-        prefixSize: usize,
-        dictContentType: ZSTD_dictContentType_e,
-    ) -> usize;
-    #[link_name = "libzstd_safe_internal_ZSTD_estimateCCtxSize"]
-    fn internal_ZSTD_estimateCCtxSize(compressionLevel: c_int) -> usize;
-    #[link_name = "libzstd_safe_internal_ZSTD_estimateCCtxSize_usingCCtxParams"]
-    fn internal_ZSTD_estimateCCtxSize_usingCCtxParams(params: *const ZSTD_CCtx_params) -> usize;
-    #[link_name = "libzstd_safe_internal_ZSTD_compress_advanced"]
-    fn internal_ZSTD_compress_advanced(
-        cctx: *mut ZSTD_CCtx,
-        dst: *mut c_void,
-        dstCapacity: usize,
-        src: *const c_void,
-        srcSize: usize,
-        dict: *const c_void,
-        dictSize: usize,
-        params: ZSTD_parameters,
-    ) -> usize;
-    #[link_name = "libzstd_safe_internal_ZSTD_estimateCCtxSize_usingCParams"]
-    fn internal_ZSTD_estimateCCtxSize_usingCParams(
-        cParams: ZSTD_compressionParameters,
-    ) -> usize;
-    #[link_name = "libzstd_safe_internal_ZSTD_createCCtx_advanced"]
-    fn internal_ZSTD_createCCtx_advanced(customMem: ZSTD_customMem) -> *mut ZSTD_CCtx;
-    #[link_name = "libzstd_safe_internal_ZSTD_CCtx_reset"]
-    fn internal_ZSTD_CCtx_reset(cctx: *mut ZSTD_CCtx, reset: ZSTD_ResetDirective) -> usize;
-    #[link_name = "libzstd_safe_internal_ZSTD_CCtx_setParameter"]
-    fn internal_ZSTD_CCtx_setParameter(
-        cctx: *mut ZSTD_CCtx,
-        param: ZSTD_cParameter,
-        value: c_int,
-    ) -> usize;
-    #[link_name = "libzstd_safe_internal_ZSTD_CCtx_setPledgedSrcSize"]
-    fn internal_ZSTD_CCtx_setPledgedSrcSize(
-        cctx: *mut ZSTD_CCtx,
-        pledgedSrcSize: u64,
-    ) -> usize;
-}
-
 #[no_mangle]
 pub extern "C" fn ZSTD_createCCtx() -> *mut ZSTD_CCtx {
-    let cctx = unsafe { internal_ZSTD_createCCtx() };
-    if cctx.is_null() {
-        null_cctx()
-    } else {
-        cctx
-    }
+    create_cctx()
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_freeCCtx(cctx: *mut ZSTD_CCtx) -> usize {
-    if cctx.is_null() {
-        0
-    } else {
-        unsafe { internal_ZSTD_freeCCtx(cctx) }
-    }
+    free_cctx(cctx)
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_compressBound(srcSize: usize) -> usize {
-    unsafe { internal_ZSTD_compressBound(srcSize) }
+    crate::ffi::compress::compress_bound(srcSize)
 }
 
 #[no_mangle]
@@ -90,11 +38,13 @@ pub extern "C" fn ZSTD_compress(
     srcSize: usize,
     compressionLevel: c_int,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(*mut c_void, usize, *const c_void, usize, c_int) -> usize;
-    match load_upstream!("ZSTD_compress", Fn) {
-        Some(func) => unsafe { func(dst, dstCapacity, src, srcSize, compressionLevel) },
-        None => generic_error(),
-    }
+    let Some(src) = optional_src_slice(src, srcSize) else {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    let mut ctx = EncoderContext::default();
+    ctx.compression_level = compressionLevel;
+    ctx.cparams = get_cparams(compressionLevel, src.len() as u64, 0);
+    to_result(write_frame_to_dst(&ctx, dst, dstCapacity, src))
 }
 
 #[no_mangle]
@@ -106,12 +56,15 @@ pub extern "C" fn ZSTD_compressCCtx(
     srcSize: usize,
     compressionLevel: c_int,
 ) -> usize {
-    type Fn =
-        unsafe extern "C" fn(*mut ZSTD_CCtx, *mut c_void, usize, *const c_void, usize, c_int) -> usize;
-    match load_upstream!("ZSTD_compressCCtx", Fn) {
-        Some(func) => unsafe { func(cctx, dst, dstCapacity, src, srcSize, compressionLevel) },
-        None => generic_error(),
-    }
+    let Some(src) = optional_src_slice(src, srcSize) else {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    to_result(with_cctx_ref(cctx, |_| {
+        let mut fresh = EncoderContext::default();
+        fresh.compression_level = compressionLevel;
+        fresh.cparams = get_cparams(compressionLevel, src.len() as u64, 0);
+        write_frame_to_dst(&fresh, dst, dstCapacity, src)
+    }))
 }
 
 #[no_mangle]
@@ -122,11 +75,15 @@ pub extern "C" fn ZSTD_compress2(
     src: *const c_void,
     srcSize: usize,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(*mut ZSTD_CCtx, *mut c_void, usize, *const c_void, usize) -> usize;
-    match load_upstream!("ZSTD_compress2", Fn) {
-        Some(func) => unsafe { func(cctx, dst, dstCapacity, src, srcSize) },
-        None => generic_error(),
-    }
+    let Some(src) = optional_src_slice(src, srcSize) else {
+        return error_result(ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    to_result(with_cctx_ref(cctx, |cctx| {
+        if cctx.sequence_producer.is_some() && !cctx.enable_seq_producer_fallback {
+            return Err(ZSTD_ErrorCode::ZSTD_error_sequenceProducer_failed);
+        }
+        write_frame_to_dst(cctx, dst, dstCapacity, src)
+    }))
 }
 
 #[no_mangle]
@@ -135,16 +92,22 @@ pub extern "C" fn ZSTD_copyCCtx(
     preparedCCtx: *const ZSTD_CCtx,
     pledgedSrcSize: u64,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(*mut ZSTD_CCtx, *const ZSTD_CCtx, u64) -> usize;
-    match load_upstream!("ZSTD_copyCCtx", Fn) {
-        Some(func) => unsafe { func(cctx, preparedCCtx, pledgedSrcSize) },
-        None => generic_error(),
-    }
+    to_result(with_cctx_ref(preparedCCtx, |prepared| {
+        let snapshot = prepared.clone();
+        with_cctx_mut(cctx, |cctx| {
+            *cctx = snapshot;
+            cctx.pledged_src_size = pledgedSrcSize;
+            Ok(0)
+        })
+    }))
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_CCtx_reset(cctx: *mut ZSTD_CCtx, reset: ZSTD_ResetDirective) -> usize {
-    unsafe { internal_ZSTD_CCtx_reset(cctx, reset) }
+    to_result(with_cctx_mut(cctx, |cctx| {
+        cctx.reset(reset);
+        Ok(0)
+    }))
 }
 
 #[no_mangle]
@@ -153,7 +116,10 @@ pub extern "C" fn ZSTD_CCtx_setParameter(
     param: ZSTD_cParameter,
     value: c_int,
 ) -> usize {
-    unsafe { internal_ZSTD_CCtx_setParameter(cctx, param, value) }
+    to_result(with_cctx_mut(cctx, |cctx| {
+        crate::ffi::compress::set_parameter(cctx, param, value)?;
+        Ok(0)
+    }))
 }
 
 #[no_mangle]
@@ -162,16 +128,21 @@ pub extern "C" fn ZSTD_CCtx_getParameter(
     param: ZSTD_cParameter,
     value: *mut c_int,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(*mut ZSTD_CCtx, ZSTD_cParameter, *mut c_int) -> usize;
-    match load_upstream!("ZSTD_CCtx_getParameter", Fn) {
-        Some(func) => unsafe { func(cctx, param, value) },
-        None => generic_error(),
-    }
+    to_result(with_cctx_ref(cctx, |cctx| {
+        let current = crate::ffi::compress::get_parameter(cctx, param)?;
+        if let Some(value) = unsafe { value.as_mut() } {
+            *value = current;
+        }
+        Ok(0)
+    }))
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_CCtx_setPledgedSrcSize(cctx: *mut ZSTD_CCtx, pledgedSrcSize: u64) -> usize {
-    unsafe { internal_ZSTD_CCtx_setPledgedSrcSize(cctx, pledgedSrcSize) }
+    to_result(with_cctx_mut(cctx, |cctx| {
+        cctx.pledged_src_size = pledgedSrcSize;
+        Ok(0)
+    }))
 }
 
 #[no_mangle]
@@ -185,31 +156,16 @@ pub extern "C" fn ZSTD_compress_usingDict(
     dictSize: usize,
     compressionLevel: c_int,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(
-        *mut ZSTD_CCtx,
-        *mut c_void,
-        usize,
-        *const c_void,
-        usize,
-        *const c_void,
-        usize,
-        c_int,
-    ) -> usize;
-    match load_upstream!("ZSTD_compress_usingDict", Fn) {
-        Some(func) => unsafe {
-            func(
-                cctx,
-                dst,
-                dstCapacity,
-                src,
-                srcSize,
-                dict,
-                dictSize,
-                compressionLevel,
-            )
-        },
-        None => generic_error(),
-    }
+    let Some(src) = optional_src_slice(src, srcSize) else {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    to_result(with_cctx_ref(cctx, |base| {
+        let mut temp = base.clone();
+        temp.compression_level = compressionLevel;
+        temp.cparams = get_cparams(compressionLevel, src.len() as u64, dictSize);
+        load_dictionary(&mut temp, dict, dictSize, compressionLevel)?;
+        write_frame_to_dst(&temp, dst, dstCapacity, src)
+    }))
 }
 
 #[no_mangle]
@@ -218,20 +174,23 @@ pub extern "C" fn ZSTD_CCtx_refPrefix(
     prefix: *const c_void,
     prefixSize: usize,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(*mut ZSTD_CCtx, *const c_void, usize) -> usize;
-    match load_upstream!("ZSTD_CCtx_refPrefix", Fn) {
-        Some(func) => unsafe { func(cctx, prefix, prefixSize) },
-        None => generic_error(),
-    }
+    let prefix = optional_src_slice(prefix, prefixSize);
+    to_result(with_cctx_mut(cctx, |cctx| {
+        cctx.set_prefix(prefix, ZSTD_dictContentType_e::ZSTD_dct_auto);
+        Ok(0)
+    }))
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_compressBegin(cctx: *mut ZSTD_CCtx, compressionLevel: c_int) -> usize {
-    type Fn = unsafe extern "C" fn(*mut ZSTD_CCtx, c_int) -> usize;
-    match load_upstream!("ZSTD_compressBegin", Fn) {
-        Some(func) => unsafe { func(cctx, compressionLevel) },
-        None => generic_error(),
-    }
+    to_result(with_cctx_mut(cctx, |cctx| {
+        cctx.reset(ZSTD_ResetDirective::ZSTD_reset_session_only);
+        cctx.set_dict(None);
+        cctx.compression_level = compressionLevel;
+        cctx.cparams = get_cparams(compressionLevel, 0, 0);
+        crate::ffi::compress::legacy_begin(cctx);
+        Ok(0)
+    }))
 }
 
 #[no_mangle]
@@ -241,11 +200,14 @@ pub extern "C" fn ZSTD_compressBegin_usingDict(
     dictSize: usize,
     compressionLevel: c_int,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(*mut ZSTD_CCtx, *const c_void, usize, c_int) -> usize;
-    match load_upstream!("ZSTD_compressBegin_usingDict", Fn) {
-        Some(func) => unsafe { func(cctx, dict, dictSize, compressionLevel) },
-        None => generic_error(),
-    }
+    to_result(with_cctx_mut(cctx, |cctx| {
+        cctx.reset(ZSTD_ResetDirective::ZSTD_reset_session_only);
+        cctx.compression_level = compressionLevel;
+        cctx.cparams = get_cparams(compressionLevel, 0, dictSize);
+        load_dictionary(cctx, dict, dictSize, compressionLevel)?;
+        crate::ffi::compress::legacy_begin(cctx);
+        Ok(0)
+    }))
 }
 
 #[no_mangle]
@@ -256,12 +218,15 @@ pub extern "C" fn ZSTD_compressBegin_advanced(
     params: ZSTD_parameters,
     pledgedSrcSize: u64,
 ) -> usize {
-    type Fn =
-        unsafe extern "C" fn(*mut ZSTD_CCtx, *const c_void, usize, ZSTD_parameters, u64) -> usize;
-    match load_upstream!("ZSTD_compressBegin_advanced", Fn) {
-        Some(func) => unsafe { func(cctx, dict, dictSize, params, pledgedSrcSize) },
-        None => generic_error(),
-    }
+    to_result(with_cctx_mut(cctx, |cctx| {
+        cctx.reset(ZSTD_ResetDirective::ZSTD_reset_session_only);
+        cctx.apply_params(params);
+        cctx.compression_level = params.cParams.strategy as c_int;
+        load_dictionary(cctx, dict, dictSize, cctx.compression_level)?;
+        crate::ffi::compress::legacy_begin(cctx);
+        cctx.pledged_src_size = pledgedSrcSize;
+        Ok(0)
+    }))
 }
 
 #[no_mangle]
@@ -272,11 +237,20 @@ pub extern "C" fn ZSTD_compressContinue(
     src: *const c_void,
     srcSize: usize,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(*mut ZSTD_CCtx, *mut c_void, usize, *const c_void, usize) -> usize;
-    match load_upstream!("ZSTD_compressContinue", Fn) {
-        Some(func) => unsafe { func(cctx, dst, dstCapacity, src, srcSize) },
-        None => generic_error(),
-    }
+    let Some(src) = optional_src_slice(src, srcSize) else {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    to_result(with_cctx_mut(cctx, |cctx| {
+        if !cctx.legacy_mode {
+            return Err(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_init_missing);
+        }
+        if cctx.dict.is_some() || cctx.prefix.is_some() {
+            stage_src_slice(cctx, src)?;
+        } else {
+            stage_legacy_input(cctx, src, false)?;
+        }
+        flush_pending_to_dst(cctx, dst, dstCapacity)
+    }))
 }
 
 #[no_mangle]
@@ -287,20 +261,30 @@ pub extern "C" fn ZSTD_compressEnd(
     src: *const c_void,
     srcSize: usize,
 ) -> usize {
-    type Fn = unsafe extern "C" fn(*mut ZSTD_CCtx, *mut c_void, usize, *const c_void, usize) -> usize;
-    match load_upstream!("ZSTD_compressEnd", Fn) {
-        Some(func) => unsafe { func(cctx, dst, dstCapacity, src, srcSize) },
-        None => generic_error(),
-    }
+    let Some(src) = optional_src_slice(src, srcSize) else {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    to_result(with_cctx_mut(cctx, |cctx| {
+        if !cctx.legacy_mode {
+            return Err(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_init_missing);
+        }
+        let result = if cctx.dict.is_some() || cctx.prefix.is_some() {
+            stage_src_slice(cctx, src)?;
+            finalize_stream(cctx).and_then(|_| flush_pending_to_dst(cctx, dst, dstCapacity))
+        } else {
+            stage_legacy_input(cctx, src, true)?;
+            flush_pending_to_dst(cctx, dst, dstCapacity)
+        };
+        if result.is_ok() {
+            cctx.clear_session();
+        }
+        result
+    }))
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_sizeof_CCtx(cctx: *const ZSTD_CCtx) -> usize {
-    type Fn = unsafe extern "C" fn(*const ZSTD_CCtx) -> usize;
-    match load_upstream!("ZSTD_sizeof_CCtx", Fn) {
-        Some(func) => unsafe { func(cctx) },
-        None => 0,
-    }
+    sizeof_cctx(cctx)
 }
 
 #[no_mangle]
@@ -310,22 +294,21 @@ pub extern "C" fn ZSTD_CCtx_refPrefix_advanced(
     prefixSize: usize,
     dictContentType: ZSTD_dictContentType_e,
 ) -> usize {
-    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
-    unsafe { internal_ZSTD_CCtx_refPrefix_advanced(cctx, prefix, prefixSize, dictContentType) }
+    let prefix = optional_src_slice(prefix, prefixSize);
+    to_result(with_cctx_mut(cctx, |cctx| {
+        cctx.set_prefix(prefix, dictContentType);
+        Ok(0)
+    }))
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_estimateCCtxSize(compressionLevel: c_int) -> usize {
-    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
-    unsafe { internal_ZSTD_estimateCCtxSize(compressionLevel) }
+    crate::ffi::compress::estimate_cctx_size_from_level(compressionLevel)
 }
 
 #[no_mangle]
-pub extern "C" fn ZSTD_estimateCCtxSize_usingCCtxParams(
-    params: *const ZSTD_CCtx_params,
-) -> usize {
-    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
-    unsafe { internal_ZSTD_estimateCCtxSize_usingCCtxParams(params) }
+pub extern "C" fn ZSTD_estimateCCtxSize_usingCCtxParams(params: *const ZSTD_CCtx_params) -> usize {
+    to_result(crate::ffi::compress::cctx_params_size(params))
 }
 
 #[no_mangle]
@@ -339,36 +322,34 @@ pub extern "C" fn ZSTD_compress_advanced(
     dictSize: usize,
     params: ZSTD_parameters,
 ) -> usize {
-    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
-    unsafe {
-        internal_ZSTD_compress_advanced(
-            cctx,
-            dst,
-            dstCapacity,
-            src,
-            srcSize,
-            dict,
-            dictSize,
-            params,
-        )
+    let Some(src) = optional_src_slice(src, srcSize) else {
+        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    to_result(with_cctx_ref(cctx, |base| {
+        let mut temp = base.clone();
+        temp.apply_params(params);
+        temp.cparams = normalize_cparams(params.cParams);
+        if dictSize != 0 {
+            let level = temp.compression_level;
+            load_dictionary(&mut temp, dict, dictSize, level)?;
+        }
+        write_frame_to_dst(&temp, dst, dstCapacity, src)
+    }))
+}
+
+#[no_mangle]
+pub extern "C" fn ZSTD_estimateCCtxSize_usingCParams(cParams: ZSTD_compressionParameters) -> usize {
+    match crate::ffi::compress::check_cparams(cParams) {
+        Ok(()) => crate::ffi::compress::estimate_cctx_size_from_cparams(cParams),
+        Err(error) => error_result(error),
     }
 }
 
 #[no_mangle]
-pub extern "C" fn ZSTD_estimateCCtxSize_usingCParams(
-    cParams: ZSTD_compressionParameters,
-) -> usize {
-    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
-    unsafe { internal_ZSTD_estimateCCtxSize_usingCParams(cParams) }
-}
-
-#[no_mangle]
 pub extern "C" fn ZSTD_createCCtx_advanced(customMem: ZSTD_customMem) -> *mut ZSTD_CCtx {
-    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
-    let cctx = unsafe { internal_ZSTD_createCCtx_advanced(customMem) };
-    if cctx.is_null() {
+    if !validate_custom_mem(customMem) {
         null_cctx()
     } else {
-        cctx
+        create_cctx()
     }
 }

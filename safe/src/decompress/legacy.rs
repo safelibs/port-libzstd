@@ -63,7 +63,8 @@ pub(crate) fn get_decompressed_size(src: &[u8]) -> u64 {
 
 pub(crate) fn find_frame_compressed_size(src: &[u8]) -> Result<usize, ZSTD_ErrorCode> {
     // SAFETY: `src` is a valid slice and we pass its pointer/length unchanged.
-    let result = unsafe { libzstd_safe_find_frame_compressed_size_legacy(src.as_ptr().cast(), src.len()) };
+    let result =
+        unsafe { libzstd_safe_find_frame_compressed_size_legacy(src.as_ptr().cast(), src.len()) };
     if result == 0 || !is_error_result(result) {
         return Ok(result);
     }

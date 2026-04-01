@@ -1,20 +1,34 @@
-use crate::ffi::types::{ZSTD_CCtx, ZSTD_frameProgression};
-
-unsafe extern "C" {
-    #[link_name = "libzstd_safe_internal_ZSTD_toFlushNow"]
-    fn internal_ZSTD_toFlushNow(cctx: *mut ZSTD_CCtx) -> usize;
-    #[link_name = "libzstd_safe_internal_ZSTD_getFrameProgression"]
-    fn internal_ZSTD_getFrameProgression(cctx: *const ZSTD_CCtx) -> ZSTD_frameProgression;
-}
+use crate::ffi::{
+    compress::with_cctx_ref,
+    types::{ZSTD_CCtx, ZSTD_frameProgression},
+};
 
 #[no_mangle]
 pub extern "C" fn ZSTD_toFlushNow(cctx: *mut ZSTD_CCtx) -> usize {
-    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
-    unsafe { internal_ZSTD_toFlushNow(cctx) }
+    with_cctx_ref(cctx, |cctx| {
+        Ok(cctx
+            .stream
+            .pending
+            .len()
+            .saturating_sub(cctx.stream.pending_pos))
+    })
+    .unwrap_or(0)
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_getFrameProgression(cctx: *const ZSTD_CCtx) -> ZSTD_frameProgression {
-    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
-    unsafe { internal_ZSTD_getFrameProgression(cctx) }
+    with_cctx_ref(cctx, |cctx| {
+        let ingested = (cctx.stream.input.len() + cctx.legacy_input.len()) as u64;
+        let produced = cctx.stream.pending.len() as u64;
+        let flushed = cctx.stream.pending_pos as u64;
+        Ok(ZSTD_frameProgression {
+            ingested,
+            consumed: ingested,
+            produced,
+            flushed,
+            currentJobID: 0,
+            nbActiveWorkers: u32::from(cctx.nb_workers > 0 || !cctx.thread_pool.is_null()),
+        })
+    })
+    .unwrap_or_default()
 }

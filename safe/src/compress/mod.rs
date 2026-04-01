@@ -5,6 +5,7 @@ pub mod block;
 pub mod cctx;
 pub mod cctx_params;
 pub mod cdict;
+pub mod compat;
 pub mod cstream;
 pub mod frame;
 pub mod ldm;

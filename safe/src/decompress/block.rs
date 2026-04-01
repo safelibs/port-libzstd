@@ -60,7 +60,9 @@ pub extern "C" fn ZSTD_decompressBlock(
     let Some(src) = crate::ffi::decompress::optional_src_slice(src, srcSize) else {
         return error_result(ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
     };
-    match with_dctx_mut(dctx, |dctx| decompress_block_body(dctx, dst, dstCapacity, src)) {
+    match with_dctx_mut(dctx, |dctx| {
+        decompress_block_body(dctx, dst, dstCapacity, src)
+    }) {
         Ok(size) => size,
         Err(code) => error_result(code),
     }

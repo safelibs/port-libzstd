@@ -968,6 +968,26 @@ pub(crate) fn decompress_block_body(
     decompress_block_continue(dctx, dst, dst_capacity, src, false)
 }
 
+pub(crate) fn insert_uncompressed_block(
+    dctx: &mut DecoderContext,
+    block: &[u8],
+) -> Result<usize, ZSTD_ErrorCode> {
+    let BufferlessStage::NeedBlockBody(header) = dctx.bufferless.stage.clone() else {
+        return Err(ZSTD_ErrorCode::ZSTD_error_stage_wrong);
+    };
+    if header.block_type != BlockType::Raw {
+        return Err(ZSTD_ErrorCode::ZSTD_error_corruption_detected);
+    }
+    if header.content_size != block.len() {
+        return Err(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong);
+    }
+
+    dctx.bufferless.decoded_prefix.extend_from_slice(block);
+    dctx.bufferless.frame_bytes.extend_from_slice(block);
+    finish_bufferless_block(dctx, header);
+    Ok(block.len())
+}
+
 fn output_remaining(output: &ZSTD_outBuffer) -> usize {
     output.size.saturating_sub(output.pos)
 }

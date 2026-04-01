@@ -7,29 +7,49 @@ REPO_ROOT=$(cd "$SAFE_ROOT/.." && pwd)
 BUILD_DIR="$SAFE_ROOT/target/capi-roundtrip"
 WORK_DIR="$BUILD_DIR/work"
 RUNTIME_DIR="$BUILD_DIR/runtime"
+CARGO_TARGET_DIR="$BUILD_DIR/cargo-target"
+SAFE_RELEASE_DIR="$CARGO_TARGET_DIR/release"
 EXAMPLES_DIR="$REPO_ROOT/original/libzstd-1.5.5+dfsg2/examples"
 DICT_FIXTURE="$REPO_ROOT/original/libzstd-1.5.5+dfsg2/tests/golden-dictionaries/http-dict-missing-symbols"
 
-mkdir -p "$BUILD_DIR" "$WORK_DIR" "$RUNTIME_DIR"
+mkdir -p "$BUILD_DIR" "$WORK_DIR" "$RUNTIME_DIR" "$CARGO_TARGET_DIR"
 
-resolve_upstream_lib() {
-    if [[ -n ${SAFE_UPSTREAM_LIB:-} ]]; then
-        printf '%s\n' "$SAFE_UPSTREAM_LIB"
+resolve_test_upstream_lib() {
+    local candidate
+    candidate=$(ldconfig -p 2>/dev/null | awk '/libzstd\.so\.1 / {print $NF; exit}')
+    if [[ -n $candidate && -e $candidate ]]; then
+        printf '%s\n' "$candidate"
         return 0
     fi
 
-    local candidate
-    candidate=$(ldconfig -p 2>/dev/null | awk '/libzstd\.so\.1 / {print $NF; exit}')
-    if [[ -z $candidate || ! -e $candidate ]]; then
-        echo "unable to resolve upstream libzstd.so.1" >&2
-        exit 1
-    fi
+    while IFS= read -r candidate; do
+        if [[ -e $candidate ]]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done < <(
+        find "$REPO_ROOT/original/libzstd-1.5.5+dfsg2" \
+            -path '*/lib/libzstd.so.1.5.5' \
+            -type f | sort
+    )
 
-    printf '%s\n' "$candidate"
+    echo "unable to resolve an upstream libzstd shared object for dictionary decode probes" >&2
+    exit 1
 }
 
-cargo build --manifest-path "$SAFE_ROOT/Cargo.toml" --release
-ln -sf "$SAFE_ROOT/target/release/libzstd.so" "$RUNTIME_DIR/libzstd.so.1"
+CARGO_TARGET_DIR="$CARGO_TARGET_DIR" cargo build --manifest-path "$SAFE_ROOT/Cargo.toml" --release
+if /usr/bin/rg -n '^[[:space:]]*load_upstream!\(' \
+    "$SAFE_ROOT/src/compress/block.rs" \
+    "$SAFE_ROOT/src/compress/cctx.rs" \
+    "$SAFE_ROOT/src/compress/cstream.rs" \
+    "$SAFE_ROOT/src/compress/params.rs"; then
+    echo "compression core still contains load_upstream! shims" >&2
+    exit 1
+fi
+
+ln -sf "$SAFE_RELEASE_DIR/libzstd.so" "$RUNTIME_DIR/libzstd.so.1"
+SAFE_TEST_UPSTREAM_LIB=$(resolve_test_upstream_lib)
+UPSTREAM_RUNTIME_DIR=$(dirname "$SAFE_TEST_UPSTREAM_LIB")
 
 CC_BIN=${CC:-cc}
 CFLAGS=(
@@ -44,14 +64,34 @@ CFLAGS=(
     -include
     sys/types.h
     -I"$SAFE_ROOT/include"
-    -L"$SAFE_ROOT/target/release"
+    -L"$SAFE_RELEASE_DIR"
     "-Wl,-rpath,$RUNTIME_DIR"
 )
 
 compile_c() {
     local src=$1
     local out=$2
-    "$CC_BIN" "${CFLAGS[@]}" "$src" -o "$out" -lzstd
+    "$CC_BIN" "${CFLAGS[@]}" "$src" -o "$out" -ldl -lzstd
+}
+
+compile_c_upstream() {
+    local src=$1
+    local out=$2
+    "$CC_BIN" \
+        -std=c11 \
+        -Wall \
+        -Wextra \
+        -Werror \
+        -D_POSIX_C_SOURCE=200809L \
+        -Wno-deprecated-declarations \
+        -Wno-unused-function \
+        -Wno-unused-parameter \
+        -include sys/types.h \
+        -I"$SAFE_ROOT/include" \
+        "-Wl,-rpath,$UPSTREAM_RUNTIME_DIR" \
+        "$src" \
+        "$SAFE_TEST_UPSTREAM_LIB" \
+        -o "$out"
 }
 
 compile_c "$SAFE_ROOT/tests/capi/roundtrip_smoke.c" "$BUILD_DIR/roundtrip_smoke"
@@ -65,7 +105,7 @@ compile_c "$EXAMPLES_DIR/simple_compression.c" "$BUILD_DIR/simple_compression"
 compile_c "$EXAMPLES_DIR/multiple_simple_compression.c" "$BUILD_DIR/multiple_simple_compression"
 compile_c "$EXAMPLES_DIR/multiple_streaming_compression.c" "$BUILD_DIR/multiple_streaming_compression"
 compile_c "$EXAMPLES_DIR/dictionary_compression.c" "$BUILD_DIR/dictionary_compression"
-compile_c "$EXAMPLES_DIR/dictionary_decompression.c" "$BUILD_DIR/dictionary_decompression"
+compile_c_upstream "$EXAMPLES_DIR/dictionary_decompression.c" "$BUILD_DIR/dictionary_decompression"
 
 STREAMING_WRAPPER="$BUILD_DIR/streaming_compression_wrapper.c"
 cat > "$STREAMING_WRAPPER" <<EOF
@@ -85,14 +125,13 @@ size_t safe_single_thread_set_parameter(ZSTD_CCtx* cctx, ZSTD_cParameter param, 
 EOF
 compile_c "$STREAMING_WRAPPER" "$BUILD_DIR/streaming_compression"
 
-export SAFE_UPSTREAM_LIB
-SAFE_UPSTREAM_LIB=$(resolve_upstream_lib)
 export LD_LIBRARY_PATH="$RUNTIME_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
-python - <<'PY'
+WORK_DIR="$WORK_DIR" python - <<'PY'
+import os
 from pathlib import Path
 
-work = Path("/home/yans/code/safelibs/ported/libzstd/safe/target/capi-roundtrip/work")
+work = Path(os.environ["WORK_DIR"])
 work.mkdir(parents=True, exist_ok=True)
 
 def sample_bytes(size: int, seed: int) -> bytes:
@@ -126,10 +165,12 @@ def sample_bytes(size: int, seed: int) -> bytes:
 (work / "input-three.txt").write_bytes(sample_bytes(160 * 1024 + 73, 0xDEADBEEF))
 PY
 
-"$BUILD_DIR/roundtrip_smoke" "$DICT_FIXTURE"
+SAFE_TEST_UPSTREAM_LIB="$SAFE_TEST_UPSTREAM_LIB" \
+    "$BUILD_DIR/roundtrip_smoke" "$DICT_FIXTURE"
 "$BUILD_DIR/bigdict_driver"
 "$BUILD_DIR/invalid_dictionaries_driver"
-"$BUILD_DIR/zstream_driver"
+SAFE_TEST_UPSTREAM_LIB="$SAFE_TEST_UPSTREAM_LIB" \
+    "$BUILD_DIR/zstream_driver" "$DICT_FIXTURE"
 "$BUILD_DIR/paramgrill_driver"
 "$BUILD_DIR/external_matchfinder_driver"
 
@@ -138,4 +179,8 @@ PY
 "$BUILD_DIR/streaming_compression" "$WORK_DIR/input-one.txt" 3 1
 "$BUILD_DIR/multiple_streaming_compression" "$WORK_DIR/input-one.txt" "$WORK_DIR/input-three.txt"
 "$BUILD_DIR/dictionary_compression" "$WORK_DIR/input-one.txt" "$WORK_DIR/input-two.txt" "$DICT_FIXTURE"
-"$BUILD_DIR/dictionary_decompression" "$WORK_DIR/input-one.txt.zst" "$WORK_DIR/input-two.txt.zst" "$DICT_FIXTURE"
+LD_LIBRARY_PATH="$UPSTREAM_RUNTIME_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    "$BUILD_DIR/dictionary_decompression" \
+    "$WORK_DIR/input-one.txt.zst" \
+    "$WORK_DIR/input-two.txt.zst" \
+    "$DICT_FIXTURE"
