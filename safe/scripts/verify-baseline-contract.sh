@@ -252,6 +252,8 @@ expected_sources = {
     "qemu",
     "curl",
     "tiff",
+    "rpm",
+    "zarchive",
 }
 matrix_sources = {entry["source_package"] for entry in matrix_entries}
 if matrix_sources != expected_sources:
@@ -269,6 +271,8 @@ expected_runtime = {
     "qemu": "test_qemu",
     "curl": "test_curl",
     "tiff": "test_tiff",
+    "rpm": "test_rpm",
+    "zarchive": "test_zarchive",
 }
 if runtime_lookup != expected_runtime:
     raise SystemExit("dependent matrix runtime test mapping is out of sync with test-original.sh")

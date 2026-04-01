@@ -80,3 +80,19 @@ compile_probe = "safe/tests/dependents/src/tiff_probe.c"
 compile_mode = "pkg-config-c"
 pkg_config_modules = ["libzstd"]
 runtime_test = "test_tiff"
+
+[[dependent]]
+source_package = "rpm"
+binary_package = "rpm"
+compile_probe = "safe/tests/dependents/src/rpm_probe.c"
+compile_mode = "pkg-config-c"
+pkg_config_modules = ["libzstd"]
+runtime_test = "test_rpm"
+
+[[dependent]]
+source_package = "zarchive"
+binary_package = "zarchive-tools"
+compile_probe = "safe/tests/dependents/src/zarchive_probe.c"
+compile_mode = "pkg-config-c"
+pkg_config_modules = ["libzstd"]
+runtime_test = "test_zarchive"

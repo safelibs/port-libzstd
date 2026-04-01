@@ -3,7 +3,7 @@
   "distribution": "Ubuntu",
   "release": "24.04",
   "suite": "noble",
-  "generated_on": "2026-03-27",
+  "generated_on": "2026-03-31",
   "selection_kind": "representative_diverse_subset",
   "notes": "This is a curated sample of Ubuntu 24.04 packages that build against libzstd and also ship runtime functionality that relies on libzstd. It is intentionally not exhaustive.",
   "packages": [
@@ -217,6 +217,43 @@
           "libtiff/tiff.h",
           "libtiff/tif_zstd.c",
           "tools/tiffcp.c"
+        ]
+      }
+    },
+    {
+      "binary_package": "rpm",
+      "source_package": "rpm",
+      "category": "package-management",
+      "dependency_kind": [
+        "build",
+        "runtime"
+      ],
+      "runtime_functionality": "rpm, rpmbuild, and rpm2cpio can build, inspect, and unpack RPM payloads that use zstd compression, including zstdio payloads selected through rpmbuild payload macros.",
+      "evidence": {
+        "build_dependency": "The rpm source package Build-Depends on libzstd-dev.",
+        "runtime_dependency": "rpm reaches libzstd1 through librpmio9t64 on Ubuntu Noble.",
+        "feature_refs": [
+          "rpm(8)",
+          "rpmbuild(8)",
+          "rpm2cpio(8)"
+        ]
+      }
+    },
+    {
+      "binary_package": "zarchive-tools",
+      "source_package": "zarchive",
+      "category": "archiving",
+      "dependency_kind": [
+        "build",
+        "runtime"
+      ],
+      "runtime_functionality": "zarchive can create and extract .za archives through libzarchive, exercising libzstd while round-tripping directory trees through zstd-compressed archive data.",
+      "evidence": {
+        "build_dependency": "The zarchive source package Build-Depends-Arch on libzstd-dev.",
+        "runtime_dependency": "zarchive-tools reaches libzstd1 through libzarchive0.1 on Ubuntu Noble.",
+        "feature_refs": [
+          "zarchive(1)",
+          "debian/control"
         ]
       }
     }

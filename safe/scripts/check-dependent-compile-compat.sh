@@ -39,16 +39,46 @@ common_flags = [
 
 matrix = tomllib.loads(matrix_path.read_text(encoding="utf-8"))
 dependents = json.loads(dependents_path.read_text(encoding="utf-8"))
-matrix_entries = {entry["source_package"]: entry for entry in matrix["dependent"]}
+expected_sources = [
+    "apt",
+    "dpkg",
+    "rsync",
+    "systemd",
+    "libarchive",
+    "btrfs-progs",
+    "squashfs-tools",
+    "qemu",
+    "curl",
+    "tiff",
+    "rpm",
+    "zarchive",
+]
+expected_runtime = {
+    "apt": "test_apt",
+    "dpkg": "test_dpkg",
+    "rsync": "test_rsync",
+    "systemd": "test_systemd",
+    "libarchive": "test_libarchive",
+    "btrfs-progs": "test_btrfs",
+    "squashfs-tools": "test_squashfs",
+    "qemu": "test_qemu",
+    "curl": "test_curl",
+    "tiff": "test_tiff",
+    "rpm": "test_rpm",
+    "zarchive": "test_zarchive",
+}
+
+matrix_list = matrix["dependent"]
+matrix_entries = {entry["source_package"]: entry for entry in matrix_list}
 source_order = [entry["source_package"] for entry in dependents["packages"]]
-matrix_sources = set(matrix_entries)
-json_sources = set(source_order)
-if matrix_sources != json_sources:
-    missing = sorted(json_sources - matrix_sources)
-    extra = sorted(matrix_sources - json_sources)
-    raise SystemExit(
-        f"dependent matrix mismatch: missing={missing or '[]'} extra={extra or '[]'}"
-    )
+matrix_order = [entry["source_package"] for entry in matrix_list]
+runtime_lookup = {entry["source_package"]: entry["runtime_test"] for entry in matrix_list}
+if source_order != expected_sources:
+    raise SystemExit(f"dependents.json source packages drifted: {source_order}")
+if matrix_order != expected_sources:
+    raise SystemExit(f"dependent_matrix.toml source packages drifted: {matrix_order}")
+if runtime_lookup != expected_runtime:
+    raise SystemExit("dependent runtime test mapping drifted from the frozen Phase 6 matrix")
 
 libzstd_dev = subprocess.run(
     ["dpkg-query", "-W", "-f=${Version}", "libzstd-dev"],
