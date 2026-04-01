@@ -8,6 +8,8 @@ UPSTREAM_ROOT="$REPO_ROOT/original/libzstd-1.5.5+dfsg2"
 
 VERSION=1.5.5
 SOURCE_DIR_NAME=libzstd-1.5.5+dfsg2
+CANONICAL_INSTALL_ROOT="$SAFE_ROOT/out/install/release-default"
+CANONICAL_HELPER_ROOT="$SAFE_ROOT/out/original-cli/lib"
 MULTIARCH=$(dpkg-architecture -qDEB_HOST_MULTIARCH)
 GNU_TYPE=$(dpkg-architecture -qDEB_HOST_GNU_TYPE)
 PROFILES=${DEB_BUILD_PROFILES:-}
@@ -39,6 +41,44 @@ import sys
 safe_root = pathlib.Path(sys.argv[1])
 upstream_root = pathlib.Path(sys.argv[2])
 params = sys.argv[3:]
+
+
+def skip_generated(entry: pathlib.Path, root: pathlib.Path) -> bool:
+    rel = entry.relative_to(root)
+    if any(part in {"obj", ".deps", ".libs", "__pycache__"} for part in rel.parts):
+        return True
+    if entry.suffix in {
+        ".o",
+        ".a",
+        ".d",
+        ".Td",
+        ".P",
+        ".so",
+        ".deb",
+        ".ddeb",
+        ".udeb",
+        ".changes",
+        ".buildinfo",
+        ".gcda",
+        ".gcno",
+        ".gcov",
+    }:
+        return True
+    if any(suffix in entry.name for suffix in (".so.",)):
+        return True
+    if entry.name in {
+        "zstd",
+        "zstd-compress",
+        "zstd-decompress",
+        "zstd-dictBuilder",
+        "zstd-frugal",
+        "zstd-nolegacy",
+        "zstd-small",
+        "zstd-nomt",
+        "pzstd",
+    }:
+        return True
+    return False
 
 h = hashlib.sha256()
 for value in params:
@@ -83,6 +123,8 @@ for path in paths:
         files = [path]
     root = safe_root if safe_root in path.parents or path == safe_root else upstream_root
     for entry in files:
+        if root == upstream_root and skip_generated(entry, root):
+            continue
         rel = entry.relative_to(root)
         h.update(root.name.encode("utf-8"))
         h.update(b":")
@@ -123,17 +165,25 @@ reuse_existing_build() {
         bash -c '
             set -euo pipefail
             source "$1"
-            printf "%s\n%s\n%s\n%s\n%s\n" \
+            printf "%s\n%s\n%s\n%s\n%s\n%s\n%s\n" \
                 "${BUILD_SIGNATURE:-}" \
                 "$STAGE_ROOT" \
                 "$PACKAGE_DIR" \
                 "$INSTALL_ROOT" \
-                "$SAFE_ENABLE_UDEB"
+                "$SAFE_ENABLE_UDEB" \
+                "${CANONICAL_INSTALL_ROOT:-}" \
+                "${CANONICAL_HELPER_ROOT:-}"
         ' bash "$METADATA_FILE"
     )
 
-    [[ ${#meta[@]} -eq 5 ]] || return 1
+    [[ ${#meta[@]} -eq 7 ]] || return 1
     [[ ${meta[0]} == "$desired_signature" ]] || return 1
+    [[ ${meta[1]} == "$STAGE_ROOT" ]] || return 1
+    [[ ${meta[2]} == "$PACKAGE_DIR" ]] || return 1
+    [[ ${meta[3]} == "$INSTALL_ROOT" ]] || return 1
+    [[ ${meta[5]} == "$CANONICAL_INSTALL_ROOT" ]] || return 1
+    [[ ${meta[6]} == "$CANONICAL_HELPER_ROOT" ]] || return 1
+    [[ -d ${meta[1]} ]] || return 1
     build_outputs_present "${meta[2]}" "${meta[3]}" "${meta[4]}" || return 1
 
     if [[ $BUILD_TAG == default ]]; then
@@ -323,6 +373,8 @@ GNU_TYPE='$GNU_TYPE'
 VERSION='$VERSION'
 SAFE_ENABLE_UDEB='$SAFE_ENABLE_UDEB'
 BUILD_SIGNATURE='$BUILD_SIGNATURE'
+CANONICAL_INSTALL_ROOT='$CANONICAL_INSTALL_ROOT'
+CANONICAL_HELPER_ROOT='$CANONICAL_HELPER_ROOT'
 EOF
 
 printf 'staged source tree: %s\n' "$STAGE_ROOT"

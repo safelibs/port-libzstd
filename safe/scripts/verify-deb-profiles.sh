@@ -6,14 +6,31 @@ SAFE_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 REPO_ROOT=$(cd "$SAFE_ROOT/.." && pwd)
 UPSTREAM_SO="$REPO_ROOT/original/libzstd-1.5.5+dfsg2/lib/libzstd.so.1.5.5"
 
-bash "$SAFE_ROOT/scripts/build-deb.sh"
+ensure_default_phase4_roots() {
+    bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release
+    bash "$SAFE_ROOT/scripts/build-original-cli-against-safe.sh"
+    bash "$SAFE_ROOT/scripts/build-deb.sh"
+}
+
+ensure_default_phase4_roots
 DEB_BUILD_PROFILES=noudeb bash "$SAFE_ROOT/scripts/build-deb.sh"
 
 source "$SAFE_ROOT/out/deb/default/metadata.env"
 DEFAULT_PACKAGE_DIR=$PACKAGE_DIR
 DEFAULT_INSTALL_ROOT=$INSTALL_ROOT
+DEFAULT_CANONICAL_INSTALL_ROOT=$CANONICAL_INSTALL_ROOT
+DEFAULT_CANONICAL_HELPER_ROOT=$CANONICAL_HELPER_ROOT
 source "$SAFE_ROOT/out/deb/noudeb/metadata.env"
 NOUDEB_PACKAGE_DIR=$PACKAGE_DIR
+
+[[ -d $DEFAULT_CANONICAL_INSTALL_ROOT ]] || {
+    printf 'missing canonical install root: %s\n' "$DEFAULT_CANONICAL_INSTALL_ROOT" >&2
+    exit 1
+}
+[[ -d $DEFAULT_CANONICAL_HELPER_ROOT ]] || {
+    printf 'missing canonical helper root: %s\n' "$DEFAULT_CANONICAL_HELPER_ROOT" >&2
+    exit 1
+}
 
 for pkg in libzstd1 libzstd-dev zstd; do
     compgen -G "$DEFAULT_PACKAGE_DIR/${pkg}_*.deb" >/dev/null || {

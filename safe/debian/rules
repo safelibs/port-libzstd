@@ -16,6 +16,19 @@ OBJDIR := $(CURDIR)/obj-${DEB_HOST_GNU_TYPE}
 MANDIR := $(CURDIR)/debian/zstd/usr/share/man/man1
 UDEB_PACKAGE := libzstd1-udeb
 UDEB_MARKER := .safelibs-enable-udeb
+SAFE_BUILD_ARTIFACTS_ARGS := \
+	--release \
+	--prefix /usr \
+	--libdir /usr/lib/${DEB_HOST_MULTIARCH} \
+	--includedir /usr/include \
+	--multiarch ${DEB_HOST_MULTIARCH} \
+	--no-install-cmake
+SAFE_BUILD_CLI_ARGS := \
+	--source-root $(CURDIR) \
+	--prefix /usr \
+	--libdir /usr/lib/${DEB_HOST_MULTIARCH} \
+	--includedir /usr/include \
+	--multiarch ${DEB_HOST_MULTIARCH}
 
 ifeq (,$(filter terse,$(DEB_BUILD_OPTIONS)))
 export V=1
@@ -31,40 +44,26 @@ override_dh_auto_clean:
 	$(RM) -r $(INSTALL_ROOT) $(CURDIR)/out $(CURDIR)/target $(CURDIR)/obj-*
 
 override_dh_auto_build:
-	bash scripts/build-artifacts.sh --release \
+	bash scripts/build-artifacts.sh \
+		$(SAFE_BUILD_ARTIFACTS_ARGS) \
 		--destdir $(BUILD_STAGE_ROOT) \
-		--objdir $(OBJDIR) \
-		--prefix /usr \
-		--libdir /usr/lib/${DEB_HOST_MULTIARCH} \
-		--includedir /usr/include \
-		--multiarch ${DEB_HOST_MULTIARCH} \
-		--no-install-cmake
+		--objdir $(OBJDIR)
 	bash scripts/build-original-cli-against-safe.sh \
-		--source-root $(CURDIR) \
+		$(SAFE_BUILD_CLI_ARGS) \
 		--artifact-root $(BUILD_STAGE_ROOT) \
 		--work-root $(CURDIR)/out/original-cli-build \
-		--destdir $(BUILD_STAGE_ROOT) \
-		--prefix /usr \
-		--libdir /usr/lib/${DEB_HOST_MULTIARCH} \
-		--multiarch ${DEB_HOST_MULTIARCH}
+		--destdir $(BUILD_STAGE_ROOT)
 
 override_dh_auto_install:
-	bash scripts/build-artifacts.sh --release \
+	bash scripts/build-artifacts.sh \
+		$(SAFE_BUILD_ARTIFACTS_ARGS) \
 		--destdir $(INSTALL_ROOT) \
-		--objdir $(OBJDIR) \
-		--prefix /usr \
-		--libdir /usr/lib/${DEB_HOST_MULTIARCH} \
-		--includedir /usr/include \
-		--multiarch ${DEB_HOST_MULTIARCH} \
-		--no-install-cmake
+		--objdir $(OBJDIR)
 	bash scripts/build-original-cli-against-safe.sh \
-		--source-root $(CURDIR) \
+		$(SAFE_BUILD_CLI_ARGS) \
 		--artifact-root $(INSTALL_ROOT) \
 		--work-root $(CURDIR)/out/original-cli-install \
-		--destdir $(INSTALL_ROOT) \
-		--prefix /usr \
-		--libdir /usr/lib/${DEB_HOST_MULTIARCH} \
-		--multiarch ${DEB_HOST_MULTIARCH}
+		--destdir $(INSTALL_ROOT)
 
 override_dh_auto_test:
 	:

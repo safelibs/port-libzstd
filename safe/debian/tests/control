@@ -1,4 +1,4 @@
-Test-Command: zstd -b1 >/dev/null 2>&1
+Test-Command: test "$(printf %s KLUv/QRYqQAAc2FmZWxpYnMgYXV0b3BrZ3Rlc3QKnEhfMw== | base64 -d | zstd -q -d -c)" = "safelibs autopkgtest"
 Features: test-name=zstd-selftest
 
 Test-Command: env PYTHONPATH="$(pwd)/debian/tests/python" python3 -B -u -m check_build -c debian/tests/ztest/programs.toml -v -- pkg-make

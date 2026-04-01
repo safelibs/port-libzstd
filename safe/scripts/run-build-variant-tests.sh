@@ -5,6 +5,14 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SAFE_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 MULTIARCH=$(dpkg-architecture -qDEB_HOST_MULTIARCH)
 
+ensure_default_phase4_roots() {
+    bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release
+    bash "$SAFE_ROOT/scripts/build-original-cli-against-safe.sh"
+    bash "$SAFE_ROOT/scripts/build-deb.sh"
+}
+
+ensure_default_phase4_roots
+
 bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release
 bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release --variant mt
 bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release --variant nomt
@@ -41,7 +49,7 @@ if grep -q 'Libs.private: -pthread' "$NOMT_LIBDIR/pkgconfig/libzstd.pc"; then
     exit 1
 fi
 
-nm -A "$DEFAULT_LIBDIR/libzstd.a" | rg -q 'pthread_' && {
+nm -A "$DEFAULT_LIBDIR/libzstd.a" 2>/dev/null | rg -q 'pthread_' && {
     printf 'default static archive still carries pthread references\n' >&2
     exit 1
 }

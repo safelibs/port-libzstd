@@ -31,7 +31,8 @@ Description: fast lossless compression algorithm -- development files
  Zstd, short for Zstandard, is a fast lossless compression algorithm, targeting
  real-time compression scenarios at zlib-level compression ratio.
  .
- This package contains the headers and static library.
+ This package contains the headers, static library, pkg-config metadata, and
+ CMake package metadata.
 
 Package: libzstd1
 Architecture: any
@@ -55,7 +56,7 @@ Description: fast lossless compression algorithm -- CLI tool
  Zstd, short for Zstandard, is a fast lossless compression algorithm, targeting
  real-time compression scenarios at zlib-level compression ratio.
  .
- This package contains the CLI program implementing zstd.
+ This package contains the CLI programs implementing zstd, zstdmt, and pzstd.
 
 Package: libzstd1-udeb
 Architecture: any

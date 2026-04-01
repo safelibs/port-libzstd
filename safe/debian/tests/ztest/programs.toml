@@ -2,6 +2,8 @@
 major = 0
 minor = 1
 
+# These sample builds are copied into the safe-staged Debian source tree and
+# exercised against the safe package outputs only.
 [program.pkg-make]
 executable = "ztest"
 

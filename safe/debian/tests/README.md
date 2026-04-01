@@ -10,6 +10,11 @@ programs in a temporary build directory. The programs are listed in
 a TOML configuration file, along with the commands to build and
 test them.
 
+In the safelibs packaging flow the entire `debian/tests/` tree is
+checked in under `safe/debian/tests/` and copied into the safe-staged
+Debian source tree under `safe/out/debian-src/default/`. These tests do
+not rely on symlinks back into `../original`.
+
 ## Configuration file structure
 
 The file describing the subdirectories with the programs to be built has

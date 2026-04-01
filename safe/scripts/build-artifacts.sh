@@ -17,7 +17,7 @@ OBJDIR=
 INSTALL_CMAKE=1
 
 compute_build_signature() {
-    python3 - "$SAFE_ROOT" "$PROFILE" "$VARIANT" "$PREFIX" "$LIBDIR" "$INCLUDEDIR" "$MULTIARCH" "$INSTALL_CMAKE" <<'PY'
+    python3 - "$SAFE_ROOT" "$VERSION" "$SONAME" "$PROFILE" "$VARIANT" "$PREFIX" "$LIBDIR" "$INCLUDEDIR" "$MULTIARCH" "$INSTALL_CMAKE" <<'PY'
 from __future__ import annotations
 
 import hashlib

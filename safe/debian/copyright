@@ -37,6 +37,10 @@ Copyright:
 License: Expat
 
 Files: debian/tests/*
+       debian/tests/python/check_build/*
+       debian/tests/requirements/*
+       debian/tests/ztest/*
+       debian/tests/ztest/*/*
 Copyright: Peter Pentchev <roam@ringlet.net>
 License: BSD-2-Clause
 

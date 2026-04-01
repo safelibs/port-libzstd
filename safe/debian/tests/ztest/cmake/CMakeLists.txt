@@ -22,11 +22,11 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 
-cmake_minimum_required(VERSION 3.0.0)
+cmake_minimum_required(VERSION 3.16)
 
 project(ztest VERSION 0.1.0)
 
-find_package(zstd CONFIG QUIET)
+find_package(zstd CONFIG REQUIRED)
 
 set(CPPFLAGS -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700)
 set(CFLAGS -O -g -pipe -std=c99)

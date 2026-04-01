@@ -86,6 +86,40 @@ class NotSourceError(ProcessError):
         return f"Not a source directory: {self.origdir}"
 
 
+@dataclasses.dataclass
+class EscapeSymlinkError(ProcessError):
+    """A source-tree symlink escapes the checked-in autopkgtest tree."""
+
+    path: pathlib.Path
+    target: pathlib.Path
+    topdir: pathlib.Path
+
+    def __str__(self) -> str:
+        """Provide a human-readable description of the error."""
+        return (
+            f"The {self.path} symlink resolves to {self.target}, "
+            f"outside the {self.topdir} autopkgtest tree"
+        )
+
+
+def _assert_tree_is_self_contained(cfg: defs.Config, origdir: pathlib.Path) -> None:
+    """Reject symlinks that point outside the checked-in safe test tree."""
+    def _is_relative_to(path: pathlib.Path, root: pathlib.Path) -> bool:
+        try:
+            path.relative_to(root)
+        except ValueError:
+            return False
+        return True
+
+    for path in origdir.rglob("*"):
+        if not path.is_symlink():
+            continue
+        target = path.resolve()
+        if _is_relative_to(target, cfg.topdir):
+            continue
+        raise EscapeSymlinkError(path, target, cfg.topdir)
+
+
 def _run_commands(
     cfg: defs.Config, tag: str, commands: list[list[str]], *, cwd: pathlib.Path
 ) -> None:
@@ -157,6 +191,8 @@ def build_and_test(cfg: defs.Config, prog: str) -> None:
     origdir: Final = cfg.topdir / prog
     if not origdir.is_dir():
         raise NotSourceError(origdir)
+
+    _assert_tree_is_self_contained(cfg, origdir)
 
     with tempfile.TemporaryDirectory(prefix="check-build.") as tempd_obj:
         tempd: Final = pathlib.Path(tempd_obj)

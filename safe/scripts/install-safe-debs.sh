@@ -14,22 +14,6 @@ usage: install-safe-debs.sh [--skip-build] [--package-dir PATH]
 EOF
 }
 
-deb_outputs_stale() {
-    [[ ! -f $METADATA_FILE ]] && return 0
-
-    find \
-        "$SAFE_ROOT/Cargo.toml" \
-        "$SAFE_ROOT/build.rs" \
-        "$SAFE_ROOT/src" \
-        "$SAFE_ROOT/include" \
-        "$SAFE_ROOT/cmake" \
-        "$SAFE_ROOT/pkgconfig" \
-        "$SAFE_ROOT/debian" \
-        "$SAFE_ROOT/scripts/build-artifacts.sh" \
-        "$SAFE_ROOT/scripts/build-deb.sh" \
-        -newer "$METADATA_FILE" -print -quit | grep -q .
-}
-
 find_one_package() {
     local pattern=$1
     local -a matches=()
@@ -45,6 +29,12 @@ find_one_package() {
     fi
 
     printf '%s\n' "${matches[0]}"
+}
+
+ensure_default_phase4_roots() {
+    bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release
+    bash "$SAFE_ROOT/scripts/build-original-cli-against-safe.sh"
+    bash "$SAFE_ROOT/scripts/build-deb.sh"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -75,8 +65,8 @@ if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
 fi
 
 if [[ -z $PACKAGE_DIR_OVERRIDE ]]; then
-    if [[ $SKIP_BUILD -eq 0 ]] && deb_outputs_stale; then
-        bash "$SAFE_ROOT/scripts/build-deb.sh"
+    if [[ $SKIP_BUILD -eq 0 ]]; then
+        ensure_default_phase4_roots
     fi
     source "$METADATA_FILE"
     PACKAGE_DIR_OVERRIDE=${PACKAGE_DIR:?}
