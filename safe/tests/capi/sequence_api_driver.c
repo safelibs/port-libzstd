@@ -100,6 +100,43 @@ int main(void)
     CHECK_ZSTD(ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 4));
     generated = ZSTD_generateSequences(cctx, seqs, seqCapacity, src, srcSize);
     CHECK(generated <= seqCapacity, "ZSTD_generateSequences failed\n");
+    CHECK(ZSTD_sequenceBound(srcSize) >= generated, "sequence bound contract violated\n");
+    CHECK(generated > 0, "ZSTD_generateSequences unexpectedly produced no sequences\n");
+    {
+        size_t i;
+        int hasMatch = 0;
+        for (i = 0; i < generated; ++i) {
+            if (seqs[i].offset != 0 && seqs[i].matchLength != 0) {
+                hasMatch = 1;
+                break;
+            }
+        }
+        CHECK(hasMatch, "ZSTD_generateSequences failed to emit match sequences\n");
+    }
+
+    compressedSize = ZSTD_compressSequences(cctx, compressedA, ZSTD_compressBound(srcSize),
+                                            seqs, generated, src, srcSize);
+    CHECK(!ZSTD_isError(compressedSize), "ZSTD_compressSequences(generated default) failed: %s\n",
+          ZSTD_getErrorName(compressedSize));
+    CHECK(check_roundtrip(src, srcSize, compressedA, compressedSize) == 0,
+          "generated sequence roundtrip failed\n");
+
+    {
+        ZSTD_Sequence literalOnly = { 0, (unsigned int)srcSize, 0, 0 };
+        size_t literalOnlySize;
+        CHECK_ZSTD(ZSTD_CCtx_reset(cctx, ZSTD_reset_session_and_parameters));
+        CHECK_ZSTD(ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 4));
+        literalOnlySize = ZSTD_compressSequences(cctx, compressedB, ZSTD_compressBound(srcSize),
+                                                 &literalOnly, 1, src, srcSize);
+        CHECK(!ZSTD_isError(literalOnlySize),
+              "ZSTD_compressSequences(all literals default) failed: %s\n",
+              ZSTD_getErrorName(literalOnlySize));
+        CHECK(check_roundtrip(src, srcSize, compressedB, literalOnlySize) == 0,
+              "default all-literals roundtrip failed\n");
+        CHECK(literalOnlySize != compressedSize ||
+                  memcmp(compressedA, compressedB, compressedSize) != 0,
+              "generated sequences collapsed to the all-literals stream\n");
+    }
 
     CHECK_ZSTD(ZSTD_CCtx_reset(cctx, ZSTD_reset_session_and_parameters));
     CHECK_ZSTD(ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 4));
@@ -126,6 +163,51 @@ int main(void)
           ZSTD_getErrorName(compressedSize));
     CHECK(check_roundtrip(src, srcSize, compressedB, compressedSize) == 0,
           "merged sequence roundtrip failed\n");
+
+    {
+        size_t const literalSrcSize = 64U * 1024U;
+        unsigned char* const literalSrc = (unsigned char*)malloc(literalSrcSize);
+        ZSTD_Sequence literalSeq = {0, 0, 0, 0};
+        ZSTD_Sequence invalidSeq = {0, 0, 4, 0};
+        size_t referenceSize;
+
+        CHECK(literalSrc != NULL, "allocation failure\n");
+        fill_sample(literalSrc, literalSrcSize, 0x1A2B3C4DU);
+        literalSeq.litLength = (unsigned int)literalSrcSize;
+        invalidSeq.offset = (unsigned int)(literalSrcSize + 1U);
+
+        CHECK_ZSTD(ZSTD_CCtx_reset(cctx, ZSTD_reset_session_and_parameters));
+        CHECK_ZSTD(ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 4));
+        CHECK_ZSTD(ZSTD_CCtx_setParameter(cctx, ZSTD_c_blockDelimiters,
+                                          ZSTD_sf_explicitBlockDelimiters));
+        CHECK_ZSTD(ZSTD_CCtx_setParameter(cctx, ZSTD_c_validateSequences, 1));
+        compressedSize = ZSTD_compressSequences(cctx, compressedA, ZSTD_compressBound(literalSrcSize),
+                                                &literalSeq, 1, literalSrc, literalSrcSize);
+        CHECK(!ZSTD_isError(compressedSize), "ZSTD_compressSequences(all literals) failed: %s\n",
+              ZSTD_getErrorName(compressedSize));
+        CHECK(check_roundtrip(literalSrc, literalSrcSize, compressedA, compressedSize) == 0,
+              "all-literals sequence roundtrip failed\n");
+
+        CHECK_ZSTD(ZSTD_CCtx_reset(cctx, ZSTD_reset_session_and_parameters));
+        CHECK_ZSTD(ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 4));
+        referenceSize = ZSTD_compress2(cctx, compressedB, ZSTD_compressBound(literalSrcSize),
+                                       literalSrc, literalSrcSize);
+        CHECK(!ZSTD_isError(referenceSize), "ZSTD_compress2(reference) failed: %s\n",
+              ZSTD_getErrorName(referenceSize));
+        CHECK(referenceSize != compressedSize ||
+                  memcmp(compressedA, compressedB, compressedSize) != 0,
+              "all-literals sequence stream should change compression behavior\n");
+
+        CHECK_ZSTD(ZSTD_CCtx_reset(cctx, ZSTD_reset_session_and_parameters));
+        CHECK_ZSTD(ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 4));
+        CHECK_ZSTD(ZSTD_CCtx_setParameter(cctx, ZSTD_c_validateSequences, 1));
+        compressedSize = ZSTD_compressSequences(cctx, compressedC, ZSTD_compressBound(literalSrcSize),
+                                                &invalidSeq, 1, literalSrc, literalSrcSize);
+        CHECK(ZSTD_isError(compressedSize),
+              "ZSTD_c_validateSequences failed to reject invalid input\n");
+
+        free(literalSrc);
+    }
 
     CHECK_ZSTD(ZSTD_CCtx_reset(cctx, ZSTD_reset_session_and_parameters));
     CHECK_ZSTD(ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 3));

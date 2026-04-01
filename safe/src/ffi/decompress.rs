@@ -7,18 +7,52 @@ use crate::{
     },
     ffi::types::{
         ZSTD_DCtx, ZSTD_DDict, ZSTD_ErrorCode, ZSTD_dParameter, ZSTD_dictContentType_e,
-        ZSTD_format_e, ZSTD_inBuffer, ZSTD_outBuffer,
+        ZSTD_dictLoadMethod_e, ZSTD_format_e, ZSTD_inBuffer, ZSTD_outBuffer,
     },
 };
-use core::ffi::c_void;
+use core::{ffi::c_void, mem::size_of};
 
 fn validate_formatted_dictionary(bytes: &[u8]) -> Result<(), ZSTD_ErrorCode> {
     if bytes.len() < 8 {
         return Err(ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted);
     }
-    structured_zstd::decoding::Dictionary::decode_dict(bytes)
-        .map(|_| ())
-        .map_err(|_| ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted)
+    if structured_zstd::decoding::Dictionary::decode_dict(bytes).is_ok()
+        || crate::dict_builder::zdict::formatted_dictionary_content(bytes).is_ok()
+    {
+        Ok(())
+    } else {
+        Err(ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted)
+    }
+}
+
+#[derive(Clone, Debug)]
+enum DecoderDictionaryStorage {
+    Owned(Vec<u8>),
+    Referenced(*const u8, usize),
+}
+
+impl DecoderDictionaryStorage {
+    fn owned(bytes: &[u8]) -> Self {
+        Self::Owned(bytes.to_vec())
+    }
+
+    fn referenced(ptr: *const u8, len: usize) -> Self {
+        Self::Referenced(ptr, len)
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        match self {
+            Self::Owned(bytes) => bytes.as_slice(),
+            Self::Referenced(ptr, len) => unsafe { core::slice::from_raw_parts(*ptr, *len) },
+        }
+    }
+
+    fn heap_size(&self) -> usize {
+        match self {
+            Self::Owned(bytes) => alloc::heap_bytes(bytes.len()),
+            Self::Referenced(_, _) => 0,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -96,9 +130,10 @@ impl DictionarySelection {
 
 #[derive(Clone, Debug)]
 pub(crate) struct DecoderDictionary {
-    pub raw: Vec<u8>,
+    storage: DecoderDictionaryStorage,
     pub dict_id: u32,
     pub formatted: bool,
+    static_workspace_size: usize,
 }
 
 impl DecoderDictionary {
@@ -127,27 +162,44 @@ impl DecoderDictionary {
             }
         };
         Ok(Self {
-            raw: bytes.to_vec(),
+            storage: DecoderDictionaryStorage::owned(bytes),
             dict_id: if formatted {
                 crate::decompress::fse::formatted_dict_id(bytes)
             } else {
                 0
             },
             formatted,
+            static_workspace_size: 0,
         })
+    }
+
+    fn from_storage(
+        storage: DecoderDictionaryStorage,
+        dict_content_type: ZSTD_dictContentType_e,
+        static_workspace_size: usize,
+    ) -> Result<Self, ZSTD_ErrorCode> {
+        let bytes = storage.as_slice();
+        let mut ddict = Self::from_bytes_with_content_type(bytes, dict_content_type)?;
+        ddict.storage = storage;
+        ddict.static_workspace_size = static_workspace_size;
+        Ok(ddict)
     }
 
     pub(crate) fn as_dictionary_ref(&self) -> DictionaryRef<'_> {
         if self.formatted {
             let _ = self.dict_id;
-            DictionaryRef::Formatted(&self.raw)
+            DictionaryRef::Formatted(self.storage.as_slice())
         } else {
-            DictionaryRef::Raw(&self.raw)
+            DictionaryRef::Raw(self.storage.as_slice())
         }
     }
 
     pub(crate) fn heap_size(&self) -> usize {
-        alloc::heap_bytes(self.raw.len())
+        self.storage.heap_size()
+    }
+
+    pub(crate) fn workspace_size(&self) -> usize {
+        self.static_workspace_size
     }
 }
 
@@ -327,6 +379,7 @@ impl BufferlessState {
 
 #[derive(Clone, Debug)]
 pub(crate) struct DecoderContext {
+    pub(crate) static_workspace_size: usize,
     pub format: ZSTD_format_e,
     pub max_window_size: usize,
     stable_out_buffer: i32,
@@ -341,6 +394,7 @@ pub(crate) struct DecoderContext {
 impl Default for DecoderContext {
     fn default() -> Self {
         Self {
+            static_workspace_size: 0,
             format: ZSTD_format_e::ZSTD_f_zstd1,
             max_window_size: (1usize << frame::ZSTD_WINDOWLOG_LIMIT_DEFAULT) + 1,
             stable_out_buffer: 0,
@@ -356,7 +410,7 @@ impl Default for DecoderContext {
 
 impl DecoderContext {
     pub(crate) fn sizeof(&self) -> usize {
-        alloc::base_size::<Self>()
+        self.static_workspace_size.max(alloc::base_size::<Self>())
             + match &self.dict {
                 DictionarySelection::None => 0,
                 DictionarySelection::Referenced(ptr) => {
@@ -366,6 +420,10 @@ impl DecoderContext {
             }
             + self.stream.size_of()
             + self.bufferless.size_of()
+    }
+
+    pub(crate) fn mark_static(&mut self, workspace_size: usize) {
+        self.static_workspace_size = workspace_size;
     }
 
     pub(crate) fn can_set_parameters(&self) -> bool {
@@ -390,6 +448,7 @@ impl DecoderContext {
     }
 
     pub(crate) fn copy_from(&mut self, other: &Self) {
+        let static_workspace_size = self.static_workspace_size;
         self.format = other.format;
         self.max_window_size = other.max_window_size;
         self.stable_out_buffer = other.stable_out_buffer;
@@ -398,6 +457,7 @@ impl DecoderContext {
         self.disable_huffman_assembly = other.disable_huffman_assembly;
         self.dict = other.dict.clone();
         self.reset_session();
+        self.static_workspace_size = static_workspace_size;
     }
 
     pub(crate) fn load_dictionary(
@@ -427,7 +487,7 @@ impl DecoderContext {
         }
         let ddict = DecoderDictionary::from_bytes_with_content_type(bytes, dict_content_type)?;
         self.dict = DictionarySelection::Owned {
-            raw: ddict.raw,
+            raw: ddict.storage.as_slice().to_vec(),
             formatted: ddict.formatted,
             dict_id: ddict.dict_id,
             use_mode,
@@ -565,7 +625,7 @@ impl DecoderContext {
         }
         let ddict = DecoderDictionary::from_bytes_with_content_type(prefix, dict_content_type)?;
         self.dict = DictionarySelection::Owned {
-            raw: ddict.raw,
+            raw: ddict.storage.as_slice().to_vec(),
             formatted: ddict.formatted,
             dict_id: ddict.dict_id,
             use_mode: DictionaryUse::Once,
@@ -629,9 +689,24 @@ pub(crate) fn create_dctx() -> *mut ZSTD_DCtx {
     Box::into_raw(Box::new(DecoderContext::default())).cast()
 }
 
+pub(crate) fn init_static_dctx(workspace: *mut c_void, workspace_size: usize) -> *mut ZSTD_DCtx {
+    if workspace.is_null() || workspace_size < size_of::<DecoderContext>() || (workspace as usize & 7) != 0 {
+        return core::ptr::null_mut();
+    }
+    let ptr = workspace.cast::<DecoderContext>();
+    unsafe {
+        ptr.write(DecoderContext::default());
+        (*ptr).mark_static(workspace_size);
+    }
+    ptr.cast()
+}
+
 pub(crate) fn free_dctx(ptr: *mut ZSTD_DCtx) -> usize {
     if ptr.is_null() {
         return 0;
+    }
+    if dctx_ref(ptr.cast_const()).is_some_and(|dctx| dctx.static_workspace_size != 0) {
+        return crate::common::error::error_result(ZSTD_ErrorCode::ZSTD_error_memory_allocation);
     }
     if let Some(dctx) = dctx_mut(ptr) {
         dctx.release_legacy_stream();
@@ -656,8 +731,49 @@ pub(crate) fn create_ddict_with_content_type(
     Ok(Box::into_raw(Box::new(ddict)).cast())
 }
 
+pub(crate) fn init_static_ddict(
+    workspace: *mut c_void,
+    workspace_size: usize,
+    dict: &[u8],
+    dict_load_method: ZSTD_dictLoadMethod_e,
+    dict_content_type: ZSTD_dictContentType_e,
+) -> Result<*mut ZSTD_DDict, ZSTD_ErrorCode> {
+    let needed = alloc::base_size::<DecoderDictionary>()
+        + if matches!(dict_load_method, ZSTD_dictLoadMethod_e::ZSTD_dlm_byCopy) {
+            dict.len()
+        } else {
+            0
+        };
+    if workspace.is_null() || workspace_size < needed || (workspace as usize & 7) != 0 {
+        return Err(ZSTD_ErrorCode::ZSTD_error_memory_allocation);
+    }
+
+    let storage = match dict_load_method {
+        ZSTD_dictLoadMethod_e::ZSTD_dlm_byCopy => {
+            let dict_ptr = unsafe { workspace.cast::<u8>().add(size_of::<DecoderDictionary>()) };
+            unsafe {
+                core::ptr::copy_nonoverlapping(dict.as_ptr(), dict_ptr, dict.len());
+            }
+            DecoderDictionaryStorage::referenced(dict_ptr, dict.len())
+        }
+        ZSTD_dictLoadMethod_e::ZSTD_dlm_byRef => {
+            DecoderDictionaryStorage::referenced(dict.as_ptr(), dict.len())
+        }
+    };
+
+    let ddict = DecoderDictionary::from_storage(storage, dict_content_type, workspace_size)?;
+    let ptr = workspace.cast::<DecoderDictionary>();
+    unsafe {
+        ptr.write(ddict);
+    }
+    Ok(ptr.cast())
+}
+
 pub(crate) fn free_ddict(ptr: *mut ZSTD_DDict) -> usize {
     if ptr.is_null() {
+        return 0;
+    }
+    if ddict_ref(ptr.cast()).is_some_and(|ddict| ddict.workspace_size() != 0) {
         return 0;
     }
     // SAFETY: `ptr` originated from `create_ddict`.
@@ -673,7 +789,7 @@ pub(crate) fn sizeof_dctx(ptr: *const ZSTD_DCtx) -> usize {
 
 pub(crate) fn sizeof_ddict(ptr: *const ZSTD_DDict) -> usize {
     ddict_ref(ptr.cast()).map_or(0, |ddict| {
-        alloc::base_size::<DecoderDictionary>() + ddict.heap_size()
+        ddict.workspace_size().max(alloc::base_size::<DecoderDictionary>()) + ddict.heap_size()
     })
 }
 
@@ -1098,12 +1214,34 @@ pub(crate) fn stream_decompress(
     output: &mut crate::ffi::types::ZSTD_outBuffer,
     input: &mut crate::ffi::types::ZSTD_inBuffer,
 ) -> Result<usize, ZSTD_ErrorCode> {
+    if output_remaining(output) == 0 {
+        if matches!(dctx.bufferless.stage, BufferlessStage::Finished)
+            && dctx.stream.decoded.is_empty()
+        {
+            return Ok(0);
+        }
+        if !dctx.stream.decoded.is_empty()
+            || matches!(dctx.bufferless.stage, BufferlessStage::NeedBlockBody(_))
+        {
+            return Err(ZSTD_ErrorCode::ZSTD_error_noForwardProgress_destFull);
+        }
+    }
+
     if !dctx.stream.decoded.is_empty() {
         if output_remaining(output) == 0 {
+            if matches!(dctx.bufferless.stage, BufferlessStage::Finished) {
+                return Ok(0);
+            }
             return Ok(stream_hint(dctx).max(1));
         }
         output.pos += drain_staged_output(dctx, output_ptr(output), output_remaining(output))?;
-        if !dctx.stream.decoded.is_empty() || output_remaining(output) == 0 {
+        if !dctx.stream.decoded.is_empty() {
+            return Ok(stream_hint(dctx).max(1));
+        }
+        if matches!(dctx.bufferless.stage, BufferlessStage::Finished) {
+            return Ok(0);
+        }
+        if output_remaining(output) == 0 {
             return Ok(stream_hint(dctx).max(1));
         }
     }
@@ -1144,6 +1282,15 @@ pub(crate) fn stream_decompress(
                 .extend_from_slice(&src[input.pos..input.pos + to_take]);
             input.pos += to_take;
             if dctx.stream.compressed.len() < need {
+                if matches!(
+                    dctx.bufferless.stage,
+                    BufferlessStage::NeedStart
+                        | BufferlessStage::NeedHeaderRemainder(_)
+                        | BufferlessStage::NeedSkippableHeaderRemainder(_)
+                ) && !frame::partial_frame_prefix_is_valid(&dctx.stream.compressed, dctx.format)
+                {
+                    return Err(ZSTD_ErrorCode::ZSTD_error_prefix_unknown);
+                }
                 return Ok(need - dctx.stream.compressed.len());
             }
         }
@@ -1166,11 +1313,11 @@ pub(crate) fn stream_decompress(
         if !dctx.stream.decoded.is_empty() {
             return Ok(stream_hint(dctx).max(1));
         }
-        if output_remaining(output) == 0 {
-            return Ok(stream_hint(dctx).max(1));
-        }
         if matches!(dctx.bufferless.stage, BufferlessStage::Finished) {
             return Ok(0);
+        }
+        if output_remaining(output) == 0 {
+            return Ok(stream_hint(dctx).max(1));
         }
         if input.pos == input.size {
             return Ok(stream_hint(dctx).max(1));

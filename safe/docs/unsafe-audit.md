@@ -1,238 +1,75 @@
 # Unsafe Audit
 
-Last reviewed: 2026-03-30
+Last reviewed: 2026-03-31
 
-Remaining `unsafe` is intentionally limited to three categories:
+The shipping `libzstd` no longer relies on runtime symbol lookup or a hidden
+helper-object archive for advanced compression APIs. `safe/build.rs` now
+compiles only the bounded legacy decode shim, while the advanced parameter,
+dictionary, static-context, sequence, threading, and dictionary-builder entry
+points are owned by Rust code in the shared library itself.
 
-1. FFI boundaries where the published `libzstd` ABI still exposes raw pointers,
-   opaque contexts, and foreign callbacks.
-2. Allocator and ownership interop where Rust-owned `DecoderContext` or
-   `DecoderDictionary` values are passed through opaque C handles and later
-   recovered.
-3. Equivalent low-level glue such as out-parameter writes, raw buffer copies,
-   compatibility shims for legacy v0.5-v0.7 decode, and the remaining
-   compression-side dynamic symbol binding that cannot be expressed in safe
-   Rust without changing the upstream ABI contract.
+## Remaining Unsafe Categories
 
-No `unsafe` remains in the core frame parser, block decoder, FSE/HUF decoding
-logic, or the high-level Rust compression and decompression algorithms
-themselves.
+1. C ABI boundaries that still accept raw pointers, opaque handles, callback
+   function pointers, or caller-owned out-parameters.
+2. Ownership transfers for boxed Rust state that backs opaque `ZSTD_*`
+   handles, including compression contexts, decompression contexts,
+   dictionaries, thread pools, and parameter blocks.
+3. Raw buffer reborrows needed to convert caller-provided memory into slices or
+   to copy produced data back into caller-owned output storage.
+4. The legacy v0.5-v0.7 decode shim, which remains the only linked C bridge in
+   the shipping library.
 
-## Unsafe Block Inventory
+No `unsafe` remains in order to support deleted helper archives, runtime symbol
+lookup, or temporary upstream replay contexts.
 
-### `safe/src/common/frame.rs`
+## Module Inventory
 
-- `90`: writes the parsed `ZSTD_frameHeader` into the caller-provided
-  `ZSTD_frameHeader*` out-parameter.
-
-### `safe/src/common/skippable.rs`
-
-- `46`: writes the optional `magicVariant` out-parameter supplied by C callers.
-- `50`: copies the skippable payload into the caller's destination buffer with
-  `copy_nonoverlapping`.
-- `70`: forwards `ZSTD_writeSkippableFrame()` to the linked C helper with the
-  original raw pointer arguments unchanged.
-
-### `safe/src/compress/block.rs`
-
-- `11`, `26`, `39`: call dynamically loaded upstream block helpers
-  (`ZSTD_getBlockSize`, `ZSTD_compressBlock`, `ZSTD_insertBlock`) with opaque
-  C contexts and raw buffer pointers.
-
-### `safe/src/compress/cctx.rs`
-
-- `63`, `76`, `82`, `147`, `156`, `174`, `314`, `320`, `328`, `343`, `362`,
-  `368`: call linked helper symbols for `CCtx` allocation, destruction,
-  parameter mutation, advanced compression, and size estimation; the helper ABI
-  is pointer-based and opaque.
-- `95`, `112`, `127`, `140`, `167`, `199`, `223`, `232`, `246`, `262`, `277`,
-  `292`, `301`: call optional compatibility symbols resolved from upstream with
-  `dlsym`; the symbol type must exactly match the requested `unsafe extern "C"`
-  signature.
-
-### `safe/src/compress/cctx_params.rs`
-
-- `64`, `73`, `82`, `88`, `103`, `112`, `122`, `131`, `137`, `146`, `155`:
-  forward `CCtxParams` lifecycle and mutation APIs to linked helpers that still
-  operate on raw C pointers and upstream-layout structs.
-
-### `safe/src/compress/cdict.rs`
-
-- `78`, `87`, `97`, `110`, `119`, `136`, `148`, `160`, `175`, `190`, `199`:
-  call optional upstream `CDict` compatibility symbols through dynamically
-  loaded function pointers.
-- `215`, `232`, `251`, `261`, `271`, `282`, `294`, `311`: call linked helper
-  symbols for advanced `CDict` creation, loading, and size estimation with raw
-  dictionary buffers and opaque dictionary handles.
-
-### `safe/src/compress/cstream.rs`
-
-- `91`, `104`, `110`, `119`, `129`, `140`, `145`, `154`, `164`, `169`, `174`,
-  `179`, `184`, `189`, `197`, `205`, `225`, `235`, `243`: call linked helper
-  symbols for `CStream` creation, destruction, initialization, streaming steps,
-  and size estimation; all of these APIs preserve the upstream raw-pointer ABI.
-
-### `safe/src/compress/params.rs`
-
-- `43`, `52`: call dynamically loaded bounds-query helpers with upstream enum
-  values.
-- `64`, `79`, `90`, `100`, `106`, `112`, `123`: call linked helper symbols for
-  parameter derivation, validation, and compression-level queries.
-
-### `safe/src/compress/sequence_api.rs`
-
-- `41`, `55`, `67`, `77`, `86`: forward sequence-API entry points to linked
-  helpers because the public ABI still accepts raw sequence arrays, buffers,
-  and opaque `CCtx` state.
-
-### `safe/src/compress/static_ctx.rs`
-
-- `63`, `77`, `86`, `104`, `132`, `156`, `170`: initialize static contexts,
-  dictionaries, and streams against caller-supplied workspaces via linked
-  helper symbols; raw workspace pointers are part of the ABI contract.
-
-### `safe/src/decompress/dctx.rs`
-
-- writes the current `ZSTD_dParameter` value into the caller-provided
-  `int*` out-parameter for `ZSTD_DCtx_getParameter()`.
-
-### `safe/src/decompress/dstream.rs`
-
-- `72`: reborrows caller-provided `ZSTD_outBuffer*` and `ZSTD_inBuffer*` as
-  mutable Rust references for streaming decode.
-- `145`, `151`: read the caller-owned `dstPos` and `srcPos` values for the
-  simple-args streaming wrapper.
-- `155`: writes updated `dstPos` and `srcPos` values back to the caller.
-
-### `safe/src/decompress/frame.rs`
-
-- copies the decoded frame payload into the caller's destination buffer.
-
-### `safe/src/decompress/legacy.rs`
-
-- calls the legacy-support C shim for version probing, sizing, one-shot
-  decompression, and the streaming context lifecycle used only for legacy
-  v0.5-v0.7 frames. This is the sole remaining decompression-side C bridge.
-
-### `safe/src/dict_builder/cover.rs`
-
-- `35`, `57`: forward COVER training and optimization entry points to linked
-  helper symbols that operate on raw sample buffers and caller-owned output
-  storage.
-
-### `safe/src/dict_builder/fastcover.rs`
-
-- `35`, `57`: forward FastCover training and optimization entry points to
-  linked helper symbols with the same raw-buffer ABI constraints as upstream.
-
-### `safe/src/dict_builder/zdict.rs`
-
-- `65`, `89`, `113`, `131`, `140`, `152`, `166`, `172`: call linked helper
-  symbols for dictionary training, dictionary finalization, header/id queries,
-  and error-name lookup; these helpers still speak the upstream C ABI.
-
-### `safe/src/ffi/compress.rs`
-
-- `39`, `47`: call `dlopen()` on either the configured upstream library path or
-  the fallback SONAME to resolve compatibility-only symbols at runtime.
-- `60`: calls `dlsym()` to look up a compatibility symbol from the chosen
-  upstream shared object.
-- `65`: transmutes the resolved symbol pointer into the requested function
-  pointer type after the caller has selected the exact ABI signature.
-- `101`: the `load_upstream!` macro invokes `load_symbol()` in an unsafe block
-  because the symbol name and requested function pointer type must agree.
-
-### `safe/src/ffi/decompress.rs`
-
-- validates caller-provided buffers, converts incoming `src` pointers into
-  borrowed byte slices, and copies staged decode output into the caller's
-  destination buffer.
-- reinterprets opaque `ZSTD_DCtx*` / `ZSTD_DDict*` handles as the owned Rust
-  `DecoderContext` / `DecoderDictionary` values that back the public ABI.
-- recovers `Box<DecoderContext>` and `Box<DecoderDictionary>` ownership in the
-  free functions.
-- preserves a raw legacy stream-context pointer returned by the legacy C shim
-  while legacy streaming decode is active.
-- the native bufferless/session state machine is fully Rust-owned; there is no
-  decompression-side dynamic loading or temporary upstream `DCtx` replay left.
-- `788`: converts an incoming `src` pointer plus size into a borrowed byte
-  slice for the C ABI entry points.
-- `796`: reinterprets an opaque `ZSTD_DCtx*` as the owned internal
-  `DecoderContext` mutably.
-- `804`: reinterprets an opaque `ZSTD_DCtx*` as the owned internal
-  `DecoderContext` immutably.
-- `812`: reinterprets an opaque dictionary pointer as `DecoderDictionary`.
-- `840`: recovers `Box<DecoderContext>` ownership in `free_dctx()`.
-- `862`: recovers `Box<DecoderDictionary>` ownership in `free_ddict()`.
-- `1064`: copies the immediately produced prefix of a staged decode block into
-  the caller's destination buffer before retaining any remainder.
-
-### `safe/src/threading/pool.rs`
-
-- `18`, `24`, `33`: forward thread-pool allocation, free, and `CCtx`
-  association to linked helper symbols; the public ABI exposes opaque thread
-  pool handles.
-
-### `safe/src/threading/zstdmt.rs`
-
-- `13`, `19`: call linked multithread helper symbols that expose opaque `CCtx`
-  state through the upstream ABI.
-
-### `safe/tests/rust/compress.rs`
-
-- `88`: converts the C error-name pointer returned by `ZSTD_getErrorName()` to
-  a Rust string for assertion messages.
-
-### `safe/tests/rust/decompress.rs`
-
-- `35`: converts the C error-name pointer returned by `ZSTD_getErrorName()` to
-  a Rust string for assertion messages.
-- `67`: converts the exported `ZSTD_versionString()` pointer to a Rust string.
+- `safe/src/common/frame.rs` and `safe/src/common/skippable.rs` write parsed
+  results into caller-owned out-parameters and copy payload bytes across the C
+  ABI boundary.
+- `safe/src/ffi/compress.rs` and `safe/src/ffi/decompress.rs` validate raw
+  input/output pointers, reinterpret opaque handles as Rust-owned state, and
+  recover `Box` ownership in the corresponding free functions.
+- `safe/src/compress/cctx.rs`, `safe/src/compress/cctx_params.rs`,
+  `safe/src/compress/cdict.rs`, `safe/src/compress/cstream.rs`,
+  `safe/src/compress/sequence_api.rs`, and `safe/src/compress/static_ctx.rs`
+  preserve the upstream ABI while converting caller buffers and opaque handles
+  into Rust-owned encoder state.
+- `safe/src/threading/pool.rs` and `safe/src/threading/zstdmt.rs` cast opaque
+  thread-pool handles, report frame progression, and expose the public
+  multithread ABI without leaving Rust-owned state.
+- `safe/src/dict_builder/cover.rs`, `safe/src/dict_builder/fastcover.rs`, and
+  `safe/src/dict_builder/zdict.rs` reinterpret caller sample buffers, write
+  trained dictionary bytes in place, and report dictionary metadata through the
+  public C entry points.
+- `safe/src/decompress/ddict.rs`, `safe/src/decompress/dctx.rs`,
+  `safe/src/decompress/dstream.rs`, and `safe/src/decompress/frame.rs`
+  reinterpret caller buffers and context handles while the actual modern decode
+  pipeline remains Rust-owned.
+- `safe/src/decompress/legacy.rs` is the only remaining foreign bridge; it
+  forwards legacy frame support to the dedicated C shim built from upstream
+  legacy sources.
+- `safe/src/compress/compat.rs`, `safe/src/compress/match_state.rs`,
+  `safe/src/compress/ldm.rs`, `safe/src/compress/literals.rs`,
+  `safe/src/compress/sequences.rs`, and the files under
+  `safe/src/compress/strategies/` use `unsafe` only to adapt upstream-compatible
+  raw structs and buffers to Rust implementations of the compression pipeline.
+- `safe/tests/rust/compress.rs` and `safe/tests/rust/decompress.rs` use
+  `unsafe` only for `CStr::from_ptr()` conversions when asserting C ABI
+  results.
 
 ## Declaration-Only Unsafe
 
-These items are still part of the audited surface even though they are not
-`unsafe { ... }` expression blocks:
-
-- `safe/src/common/skippable.rs:8`
-- `safe/src/compress/cctx.rs:11`
-- `safe/src/compress/cctx_params.rs:10`
-- `safe/src/compress/cdict.rs:11`
-- `safe/src/compress/cstream.rs:11`
-- `safe/src/compress/params.rs:10`
-- `safe/src/compress/sequence_api.rs:4`
-- `safe/src/compress/static_ctx.rs:10`
-- `safe/src/decompress/legacy.rs:6`
-- `safe/src/dict_builder/cover.rs:4`
-- `safe/src/dict_builder/fastcover.rs:4`
-- `safe/src/dict_builder/zdict.rs:7`
-- `safe/src/ffi/compress.rs:25`
-- `safe/src/threading/pool.rs:3`
-- `safe/src/threading/zstdmt.rs:3`
-
-Each of the lines above is an `unsafe extern "C"` declaration block for linked
-helper symbols or system dynamic-loader calls. Rust cannot verify the validity
-of foreign symbol declarations, so these remain unsafe by definition.
-
-- `safe/src/ffi/compress.rs:57`: `load_symbol()` is itself an `unsafe fn`
-  because the caller must request the exact symbol type that matches the foreign
-  definition.
-- `safe/src/ffi/types.rs:42`, `safe/src/ffi/types.rs:44`,
-  `safe/src/ffi/types.rs:439`: exported callback typedefs remain
-  `unsafe extern "C" fn` so allocator hooks and sequence producers match the C
-  ABI exactly.
-- Local `type Fn = unsafe extern "C" fn(...)` aliases adjacent to the callsites
-  above exist only to encode the exact foreign signature being invoked; the
-  corresponding call blocks are already enumerated in the main inventory.
+- `safe/src/decompress/legacy.rs` declares the linked legacy shim functions as
+  `unsafe extern "C"`.
+- `safe/src/ffi/types.rs` keeps allocator hooks and sequence producer callbacks
+  as `unsafe extern "C" fn` typedefs so the published ABI matches upstream
+  headers exactly.
 
 ## Target State
 
-The remaining unsafe surface is now restricted to:
-
-- foreign-function declarations and calls that preserve the upstream `libzstd`
-  ABI,
-- allocator and opaque-handle ownership transfers across that ABI, and
-- unavoidable raw buffer/out-parameter glue needed to interoperate with C
-  callers, including the bounded legacy decode shim for v0.5-v0.7 frames.
-
-There is no remaining `unsafe` used only for convenience.
+The remaining `unsafe` surface is now restricted to preserving the upstream C
+ABI, handling opaque-handle ownership, copying across raw buffer boundaries,
+and calling the bounded legacy decode shim. There is no remaining `unsafe`
+used only for convenience.

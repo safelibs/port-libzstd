@@ -39,9 +39,9 @@ headers = [
 ]
 
 [dependencies]
-oxiarc-core = "0.2.6"
-oxiarc-zstd = "0.2.5"
-structured-zstd = "0.0.3"
+oxiarc-core = "=0.2.5"
+oxiarc-zstd = "=0.2.5"
+structured-zstd = "=0.0.3"
 
 [build-dependencies]
 cc = "1.2"

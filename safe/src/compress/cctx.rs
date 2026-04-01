@@ -95,7 +95,9 @@ pub extern "C" fn ZSTD_copyCCtx(
     to_result(with_cctx_ref(preparedCCtx, |prepared| {
         let snapshot = prepared.clone();
         with_cctx_mut(cctx, |cctx| {
+            let static_workspace_size = cctx.static_workspace_size;
             *cctx = snapshot;
+            cctx.static_workspace_size = static_workspace_size;
             cctx.pledged_src_size = pledgedSrcSize;
             Ok(0)
         })

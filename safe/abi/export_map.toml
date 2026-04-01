@@ -1,4 +1,7 @@
 schema_version = 1
+phase_id = "impl_safe_advanced_abi_completion"
+last_verified = "2026-03-31"
+implementation_note = "Advanced ABI exports are Rust-owned; build.rs now only compiles the bounded legacy decode shim."
 upstream_shared_object = "original/libzstd-1.5.5+dfsg2/lib/libzstd.so.1.5.5"
 upstream_soname = "libzstd.so.1"
 

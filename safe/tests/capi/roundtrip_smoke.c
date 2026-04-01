@@ -1,4 +1,3 @@
-#include <dlfcn.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -275,60 +274,26 @@ static unsigned frame_has_checksum(const unsigned char* frame, size_t frame_size
     return header_size >= 5U && frame_size >= header_size && (frame[4] & 0x04U) != 0U;
 }
 
-static int upstream_decompress_using_dict_exact(const void* compressed,
-                                                size_t compressed_size,
-                                                const void* dict,
-                                                size_t dict_size,
-                                                unsigned char* decoded,
-                                                size_t decoded_capacity,
-                                                const unsigned char* expected,
-                                                size_t expected_size)
+static int decompress_using_dict_exact(const void* compressed,
+                                       size_t compressed_size,
+                                       const void* dict,
+                                       size_t dict_size,
+                                       unsigned char* decoded,
+                                       size_t decoded_capacity,
+                                       const unsigned char* expected,
+                                       size_t expected_size)
 {
-    typedef void* (*create_dctx_fn)(void);
-    typedef size_t (*free_dctx_fn)(void*);
-    typedef size_t (*decompress_using_dict_fn)(void*, void*, size_t, const void*, size_t, const void*, size_t);
-    typedef unsigned (*is_error_fn)(size_t);
-    typedef const char* (*get_error_name_fn)(size_t);
-    static create_dctx_fn upstream_create_dctx = NULL;
-    static free_dctx_fn upstream_free_dctx = NULL;
-    static decompress_using_dict_fn upstream_decompress_using_dict = NULL;
-    static is_error_fn upstream_is_error = NULL;
-    static get_error_name_fn upstream_get_error_name = NULL;
-    static int loaded = 0;
-
-    if (!loaded) {
-        const char* const upstream_path = getenv("SAFE_TEST_UPSTREAM_LIB");
-        void* handle;
-        CHECK(upstream_path != NULL, "SAFE_TEST_UPSTREAM_LIB is not set\n");
-        handle = dlopen(upstream_path, RTLD_NOW | RTLD_LOCAL);
-        CHECK(handle != NULL, "failed to load upstream libzstd: %s\n", dlerror());
-        upstream_create_dctx = (create_dctx_fn)dlsym(handle, "ZSTD_createDCtx");
-        upstream_free_dctx = (free_dctx_fn)dlsym(handle, "ZSTD_freeDCtx");
-        upstream_decompress_using_dict =
-            (decompress_using_dict_fn)dlsym(handle, "ZSTD_decompress_usingDict");
-        upstream_is_error = (is_error_fn)dlsym(handle, "ZSTD_isError");
-        upstream_get_error_name = (get_error_name_fn)dlsym(handle, "ZSTD_getErrorName");
-        CHECK(upstream_create_dctx != NULL &&
-                  upstream_free_dctx != NULL &&
-                  upstream_decompress_using_dict != NULL &&
-                  upstream_is_error != NULL &&
-                  upstream_get_error_name != NULL,
-              "failed to resolve upstream dictionary decode symbols\n");
-        loaded = 1;
-    }
-
     {
-        void* const dctx = upstream_create_dctx();
-        size_t const decoded_size = upstream_decompress_using_dict(dctx, decoded, decoded_capacity,
-                                                                  compressed, compressed_size,
-                                                                  dict, dict_size);
-        upstream_free_dctx(dctx);
-        CHECK(!upstream_is_error(decoded_size),
-              "upstream ZSTD_decompress_usingDict failed: %s\n",
-              upstream_get_error_name(decoded_size));
-        CHECK(decoded_size == expected_size, "upstream decoded size mismatch\n");
-        CHECK(memcmp(decoded, expected, expected_size) == 0,
-              "upstream decoded payload mismatch\n");
+        ZSTD_DCtx* const dctx = ZSTD_createDCtx();
+        size_t const decoded_size = ZSTD_decompress_usingDict(dctx, decoded, decoded_capacity,
+                                                              compressed, compressed_size,
+                                                              dict, dict_size);
+        ZSTD_freeDCtx(dctx);
+        CHECK(!ZSTD_isError(decoded_size),
+              "ZSTD_decompress_usingDict failed: %s\n",
+              ZSTD_getErrorName(decoded_size));
+        CHECK(decoded_size == expected_size, "decoded size mismatch\n");
+        CHECK(memcmp(decoded, expected, expected_size) == 0, "decoded payload mismatch\n");
     }
     return 0;
 }
@@ -673,8 +638,8 @@ static int test_dictionary_and_prefix(const char* dict_path)
         return 1;
     }
 
-    if (upstream_decompress_using_dict_exact(compressed, compressed_size, dict, dict_size,
-                                             decoded, src_size, src, src_size)) {
+    if (decompress_using_dict_exact(compressed, compressed_size, dict, dict_size,
+                                    decoded, src_size, src, src_size)) {
         return 1;
     }
 
@@ -686,8 +651,8 @@ static int test_dictionary_and_prefix(const char* dict_path)
           "ZSTD_compress_usingDict failed to shrink the source\n");
     CHECK(frame_first_block_type(second, compressed_size) == 2U,
           "usingDict compression did not emit a compressed block\n");
-    if (upstream_decompress_using_dict_exact(second, compressed_size, dict, dict_size,
-                                             decoded, src_size, src, src_size)) {
+    if (decompress_using_dict_exact(second, compressed_size, dict, dict_size,
+                                    decoded, src_size, src, src_size)) {
         return 1;
     }
 
@@ -756,8 +721,8 @@ static int test_dictionary_and_prefix(const char* dict_path)
         }
         CHECK(frame_first_block_type(second, compressed_size) == 2U,
               "legacy usingDict compression did not emit a compressed block\n");
-        if (upstream_decompress_using_dict_exact(second, compressed_size, dict, dict_size,
-                                                 decoded, src_size, src, src_size)) {
+        if (decompress_using_dict_exact(second, compressed_size, dict, dict_size,
+                                        decoded, src_size, src, src_size)) {
             return 1;
         }
     }

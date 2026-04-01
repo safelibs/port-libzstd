@@ -130,10 +130,21 @@ pub extern "C" fn ZSTD_compressStream(
     input: *mut ZSTD_inBuffer,
 ) -> usize {
     to_result(with_cctx_mut(zcs.cast(), |zcs| {
-        if !zcs.stream_mode {
+        if zcs.legacy_mode {
             return Err(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_init_missing);
         }
+        zcs.stream_mode = true;
         stage_stream_input(zcs, input)?;
+        if zcs.pledged_src_size == ZSTD_CONTENTSIZE_UNKNOWN
+            && !zcs.stream.deferred_header
+            && zcs.stream.frame_started
+            && zcs.stream.pending.len() >= 4
+            && (zcs.dict.is_some() || zcs.prefix.is_some())
+        {
+            zcs.stream.pending.truncate(4);
+            zcs.stream.pending_pos = zcs.stream.pending_pos.min(4);
+            zcs.stream.deferred_header = true;
+        }
         flush_stream_output(zcs, output)?;
         Ok(next_input_size_hint(zcs))
     }))

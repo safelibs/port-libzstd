@@ -10,10 +10,12 @@ SHARED_LIB := $(SAFE_ROOT)/target/release/libzstd.so
 RUNTIME_LIB := $(RUNTIME_DIR)/libzstd.so.1
 LD_PATH := $(RUNTIME_DIR)$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}
 
+CARGO ?= cargo
 CC ?= cc
 WARN_FLAGS := -std=c11 -Wall -Wextra -Werror -Wno-deprecated-declarations -Wno-sign-compare -Wno-unused-function -Wno-unused-parameter -D_POSIX_C_SOURCE=200809L
 ORIGINAL_CPPFLAGS := -I$(ORIGINAL_ROOT)/lib -I$(ORIGINAL_ROOT)/examples
 LINK_FLAGS := -L$(SAFE_ROOT)/target/release -Wl,-rpath,$(RUNTIME_DIR) -lzstd
+SAFE_CARGO_ARGS ?= --release --crate-type cdylib
 
 OBJECTS := \
 	$(OBJ_DIR)/pkg_make_ztest.o \
@@ -47,7 +49,7 @@ workdirs:
 	mkdir -p $(OBJ_DIR) $(BIN_DIR) $(WORK_DIR) $(RUNTIME_DIR)
 
 safe-lib: | workdirs
-	cargo rustc --manifest-path $(SAFE_ROOT)/Cargo.toml --release --crate-type cdylib
+	$(CARGO) rustc --manifest-path $(SAFE_ROOT)/Cargo.toml $(SAFE_CARGO_ARGS)
 	ln -sf $(SHARED_LIB) $(RUNTIME_LIB)
 
 objects: $(OBJECTS)

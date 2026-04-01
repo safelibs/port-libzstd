@@ -8,24 +8,9 @@ BUILD_DIR="$SAFE_ROOT/target/advanced-mt"
 WORK_DIR="$BUILD_DIR/work"
 RUNTIME_DIR="$BUILD_DIR/runtime"
 UPSTREAM_ROOT="$REPO_ROOT/original/libzstd-1.5.5+dfsg2"
+DICT_FIXTURE="$UPSTREAM_ROOT/tests/golden-dictionaries/http-dict-missing-symbols"
 
 mkdir -p "$BUILD_DIR" "$WORK_DIR" "$RUNTIME_DIR"
-
-resolve_upstream_lib() {
-    if [[ -n ${SAFE_UPSTREAM_LIB:-} ]]; then
-        printf '%s\n' "$SAFE_UPSTREAM_LIB"
-        return 0
-    fi
-
-    local candidate
-    candidate=$(ldconfig -p 2>/dev/null | awk '/libzstd\.so\.1 / {print $NF; exit}')
-    if [[ -z $candidate || ! -e $candidate ]]; then
-        echo "unable to resolve upstream libzstd.so.1" >&2
-        exit 1
-    fi
-
-    printf '%s\n' "$candidate"
-}
 
 cargo rustc --manifest-path "$SAFE_ROOT/Cargo.toml" --release --crate-type cdylib
 ln -sf "$SAFE_ROOT/target/release/libzstd.so" "$RUNTIME_DIR/libzstd.so.1"
@@ -65,14 +50,13 @@ compile_c "$UPSTREAM_ROOT/examples/streaming_compression_thread_pool.c" \
     -DZSTD_STATIC_LINKING_ONLY \
     -pthread
 
-export SAFE_UPSTREAM_LIB
-SAFE_UPSTREAM_LIB=$(resolve_upstream_lib)
 export LD_LIBRARY_PATH="$RUNTIME_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
-python3 - <<'PY'
+python3 - "$WORK_DIR" <<'PY'
+import sys
 from pathlib import Path
 
-work = Path("/home/yans/code/safelibs/ported/libzstd/safe/target/advanced-mt/work")
+work = Path(sys.argv[1])
 work.mkdir(parents=True, exist_ok=True)
 
 def sample_bytes(size: int, seed: int) -> bytes:
@@ -108,7 +92,7 @@ PY
 "$BUILD_DIR/dict_builder_driver"
 "$BUILD_DIR/sequence_api_driver"
 "$BUILD_DIR/thread_pool_driver"
-"$BUILD_DIR/zstream_driver"
+"$BUILD_DIR/zstream_driver" "$DICT_FIXTURE"
 "$BUILD_DIR/upstream_zstreamtest" -t2
 "$BUILD_DIR/upstream_poolTests"
 "$BUILD_DIR/streaming_memory_usage"

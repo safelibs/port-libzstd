@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::{
     common::error::error_result,
     compress::{
@@ -14,16 +16,14 @@ use core::ffi::c_void;
 
 pub(crate) type HUF_CElt = usize;
 
-#[no_mangle]
-pub extern "C" fn ZSTD_compressBegin_usingCDict_deprecated(
+pub(crate) fn ZSTD_compressBegin_usingCDict_deprecated(
     cctx: *mut ZSTD_CCtx,
     cdict: *const ZSTD_CDict,
 ) -> usize {
     ZSTD_compressBegin_usingCDict(cctx, cdict)
 }
 
-#[no_mangle]
-pub extern "C" fn ZSTD_compressBlock_deprecated(
+pub(crate) fn ZSTD_compressBlock_deprecated(
     cctx: *mut ZSTD_CCtx,
     dst: *mut c_void,
     dstCapacity: usize,
@@ -33,23 +33,19 @@ pub extern "C" fn ZSTD_compressBlock_deprecated(
     ZSTD_compressBlock(cctx, dst, dstCapacity, src, srcSize)
 }
 
-#[no_mangle]
-pub extern "C" fn ZSTD_reset_compressedBlockState(bs: *mut c_void) {
+pub(crate) fn ZSTD_reset_compressedBlockState(bs: *mut c_void) {
     reset_compressed_block_state(bs.cast::<CompressedBlockState>());
 }
 
-#[no_mangle]
-pub extern "C" fn ZSTD_getSeqStore(ctx: *const ZSTD_CCtx) -> *const c_void {
+pub(crate) fn ZSTD_getSeqStore(ctx: *const ZSTD_CCtx) -> *const c_void {
     get_seq_store(ctx).cast()
 }
 
-#[no_mangle]
-pub extern "C" fn ZSTD_seqToCodes(seqStorePtr: *const c_void) -> i32 {
+pub(crate) fn ZSTD_seqToCodes(seqStorePtr: *const c_void) -> i32 {
     seq_to_codes(seqStorePtr.cast::<SeqStore>())
 }
 
-#[no_mangle]
-pub extern "C" fn ZSTD_loadCEntropy(
+pub(crate) fn ZSTD_loadCEntropy(
     _bs: *mut c_void,
     _workspace: *mut c_void,
     _dict: *const c_void,
@@ -61,8 +57,7 @@ pub extern "C" fn ZSTD_loadCEntropy(
     8
 }
 
-#[no_mangle]
-pub extern "C" fn FSE_normalizeCount(
+pub(crate) fn FSE_normalizeCount(
     normalizedCounter: *mut i16,
     tableLog: u32,
     count: *const u32,
@@ -94,8 +89,7 @@ pub extern "C" fn FSE_normalizeCount(
     tableLog as usize
 }
 
-#[no_mangle]
-pub extern "C" fn FSE_writeNCount(
+pub(crate) fn FSE_writeNCount(
     buffer: *mut c_void,
     bufferSize: usize,
     _normalizedCounter: *const i16,
@@ -110,8 +104,7 @@ pub extern "C" fn FSE_writeNCount(
     1
 }
 
-#[no_mangle]
-pub extern "C" fn HUF_buildCTable_wksp(
+pub(crate) fn HUF_buildCTable_wksp(
     tree: *mut HUF_CElt,
     count: *const u32,
     maxSymbolValue: u32,
@@ -134,8 +127,7 @@ pub extern "C" fn HUF_buildCTable_wksp(
     maxNbBits as usize
 }
 
-#[no_mangle]
-pub extern "C" fn HUF_writeCTable_wksp(
+pub(crate) fn HUF_writeCTable_wksp(
     dst: *mut c_void,
     maxDstSize: usize,
     _ctable: *const HUF_CElt,

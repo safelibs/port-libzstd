@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -92,6 +93,7 @@ int main(void)
 
     int rc = 1;
     unsigned char* samples = NULL;
+    unsigned char* altSamples = NULL;
     unsigned char* src = NULL;
     unsigned char* decoded = NULL;
     unsigned char* compressed = NULL;
@@ -102,6 +104,8 @@ int main(void)
     unsigned char fastCoverDict[kDictCapacity];
     unsigned char legacyDict[kDictCapacity];
     unsigned char entropyDict[kDictCapacity];
+    unsigned char finalDictAlt[kDictCapacity];
+    unsigned char entropyDictAlt[kDictCapacity];
     size_t dictSize;
     size_t finalSize;
     size_t coverSize;
@@ -149,19 +153,25 @@ int main(void)
     size_t ddictEstimate;
     size_t compressedSize;
     int paramValue = 0;
+    union {
+        uint64_t align;
+        unsigned char bytes[8];
+    } tinyWorkspace = { 0 };
 
     sampleSizes = (size_t*)malloc(kNbSamples * sizeof(*sampleSizes));
     samples = (unsigned char*)malloc(kNbSamples * kSampleSize);
+    altSamples = (unsigned char*)malloc(kNbSamples * kSampleSize);
     src = (unsigned char*)malloc(kSrcSize);
     decoded = (unsigned char*)malloc(kSrcSize);
     compressed = (unsigned char*)malloc(ZSTD_compressBound(kSrcSize));
-    CHECK(sampleSizes != NULL && samples != NULL && src != NULL &&
+    CHECK(sampleSizes != NULL && samples != NULL && altSamples != NULL && src != NULL &&
               decoded != NULL && compressed != NULL,
           "allocation failure\n");
 
     for (size_t i = 0; i < kNbSamples; ++i) {
         sampleSizes[i] = kSampleSize;
         fill_sample(samples + (i * kSampleSize), kSampleSize, 0x12340000U + (unsigned)i);
+        fill_sample(altSamples + (i * kSampleSize), kSampleSize, 0xDEAD0000U + (unsigned)i);
     }
     fill_sample(src, kSrcSize, 0xBEEF4321U);
 
@@ -185,6 +195,19 @@ int main(void)
                                          samples, sampleSizes, kNbSamples,
                                          finalizeParams);
     CHECK(!ZDICT_isError(finalSize) && finalSize != 0, "finalized dictionary is empty\n");
+    {
+        size_t const altFinalSize = ZDICT_finalizeDictionary(
+            finalDictAlt, sizeof(finalDictAlt),
+            samples + (kNbSamples * kSampleSize) - kRawContentSize,
+            kRawContentSize,
+            altSamples, sampleSizes, kNbSamples,
+            finalizeParams);
+        CHECK(!ZDICT_isError(altFinalSize) && altFinalSize != 0,
+              "alternate finalized dictionary is empty\n");
+        CHECK(altFinalSize != finalSize ||
+                  memcmp(finalDict, finalDictAlt, finalSize) != 0,
+              "ZDICT_finalizeDictionary ignored the sample corpus\n");
+    }
 
     coverSize = ZDICT_trainFromBuffer_cover(coverDict, sizeof(coverDict),
                                             samples, sampleSizes, kNbSamples, coverParams);
@@ -192,6 +215,8 @@ int main(void)
           ZDICT_getErrorName(coverSize));
     CHECK_ZDICT(ZDICT_optimizeTrainFromBuffer_cover(coverDict, sizeof(coverDict),
                                                     samples, sampleSizes, kNbSamples, &coverOpt));
+    CHECK(coverOpt.k >= coverOpt.d && coverOpt.k != 0 && coverOpt.d != 0,
+          "cover optimizer returned invalid parameters\n");
 
     fastCoverSize = ZDICT_trainFromBuffer_fastCover(fastCoverDict, sizeof(fastCoverDict),
                                                     samples, sampleSizes, kNbSamples, fastParams);
@@ -200,6 +225,8 @@ int main(void)
           ZDICT_getErrorName(fastCoverSize));
     CHECK_ZDICT(ZDICT_optimizeTrainFromBuffer_fastCover(fastCoverDict, sizeof(fastCoverDict),
                                                         samples, sampleSizes, kNbSamples, &fastOpt));
+    CHECK(fastOpt.k >= fastOpt.d && fastOpt.k != 0 && fastOpt.d != 0 && fastOpt.f != 0,
+          "fastCover optimizer returned invalid parameters\n");
 
     legacySize = ZDICT_trainFromBuffer_legacy(legacyDict, sizeof(legacyDict),
                                               samples, sampleSizes, kNbSamples, legacyParams);
@@ -215,6 +242,20 @@ int main(void)
     CHECK(!ZDICT_isError(entropySize) && entropySize >= kRawContentSize,
           "ZDICT_addEntropyTablesFromBuffer failed: %s\n",
           ZDICT_getErrorName(entropySize));
+    memcpy(entropyDictAlt,
+           samples + (kNbSamples * kSampleSize) - kRawContentSize,
+           kRawContentSize);
+    {
+        size_t const altEntropySize = ZDICT_addEntropyTablesFromBuffer(
+            entropyDictAlt, kRawContentSize, sizeof(entropyDictAlt),
+            altSamples, sampleSizes, kNbSamples);
+        CHECK(!ZDICT_isError(altEntropySize) && altEntropySize >= kRawContentSize,
+              "alternate ZDICT_addEntropyTablesFromBuffer failed: %s\n",
+              ZDICT_getErrorName(altEntropySize));
+        CHECK(altEntropySize != entropySize ||
+                  memcmp(entropyDict, entropyDictAlt, entropySize) != 0,
+              "ZDICT_addEntropyTablesFromBuffer ignored the sample corpus\n");
+    }
 
     cctxParams = ZSTD_createCCtxParams();
     cctx = ZSTD_createCCtx_advanced(customMem);
@@ -267,6 +308,8 @@ int main(void)
     ddictEstimate = ZSTD_estimateDDictSize(dictSize, ZSTD_dlm_byCopy);
     CHECK(!ZSTD_isError(ddictEstimate) && ddictEstimate > 0,
           "ZSTD_estimateDDictSize failed\n");
+    CHECK(ZSTD_estimateDDictSize(dictSize, ZSTD_dlm_byRef) <= ddictEstimate,
+          "ZSTD_estimateDDictSize by-reference should not exceed by-copy estimate\n");
 
     staticCCtxWorkspace = malloc(cctxEstimate);
     staticCStreamWorkspace = malloc(cstreamEstimate);
@@ -289,9 +332,33 @@ int main(void)
     staticDDict = ZSTD_initStaticDDict(staticDDictWorkspace, ddictEstimate,
                                        dictBuffer, dictSize,
                                        ZSTD_dlm_byCopy, ZSTD_dct_fullDict);
+    CHECK(ZSTD_initStaticCCtx(tinyWorkspace.bytes, sizeof(tinyWorkspace.bytes)) == NULL,
+          "ZSTD_initStaticCCtx accepted an undersized workspace\n");
+    CHECK(ZSTD_initStaticCStream(tinyWorkspace.bytes, sizeof(tinyWorkspace.bytes)) == NULL,
+          "ZSTD_initStaticCStream accepted an undersized workspace\n");
+    CHECK(ZSTD_initStaticDCtx(tinyWorkspace.bytes, sizeof(tinyWorkspace.bytes)) == NULL,
+          "ZSTD_initStaticDCtx accepted an undersized workspace\n");
+    CHECK(ZSTD_initStaticDStream(tinyWorkspace.bytes, sizeof(tinyWorkspace.bytes)) == NULL,
+          "ZSTD_initStaticDStream accepted an undersized workspace\n");
+    CHECK(ZSTD_initStaticCDict(tinyWorkspace.bytes, sizeof(tinyWorkspace.bytes),
+                               dictBuffer, dictSize,
+                               ZSTD_dlm_byCopy, ZSTD_dct_fullDict, cParams) == NULL,
+          "ZSTD_initStaticCDict accepted an undersized workspace\n");
+    CHECK(ZSTD_initStaticDDict(tinyWorkspace.bytes, sizeof(tinyWorkspace.bytes),
+                               dictBuffer, dictSize,
+                               ZSTD_dlm_byCopy, ZSTD_dct_fullDict) == NULL,
+          "ZSTD_initStaticDDict accepted an undersized workspace\n");
     CHECK(staticCCtx != NULL || staticCStream != NULL || staticDCtx != NULL ||
               staticDStream != NULL || staticCDict != NULL || staticDDict != NULL,
           "all static context initialization calls failed\n");
+    if (staticCCtx != NULL) {
+        CHECK(ZSTD_isError(ZSTD_freeCCtx(staticCCtx)),
+              "ZSTD_freeCCtx unexpectedly accepted a static context\n");
+    }
+    if (staticDCtx != NULL) {
+        CHECK(ZSTD_isError(ZSTD_freeDCtx(staticDCtx)),
+              "ZSTD_freeDCtx unexpectedly accepted a static context\n");
+    }
 
     cdictCopy = ZSTD_createCDict_advanced(dictBuffer, dictSize,
                                           ZSTD_dlm_byCopy, ZSTD_dct_fullDict,
@@ -307,6 +374,8 @@ int main(void)
     CHECK(cdictCopy != NULL && cdictRef != NULL && cdictAdv2 != NULL &&
               ddictCopy != NULL && ddictRef != NULL,
           "advanced dictionary creation failed\n");
+    CHECK(ZSTD_getDictID_fromCDict(cdictCopy) == dictID,
+          "advanced cdict lost the trained dictionary id\n");
 
     CHECK_ZSTD(ZSTD_CCtx_setParametersUsingCCtxParams(cctx, cctxParams));
     CHECK_ZSTD(ZSTD_CCtx_setCParams(cctx, cParams));
@@ -384,6 +453,7 @@ cleanup:
     free(compressed);
     free(decoded);
     free(src);
+    free(altSamples);
     free(samples);
     free(sampleSizes);
     return rc;

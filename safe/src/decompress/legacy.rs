@@ -4,8 +4,8 @@ use crate::{
 };
 use core::ffi::c_void;
 
-// Legacy v0.5-v0.7 decode is the only decompression-side C bridge left; there is no
-// decompression-side dlopen/dlsym shared-object fallback anymore.
+// Legacy v0.5-v0.7 decode is the only decompression-side C bridge left; modern
+// decode stays within the Rust-owned shared library.
 
 pub const ZSTD_LEGACY_SUPPORT: u32 = 5;
 

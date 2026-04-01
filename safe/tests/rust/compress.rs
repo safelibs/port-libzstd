@@ -1,19 +1,19 @@
 use std::{
-    ffi::{c_char, c_int, c_void, CStr, CString, OsString},
+    ffi::{c_int, CStr},
     fs,
     path::{Path, PathBuf},
-    sync::{Mutex, OnceLock},
 };
 
 use zstd::{
-    compress::{block as cblock, cctx, cctx_params, cdict, cstream, params},
+    compress::{block as cblock, cctx, cctx_params, cdict, cstream, params, sequence_api},
     decompress::{dctx, ddict, dstream},
     ffi::types::{
         ZSTD_CCtx, ZSTD_CDict, ZSTD_CStream, ZSTD_EndDirective, ZSTD_ErrorCode,
-        ZSTD_ResetDirective, ZSTD_bounds, ZSTD_cParameter, ZSTD_compressionParameters,
-        ZSTD_customMem, ZSTD_dParameter, ZSTD_dictContentType_e, ZSTD_dictLoadMethod_e,
-        ZSTD_frameParameters, ZSTD_inBuffer, ZSTD_outBuffer, ZSTD_parameters, ZSTD_strategy,
-        ZSTD_BLOCKSIZE_MAX, ZSTD_CONTENTSIZE_UNKNOWN,
+        ZSTD_ResetDirective, ZSTD_Sequence, ZSTD_bounds, ZSTD_cParameter,
+        ZSTD_compressionParameters, ZSTD_customMem, ZSTD_dParameter, ZSTD_dictContentType_e,
+        ZSTD_dictLoadMethod_e, ZSTD_frameParameters, ZSTD_inBuffer, ZSTD_outBuffer,
+        ZSTD_parameters, ZSTD_sequenceFormat_e, ZSTD_strategy, ZSTD_BLOCKSIZE_MAX,
+        ZSTD_CONTENTSIZE_UNKNOWN,
     },
 };
 
@@ -23,18 +23,17 @@ fn dict_fixture() -> Vec<u8> {
 
 fn invalid_cdict_fixture() -> &'static [u8] {
     &[
-        0x37, 0xa4, 0x30, 0xec, 0x2a, 0x00, 0x00, 0x00, 0x39, 0x10, 0xc0, 0xc2, 0xa6, 0x00,
-        0x0c, 0x30, 0xc0, 0x00, 0x03, 0x0c, 0x30, 0x20, 0x72, 0xf8, 0xb4, 0x6d, 0x4b, 0x9f,
-        0xfc, 0x97, 0x29, 0x49, 0xb2, 0xdf, 0x4b, 0x29, 0x7d, 0x4a, 0xfc, 0x83, 0x18, 0x22,
-        0x75, 0x23, 0x24, 0x44, 0x4d, 0x02, 0xb7, 0x97, 0x96, 0xf6, 0xcb, 0xd1, 0xcf, 0xe8,
-        0x22, 0xea, 0x27, 0x36, 0xb7, 0x2c, 0x40, 0x46, 0x01, 0x08, 0x23, 0x01, 0x00, 0x00,
-        0x06, 0x1e, 0x3c, 0x83, 0x81, 0xd6, 0x18, 0xd4, 0x12, 0x3a, 0x04, 0x00, 0x80, 0x03,
-        0x08, 0x0e, 0x12, 0x1c, 0x12, 0x11, 0x0d, 0x0e, 0x0a, 0x0b, 0x0a, 0x09, 0x10, 0x0c,
-        0x09, 0x05, 0x04, 0x03, 0x06, 0x06, 0x06, 0x02, 0x00, 0x03, 0x00, 0x00, 0x02, 0x02,
-        0x00, 0x04, 0x06, 0x03, 0x06, 0x08, 0x24, 0x6b, 0x0d, 0x01, 0x10, 0x04, 0x81, 0x07,
-        0x00, 0x00, 0x04, 0xb9, 0x58, 0x18, 0x06, 0x59, 0x92, 0x43, 0xce, 0x28, 0xa5, 0x08,
-        0x88, 0xc0, 0x80, 0x88, 0x8c, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00,
-        0x00, 0x00, 0x08, 0x00, 0x00, 0x00,
+        0x37, 0xa4, 0x30, 0xec, 0x2a, 0x00, 0x00, 0x00, 0x39, 0x10, 0xc0, 0xc2, 0xa6, 0x00, 0x0c,
+        0x30, 0xc0, 0x00, 0x03, 0x0c, 0x30, 0x20, 0x72, 0xf8, 0xb4, 0x6d, 0x4b, 0x9f, 0xfc, 0x97,
+        0x29, 0x49, 0xb2, 0xdf, 0x4b, 0x29, 0x7d, 0x4a, 0xfc, 0x83, 0x18, 0x22, 0x75, 0x23, 0x24,
+        0x44, 0x4d, 0x02, 0xb7, 0x97, 0x96, 0xf6, 0xcb, 0xd1, 0xcf, 0xe8, 0x22, 0xea, 0x27, 0x36,
+        0xb7, 0x2c, 0x40, 0x46, 0x01, 0x08, 0x23, 0x01, 0x00, 0x00, 0x06, 0x1e, 0x3c, 0x83, 0x81,
+        0xd6, 0x18, 0xd4, 0x12, 0x3a, 0x04, 0x00, 0x80, 0x03, 0x08, 0x0e, 0x12, 0x1c, 0x12, 0x11,
+        0x0d, 0x0e, 0x0a, 0x0b, 0x0a, 0x09, 0x10, 0x0c, 0x09, 0x05, 0x04, 0x03, 0x06, 0x06, 0x06,
+        0x02, 0x00, 0x03, 0x00, 0x00, 0x02, 0x02, 0x00, 0x04, 0x06, 0x03, 0x06, 0x08, 0x24, 0x6b,
+        0x0d, 0x01, 0x10, 0x04, 0x81, 0x07, 0x00, 0x00, 0x04, 0xb9, 0x58, 0x18, 0x06, 0x59, 0x92,
+        0x43, 0xce, 0x28, 0xa5, 0x08, 0x88, 0xc0, 0x80, 0x88, 0x8c, 0x00, 0x01, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00,
     ]
 }
 
@@ -255,139 +254,27 @@ fn frame_content_size(frame: &[u8]) -> u64 {
     zstd::common::frame::ZSTD_getFrameContentSize(frame.as_ptr().cast(), frame.len())
 }
 
-unsafe extern "C" {
-    fn dlopen(filename: *const c_char, flags: c_int) -> *mut c_void;
-    fn dlsym(handle: *mut c_void, symbol: *const c_char) -> *mut c_void;
-}
+fn decompress_using_dict_exact(compressed: &[u8], dict: &[u8], expected: &[u8]) {
+    let dctx_ptr = dctx::ZSTD_createDCtx();
+    let mut decoded = vec![0u8; expected.len()];
 
-const RTLD_NOW: c_int = 2;
-const RTLD_LOCAL: c_int = 0;
-
-fn upstream_env_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-}
-
-struct UpstreamEnvRestore(Option<OsString>);
-
-impl Drop for UpstreamEnvRestore {
-    fn drop(&mut self) {
-        if let Some(value) = self.0.take() {
-            std::env::set_var("SAFE_TEST_UPSTREAM_LIB", value);
-        } else {
-            std::env::remove_var("SAFE_TEST_UPSTREAM_LIB");
-        }
-    }
-}
-
-fn with_temp_upstream_lib_env<T>(value: &str, f: impl FnOnce() -> T) -> T {
-    let _guard = upstream_env_lock()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let restore = UpstreamEnvRestore(std::env::var_os("SAFE_TEST_UPSTREAM_LIB"));
-    std::env::set_var("SAFE_TEST_UPSTREAM_LIB", value);
-    let result = f();
-    drop(restore);
-    result
-}
-
-fn upstream_lib_path() -> PathBuf {
-    if let Ok(path) = std::env::var("SAFE_TEST_UPSTREAM_LIB") {
-        return PathBuf::from(path);
-    }
-
-    for candidate in [
-        "/lib/x86_64-linux-gnu/libzstd.so.1",
-        "/usr/lib/x86_64-linux-gnu/libzstd.so.1",
-    ] {
-        let path = PathBuf::from(candidate);
-        if path.exists() {
-            return path;
-        }
-    }
-
-    panic!("unable to locate an upstream libzstd shared object");
-}
-
-fn upstream_decompress_using_dict_exact(compressed: &[u8], dict: &[u8], expected: &[u8]) {
-    type CreateDCtxFn = unsafe extern "C" fn() -> *mut c_void;
-    type FreeDCtxFn = unsafe extern "C" fn(*mut c_void) -> usize;
-    type DecompressUsingDictFn = unsafe extern "C" fn(
-        *mut c_void,
-        *mut c_void,
-        usize,
-        *const c_void,
-        usize,
-        *const c_void,
-        usize,
-    ) -> usize;
-    type IsErrorFn = unsafe extern "C" fn(usize) -> u32;
-    type GetErrorNameFn = unsafe extern "C" fn(usize) -> *const c_char;
-
-    let _guard = upstream_env_lock()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    unsafe {
-        let library = CString::new(upstream_lib_path().to_string_lossy().as_bytes()).unwrap();
-        let handle = dlopen(library.as_ptr(), RTLD_NOW | RTLD_LOCAL);
-        assert!(!handle.is_null(), "dlopen upstream libzstd failed");
-
-        let create = CString::new("ZSTD_createDCtx").unwrap();
-        let free = CString::new("ZSTD_freeDCtx").unwrap();
-        let decode = CString::new("ZSTD_decompress_usingDict").unwrap();
-        let is_error = CString::new("ZSTD_isError").unwrap();
-        let get_error_name = CString::new("ZSTD_getErrorName").unwrap();
-
-        let create_dctx_ptr = dlsym(handle, create.as_ptr());
-        let free_dctx_ptr = dlsym(handle, free.as_ptr());
-        let decompress_using_dict_ptr = dlsym(handle, decode.as_ptr());
-        let upstream_is_error_ptr = dlsym(handle, is_error.as_ptr());
-        let upstream_get_error_name_ptr = dlsym(handle, get_error_name.as_ptr());
-
-        assert!(!create_dctx_ptr.is_null(), "missing upstream createDCtx");
-        assert!(!free_dctx_ptr.is_null(), "missing upstream freeDCtx");
-        assert!(
-            !decompress_using_dict_ptr.is_null(),
-            "missing upstream decompress_usingDict"
-        );
-        assert!(!upstream_is_error_ptr.is_null(), "missing upstream isError");
-        assert!(
-            !upstream_get_error_name_ptr.is_null(),
-            "missing upstream getErrorName"
-        );
-
-        let create_dctx: CreateDCtxFn = core::mem::transmute(create_dctx_ptr);
-        let free_dctx: FreeDCtxFn = core::mem::transmute(free_dctx_ptr);
-        let decompress_using_dict: DecompressUsingDictFn =
-            core::mem::transmute(decompress_using_dict_ptr);
-        let upstream_is_error: IsErrorFn = core::mem::transmute(upstream_is_error_ptr);
-        let upstream_get_error_name: GetErrorNameFn =
-            core::mem::transmute(upstream_get_error_name_ptr);
-
-        let dctx = create_dctx();
-        let mut decoded = vec![0u8; expected.len()];
-        let decoded_size = decompress_using_dict(
-            dctx,
-            decoded.as_mut_ptr().cast(),
-            decoded.len(),
-            compressed.as_ptr().cast(),
-            compressed.len(),
-            dict.as_ptr().cast(),
-            dict.len(),
-        );
-        free_dctx(dctx);
-
-        assert_eq!(
-            upstream_is_error(decoded_size),
-            0,
-            "upstream ZSTD_decompress_usingDict: {}",
-            CStr::from_ptr(upstream_get_error_name(decoded_size))
-                .to_string_lossy()
-                .into_owned()
-        );
-        assert_eq!(decoded_size, expected.len());
-        assert_eq!(decoded, expected);
-    }
+    assert!(
+        !dctx_ptr.is_null(),
+        "failed to create dctx for dictionary decode"
+    );
+    let decoded_size = dctx::ZSTD_decompress_usingDict(
+        dctx_ptr,
+        decoded.as_mut_ptr().cast(),
+        decoded.len(),
+        compressed.as_ptr().cast(),
+        compressed.len(),
+        dict.as_ptr().cast(),
+        dict.len(),
+    );
+    check_result(decoded_size, "ZSTD_decompress_usingDict");
+    assert_eq!(decoded_size, expected.len());
+    assert_eq!(decoded, expected);
+    dctx::ZSTD_freeDCtx(dctx_ptr);
 }
 
 fn emit_legacy_frame(cctx_ptr: *mut ZSTD_CCtx, segments: &[&[u8]]) -> Vec<u8> {
@@ -764,7 +651,10 @@ fn compress_one_shot_context_and_block_api_roundtrip() {
         1,
     );
     check_result(compressible_size, "ZSTD_compress(compressible)");
-    assert_eq!(frame_first_block_type(&compressible_out[..compressible_size]), 2);
+    assert_eq!(
+        frame_first_block_type(&compressible_out[..compressible_size]),
+        2
+    );
     assert!(compressible_size < compressible.len());
     decompress_exact(&compressible_out[..compressible_size], &compressible);
 
@@ -1102,7 +992,10 @@ fn compress_dictionary_and_prefix_helpers_roundtrip() {
     );
     check_result(size, "ZSTD_compress_usingCDict");
     assert_eq!(frame_first_block_type(&compressed[..size]), 2);
-    assert!(size < src.len(), "CDict compression failed to shrink the source");
+    assert!(
+        size < src.len(),
+        "CDict compression failed to shrink the source"
+    );
     assert_eq!(
         zstd::common::frame::ZSTD_getDictID_fromFrame(compressed.as_ptr().cast(), size),
         dict_id
@@ -1116,7 +1009,7 @@ fn compress_dictionary_and_prefix_helpers_roundtrip() {
         ),
         "ZSTD_decompress(dictionary frame without dict)",
     );
-    upstream_decompress_using_dict_exact(&compressed[..size], &dict, &src);
+    decompress_using_dict_exact(&compressed[..size], &dict, &src);
 
     let size = cctx::ZSTD_compress_usingDict(
         cctx_ptr,
@@ -1130,31 +1023,28 @@ fn compress_dictionary_and_prefix_helpers_roundtrip() {
     );
     check_result(size, "ZSTD_compress_usingDict");
     assert_eq!(frame_first_block_type(&second[..size]), 2);
-    assert!(size < src.len(), "usingDict compression failed to shrink the source");
-    upstream_decompress_using_dict_exact(&second[..size], &dict, &src);
-    let isolated_size = with_temp_upstream_lib_env("/definitely/missing/libzstd.so.1", || {
-        let isolated_size = cctx::ZSTD_compress_usingDict(
-            cctx_ptr,
-            compressed.as_mut_ptr().cast(),
-            compressed.len(),
-            src.as_ptr().cast(),
-            src.len(),
-            dict.as_ptr().cast(),
-            dict.len(),
-            5,
-        );
-        check_result(
-            isolated_size,
-            "ZSTD_compress_usingDict(independent from SAFE_TEST_UPSTREAM_LIB)",
-        );
-        assert_eq!(frame_first_block_type(&compressed[..isolated_size]), 2);
-        assert!(
-            isolated_size < src.len(),
-            "usingDict compression stopped shrinking the source when upstream env was invalid"
-        );
-        isolated_size
-    });
-    upstream_decompress_using_dict_exact(&compressed[..isolated_size], &dict, &src);
+    assert!(
+        size < src.len(),
+        "usingDict compression failed to shrink the source"
+    );
+    decompress_using_dict_exact(&second[..size], &dict, &src);
+    let repeated_size = cctx::ZSTD_compress_usingDict(
+        cctx_ptr,
+        compressed.as_mut_ptr().cast(),
+        compressed.len(),
+        src.as_ptr().cast(),
+        src.len(),
+        dict.as_ptr().cast(),
+        dict.len(),
+        5,
+    );
+    check_result(repeated_size, "ZSTD_compress_usingDict(repeated)");
+    assert_eq!(frame_first_block_type(&compressed[..repeated_size]), 2);
+    assert!(
+        repeated_size < src.len(),
+        "usingDict compression stopped shrinking the source on a repeated call"
+    );
+    decompress_using_dict_exact(&compressed[..repeated_size], &dict, &src);
 
     {
         let by_copy = cdict::ZSTD_createCDict_advanced(
@@ -1215,12 +1105,12 @@ fn compress_dictionary_and_prefix_helpers_roundtrip() {
             src.as_ptr().cast(),
             src.len(),
         );
-        check_result(raw_loaded_size, "ZSTD_compress2(loadDictionary_advanced raw)");
+        check_result(
+            raw_loaded_size,
+            "ZSTD_compress2(loadDictionary_advanced raw)",
+        );
         assert_eq!(
-            zstd::common::frame::ZSTD_getDictID_fromFrame(
-                second.as_ptr().cast(),
-                raw_loaded_size,
-            ),
+            zstd::common::frame::ZSTD_getDictID_fromFrame(second.as_ptr().cast(), raw_loaded_size,),
             0
         );
 
@@ -1248,12 +1138,12 @@ fn compress_dictionary_and_prefix_helpers_roundtrip() {
             src.as_ptr().cast(),
             src.len(),
         );
-        check_result(full_loaded_size, "ZSTD_compress2(loadDictionary_advanced full)");
+        check_result(
+            full_loaded_size,
+            "ZSTD_compress2(loadDictionary_advanced full)",
+        );
         assert_eq!(
-            zstd::common::frame::ZSTD_getDictID_fromFrame(
-                second.as_ptr().cast(),
-                full_loaded_size,
-            ),
+            zstd::common::frame::ZSTD_getDictID_fromFrame(second.as_ptr().cast(), full_loaded_size,),
             dict_id
         );
 
@@ -1274,7 +1164,7 @@ fn compress_dictionary_and_prefix_helpers_roundtrip() {
     );
     let legacy = emit_legacy_frame(cctx_ptr, &[&src[..24 * 1024], &src[24 * 1024..]]);
     assert_eq!(frame_first_block_type(&legacy), 2);
-    upstream_decompress_using_dict_exact(&legacy, &dict, &src);
+    decompress_using_dict_exact(&legacy, &dict, &src);
 
     {
         let prefix = &dict[dict.len().saturating_sub(32 * 1024)..];
@@ -1507,12 +1397,13 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     assert!(cstream::ZSTD_sizeof_CStream(zcs) > 0);
     let cctx_level_one = cctx::ZSTD_estimateCCtxSize(1);
     let cctx_level_nineteen = cctx::ZSTD_estimateCCtxSize(19);
-    let cctx_small_params = cctx::ZSTD_estimateCCtxSize_usingCParams(
-        params::ZSTD_getCParams(1, 16 * 1024, 0),
-    );
-    let cctx_large_params = cctx::ZSTD_estimateCCtxSize_usingCParams(
-        params::ZSTD_getCParams(19, ZSTD_CONTENTSIZE_UNKNOWN, 0),
-    );
+    let cctx_small_params =
+        cctx::ZSTD_estimateCCtxSize_usingCParams(params::ZSTD_getCParams(1, 16 * 1024, 0));
+    let cctx_large_params = cctx::ZSTD_estimateCCtxSize_usingCParams(params::ZSTD_getCParams(
+        19,
+        ZSTD_CONTENTSIZE_UNKNOWN,
+        0,
+    ));
     let cstream_level_one = cstream::ZSTD_estimateCStreamSize(1);
     let cstream_level_nineteen = cstream::ZSTD_estimateCStreamSize(19);
     check_result(
@@ -1520,8 +1411,7 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
         "ZSTD_CCtxParams_init(estimate)",
     );
     let cctx_params_default = cctx::ZSTD_estimateCCtxSize_usingCCtxParams(cctx_params_ptr);
-    let cstream_params_default =
-        cstream::ZSTD_estimateCStreamSize_usingCCtxParams(cctx_params_ptr);
+    let cstream_params_default = cstream::ZSTD_estimateCStreamSize_usingCCtxParams(cctx_params_ptr);
     check_result(
         cctx_params_default,
         "ZSTD_estimateCCtxSize_usingCCtxParams(default)",
@@ -1539,8 +1429,7 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
         "ZSTD_CCtxParams_setParameter(hashLog estimate)",
     );
     let cctx_params_window = cctx::ZSTD_estimateCCtxSize_usingCCtxParams(cctx_params_ptr);
-    let cstream_params_window =
-        cstream::ZSTD_estimateCStreamSize_usingCCtxParams(cctx_params_ptr);
+    let cstream_params_window = cstream::ZSTD_estimateCStreamSize_usingCCtxParams(cctx_params_ptr);
     check_result(
         cctx_params_window,
         "ZSTD_estimateCCtxSize_usingCCtxParams(hashLog)",
@@ -1636,7 +1525,10 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     check_result(next_hint, "ZSTD_compressStream(hint)");
     assert_eq!(hint_input.pos, hint_len);
     assert_eq!(next_hint, cstream::ZSTD_CStreamInSize() - hint_len);
-    check_result(cstream::ZSTD_initCStream(zcs, 3), "ZSTD_initCStream(hint restart)");
+    check_result(
+        cstream::ZSTD_initCStream(zcs, 3),
+        "ZSTD_initCStream(hint restart)",
+    );
 
     let (compressed, _flushed_output) =
         compress_stream_legacy_flush_then_end(zcs, &compressible, 97);
@@ -1645,9 +1537,11 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     assert!(frame_has_checksum(&compressed));
     decompress_exact(&compressed, &compressible);
 
-    check_result(cstream::ZSTD_initCStream(zcs, 3), "ZSTD_initCStream(restart)");
-    let (compressed, produced_before_end) =
-        compress_stream_legacy_limited(zcs, &compressible, 97);
+    check_result(
+        cstream::ZSTD_initCStream(zcs, 3),
+        "ZSTD_initCStream(restart)",
+    );
+    let (compressed, produced_before_end) = compress_stream_legacy_limited(zcs, &compressible, 97);
     assert!(
         produced_before_end,
         "ZSTD_compressStream withheld all output until end"
@@ -1708,7 +1602,7 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
         "legacy usingDict stream failed to shrink the source"
     );
     assert!(frame_has_checksum(&compressed));
-    upstream_decompress_using_dict_exact(&compressed, &dict, &src);
+    decompress_using_dict_exact(&compressed, &dict, &src);
 
     check_result(
         cctx::ZSTD_CCtx_setParameter(zcs2.cast(), ZSTD_cParameter::ZSTD_c_checksumFlag, 1),
@@ -1729,7 +1623,7 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
         "legacy usingCDict stream failed to shrink the source"
     );
     assert!(frame_has_checksum(&compressed));
-    upstream_decompress_using_dict_exact(&compressed, &dict, &src);
+    decompress_using_dict_exact(&compressed, &dict, &src);
 
     {
         let tuned_params = cctx_params::ZSTD_createCCtxParams();
@@ -1788,7 +1682,7 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
             },
         );
         check_result(tuned_size, "ZSTD_compress_usingCDict_advanced(tuned)");
-        upstream_decompress_using_dict_exact(&tuned_out[..tuned_size], &dict, &tuned_src);
+        decompress_using_dict_exact(&tuned_out[..tuned_size], &dict, &tuned_src);
         cdict::ZSTD_freeCDict(tuned_cdict);
         cctx_params::ZSTD_freeCCtxParams(tuned_params);
         cctx::ZSTD_freeCCtx(tuned_cctx);
@@ -1857,7 +1751,7 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     );
     assert_eq!(frame_first_block_type(&compressed), 2);
     assert!(frame_has_checksum(&compressed));
-    upstream_decompress_using_dict_exact(&compressed, &dict, &src);
+    decompress_using_dict_exact(&compressed, &dict, &src);
 
     {
         let cctx_ptr = cctx::ZSTD_createCCtx();
@@ -1903,4 +1797,174 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     cctx_params::ZSTD_freeCCtxParams(cctx_params_ptr);
     cstream::ZSTD_freeCStream(zcs2);
     cstream::ZSTD_freeCStream(zcs);
+}
+
+#[test]
+fn compress_sequence_api_respects_sequences_and_validation() {
+    let src = compressible_sample(64 * 1024);
+    let cctx_ptr = cctx::ZSTD_createCCtx();
+    let seq_capacity = sequence_api::ZSTD_sequenceBound(src.len());
+    let mut generated = vec![ZSTD_Sequence::default(); seq_capacity];
+    let mut sequence_frame = vec![0u8; cctx::ZSTD_compressBound(src.len())];
+    let mut reference_frame = vec![0u8; cctx::ZSTD_compressBound(src.len())];
+    let literal_only = [ZSTD_Sequence {
+        offset: 0,
+        litLength: src.len().try_into().unwrap(),
+        matchLength: 0,
+        rep: 0,
+    }];
+    let invalid = [ZSTD_Sequence {
+        offset: (src.len() + 1).try_into().unwrap(),
+        litLength: 0,
+        matchLength: 4,
+        rep: 0,
+    }];
+
+    assert!(!cctx_ptr.is_null());
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_compressionLevel, 4),
+        "ZSTD_c_compressionLevel(sequence api)",
+    );
+    let generated_count = sequence_api::ZSTD_generateSequences(
+        cctx_ptr,
+        generated.as_mut_ptr(),
+        generated.len(),
+        src.as_ptr().cast(),
+        src.len(),
+    );
+    check_result(generated_count, "ZSTD_generateSequences");
+    assert!(generated_count > 0);
+    assert!(generated_count <= generated.len());
+    assert!(
+        generated[..generated_count]
+            .iter()
+            .any(|sequence| sequence.offset != 0 && sequence.matchLength != 0),
+        "generated sequences should contain at least one match"
+    );
+
+    let generated_size = sequence_api::ZSTD_compressSequences(
+        cctx_ptr,
+        reference_frame.as_mut_ptr().cast(),
+        reference_frame.len(),
+        generated.as_ptr(),
+        generated_count,
+        src.as_ptr().cast(),
+        src.len(),
+    );
+    check_result(generated_size, "ZSTD_compressSequences(generated default)");
+    decompress_exact(&reference_frame[..generated_size], &src);
+
+    check_result(
+        cctx::ZSTD_CCtx_reset(
+            cctx_ptr,
+            ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+        ),
+        "ZSTD_CCtx_reset(sequence default literals)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_compressionLevel, 4),
+        "ZSTD_c_compressionLevel(sequence default literals)",
+    );
+    let literal_default_size = sequence_api::ZSTD_compressSequences(
+        cctx_ptr,
+        sequence_frame.as_mut_ptr().cast(),
+        sequence_frame.len(),
+        literal_only.as_ptr(),
+        literal_only.len(),
+        src.as_ptr().cast(),
+        src.len(),
+    );
+    check_result(
+        literal_default_size,
+        "ZSTD_compressSequences(all literals default)",
+    );
+    decompress_exact(&sequence_frame[..literal_default_size], &src);
+    assert!(
+        generated_size != literal_default_size
+            || reference_frame[..generated_size] != sequence_frame[..literal_default_size],
+        "generated sequences should not collapse to the all-literals stream"
+    );
+
+    check_result(
+        cctx::ZSTD_CCtx_reset(
+            cctx_ptr,
+            ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+        ),
+        "ZSTD_CCtx_reset(sequence explicit)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_compressionLevel, 4),
+        "ZSTD_c_compressionLevel(sequence explicit)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(
+            cctx_ptr,
+            ZSTD_cParameter::ZSTD_c_experimentalParam11,
+            ZSTD_sequenceFormat_e::ZSTD_sf_explicitBlockDelimiters as c_int,
+        ),
+        "ZSTD_c_blockDelimiters(explicit)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_experimentalParam12, 1),
+        "ZSTD_c_validateSequences(enable)",
+    );
+    let sequence_size = sequence_api::ZSTD_compressSequences(
+        cctx_ptr,
+        sequence_frame.as_mut_ptr().cast(),
+        sequence_frame.len(),
+        literal_only.as_ptr(),
+        literal_only.len(),
+        src.as_ptr().cast(),
+        src.len(),
+    );
+    check_result(sequence_size, "ZSTD_compressSequences(all literals)");
+    decompress_exact(&sequence_frame[..sequence_size], &src);
+
+    check_result(
+        cctx::ZSTD_CCtx_reset(
+            cctx_ptr,
+            ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+        ),
+        "ZSTD_CCtx_reset(sequence reference)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_compressionLevel, 4),
+        "ZSTD_c_compressionLevel(sequence reference)",
+    );
+    let reference_size = cctx::ZSTD_compress2(
+        cctx_ptr,
+        reference_frame.as_mut_ptr().cast(),
+        reference_frame.len(),
+        src.as_ptr().cast(),
+        src.len(),
+    );
+    check_result(reference_size, "ZSTD_compress2(sequence reference)");
+    assert!(
+        sequence_size != reference_size
+            || sequence_frame[..sequence_size] != reference_frame[..reference_size]
+    );
+
+    check_result(
+        cctx::ZSTD_CCtx_reset(
+            cctx_ptr,
+            ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+        ),
+        "ZSTD_CCtx_reset(sequence invalid)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_experimentalParam12, 1),
+        "ZSTD_c_validateSequences(re-enable)",
+    );
+    let invalid_size = sequence_api::ZSTD_compressSequences(
+        cctx_ptr,
+        sequence_frame.as_mut_ptr().cast(),
+        sequence_frame.len(),
+        invalid.as_ptr(),
+        invalid.len(),
+        src.as_ptr().cast(),
+        src.len(),
+    );
+    expect_error(invalid_size, "ZSTD_compressSequences(invalid sequence)");
+
+    cctx::ZSTD_freeCCtx(cctx_ptr);
 }

@@ -1,4 +1,11 @@
 schema_version = 1
+phase_id = "impl_safe_advanced_abi_completion"
+last_verified = "2026-03-31"
+verification_helpers = [
+  "safe/scripts/run-advanced-mt-tests.sh",
+  "safe/scripts/verify-link-compat.sh",
+  "safe/scripts/verify-export-parity.sh",
+]
 upstream_root = "original/libzstd-1.5.5+dfsg2"
 
 [[entry]]
@@ -22,6 +29,7 @@ execution_strategy = "compile-and-run"
 owning_phase = 3
 release_gate = true
 prerequisites = ["pthread", "dictionary-training coverage"]
+helper_paths = ["safe/scripts/run-advanced-mt-tests.sh", "safe/scripts/verify-link-compat.sh"]
 
 [[entry]]
 id = "tests:zstreamtest32"
@@ -104,6 +112,7 @@ execution_strategy = "compile-and-run"
 owning_phase = 3
 release_gate = true
 prerequisites = ["pthread"]
+helper_paths = ["safe/scripts/run-advanced-mt-tests.sh", "safe/scripts/verify-link-compat.sh"]
 
 [[entry]]
 id = "tests:external_matchfinder"

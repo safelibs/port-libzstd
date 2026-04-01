@@ -2,8 +2,8 @@ use crate::{
     common::error::error_result,
     ffi::{
         compress::{
-            emit_sequences, optional_src_slice, sequence_bound, set_sequence_producer, to_result,
-            with_cctx_mut, with_cctx_ref, write_frame_to_dst,
+            compress_sequences_to_dst, emit_sequences, optional_src_slice, sequence_bound,
+            set_sequence_producer, to_result, with_cctx_mut, with_cctx_ref,
         },
         types::{ZSTD_CCtx, ZSTD_ErrorCode, ZSTD_Sequence, ZSTD_sequenceProducer_F},
     },
@@ -29,7 +29,7 @@ pub extern "C" fn ZSTD_compressSequences(
         return error_result(ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
     };
     to_result(with_cctx_ref(cctx, |cctx| {
-        write_frame_to_dst(cctx, dst, dstSize, src)
+        compress_sequences_to_dst(cctx, dst, dstSize, _inSeqs, _inSeqsSize, src)
     }))
 }
 
@@ -66,5 +66,28 @@ pub extern "C" fn ZSTD_mergeBlockDelimiters(
     if seqsSize != 0 && sequences.is_null() {
         return error_result(ZSTD_ErrorCode::ZSTD_error_externalSequences_invalid);
     }
-    seqsSize
+    if seqsSize == 0 {
+        return 0;
+    }
+
+    let sequences = unsafe { core::slice::from_raw_parts_mut(sequences, seqsSize) };
+    let mut input = 0usize;
+    let mut output = 0usize;
+
+    while input < seqsSize {
+        let sequence = sequences[input];
+        if sequence.offset == 0 && sequence.matchLength == 0 {
+            if input + 1 < seqsSize {
+                sequences[input + 1].litLength = sequences[input + 1]
+                    .litLength
+                    .saturating_add(sequence.litLength);
+            }
+        } else {
+            sequences[output] = sequence;
+            output += 1;
+        }
+        input += 1;
+    }
+
+    output
 }

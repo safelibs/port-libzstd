@@ -206,6 +206,7 @@ pub extern "C" fn ZSTD_createCDict_advanced(
         0,
         crate::ffi::types::ZSTD_sequenceFormat_e::ZSTD_sf_noBlockDelimiters,
         false,
+        false,
         dictLoadMethod,
         dictContentType,
     )
@@ -257,6 +258,7 @@ pub extern "C" fn ZSTD_createCDict_byReference(
         0,
         0,
         crate::ffi::types::ZSTD_sequenceFormat_e::ZSTD_sf_noBlockDelimiters,
+        false,
         false,
         ZSTD_dictLoadMethod_e::ZSTD_dlm_byRef,
         ZSTD_dictContentType_e::ZSTD_dct_auto,
@@ -320,6 +322,7 @@ pub extern "C" fn ZSTD_createCDict_advanced2(
         ctx.job_size,
         ctx.overlap_log,
         ctx.block_delimiters,
+        ctx.validate_sequences,
         ctx.enable_seq_producer_fallback,
         dictLoadMethod,
         dictContentType,

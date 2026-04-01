@@ -11,6 +11,7 @@ use oxiarc_core::error::OxiArcError;
 use structured_zstd::decoding::{
     BlockDecodingStrategy, Dictionary as StructuredDictionary, FrameDecoder,
 };
+use std::sync::{Mutex, OnceLock};
 
 pub(crate) const ZSTD_MAGICNUMBER: u32 = 0xFD2F_B528;
 pub(crate) const ZSTD_MAGIC_SKIPPABLE_START: u32 = 0x184D_2A50;
@@ -166,10 +167,15 @@ pub(crate) fn parse_frame_header(
 ) -> Result<HeaderProbe, ZSTD_ErrorCode> {
     let min_input = starting_input_length(format);
     if src.len() < min_input {
-        if format != ZSTD_format_e::ZSTD_f_zstd1_magicless && src.len() >= 4 {
-            let magic = read_u32(src);
-            if magic != ZSTD_MAGICNUMBER && !is_skippable_magic(magic) {
+        if format != ZSTD_format_e::ZSTD_f_zstd1_magicless {
+            if !partial_frame_prefix_is_valid(src, format) {
                 return Err(ZSTD_ErrorCode::ZSTD_error_prefix_unknown);
+            }
+            if src.len() >= 4 {
+                let magic = read_u32(src);
+                if magic != ZSTD_MAGICNUMBER && !is_skippable_magic(magic) {
+                    return Err(ZSTD_ErrorCode::ZSTD_error_prefix_unknown);
+                }
             }
         }
         return Ok(HeaderProbe::Need(min_input));
@@ -283,16 +289,16 @@ fn encode_window_descriptor(window_size: u64) -> Result<u8, ZSTD_ErrorCode> {
     let window_size = window_size.max(1u64 << ZSTD_WINDOWLOG_ABSOLUTEMIN);
     for window_log in ZSTD_WINDOWLOG_ABSOLUTEMIN..=ZSTD_WINDOWLOG_MAX {
         let window_base = 1u64 << window_log;
-        if window_size < window_base {
-            continue;
+        if window_size <= window_base {
+            return Ok(((window_log - ZSTD_WINDOWLOG_ABSOLUTEMIN) as u8) << 3);
         }
         let step = window_base >> 3;
         let diff = window_size - window_base;
-        if diff > step * 7 || diff % step != 0 {
+        let mantissa = diff.div_ceil(step);
+        if mantissa > 7 {
             continue;
         }
-        let mantissa = (diff / step) as u8;
-        return Ok((((window_log - ZSTD_WINDOWLOG_ABSOLUTEMIN) as u8) << 3) | mantissa);
+        return Ok((((window_log - ZSTD_WINDOWLOG_ABSOLUTEMIN) as u8) << 3) | mantissa as u8);
     }
     Err(ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge)
 }
@@ -441,17 +447,40 @@ fn collect_structured_output(
     Ok(output)
 }
 
-fn decode_with_formatted_dict(
+fn frame_checksum(frame: &[u8], header: ZSTD_frameHeader) -> Option<u32> {
+    if header.checksumFlag == 0 || frame.len() < 4 {
+        return None;
+    }
+    Some(u32::from_le_bytes(
+        frame[frame.len() - 4..].try_into().expect("slice length checked"),
+    ))
+}
+
+fn decoded_matches_frame(
+    decoded: &[u8],
+    frame: &[u8],
+    header: ZSTD_frameHeader,
+) -> bool {
+    if header.frameContentSize != ZSTD_CONTENTSIZE_UNKNOWN
+        && decoded.len() as u64 != header.frameContentSize
+    {
+        return false;
+    }
+    match frame_checksum(frame, header) {
+        Some(expected) => (crate::ffi::compress::xxh64(decoded) as u32) == expected,
+        None => true,
+    }
+}
+
+fn decode_with_structured_dict(
     frame: &[u8],
     header: ZSTD_frameHeader,
     format: ZSTD_format_e,
-    dict: &[u8],
+    dict: StructuredDictionary,
 ) -> Result<Vec<u8>, ZSTD_ErrorCode> {
     let input = build_modern_frame_bytes(frame, format);
     let mut remaining = input.as_slice();
     let mut decoder = FrameDecoder::new();
-    let dict = StructuredDictionary::decode_dict(dict)
-        .map_err(|_| ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted)?;
     let dict_id = dict.id;
 
     decoder.add_dict(dict).map_err(map_structured_error)?;
@@ -460,18 +489,76 @@ fn decode_with_formatted_dict(
         decoder.force_dict(dict_id).map_err(map_structured_error)?;
     }
 
-    collect_structured_output(&mut decoder, &mut remaining)
+    let decoded = collect_structured_output(&mut decoder, &mut remaining)?;
+    if decoded_matches_frame(&decoded, frame, header) {
+        Ok(decoded)
+    } else {
+        Err(ZSTD_ErrorCode::ZSTD_error_checksum_wrong)
+    }
+}
+
+fn decode_with_formatted_dict(
+    frame: &[u8],
+    header: ZSTD_frameHeader,
+    format: ZSTD_format_e,
+    dict: &[u8],
+) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    match StructuredDictionary::decode_dict(dict) {
+        Ok(dict) => decode_with_structured_dict(frame, header, format, dict),
+        Err(_) => {
+            let raw_content = crate::dict_builder::zdict::formatted_dictionary_content(dict)?;
+            let synthetic = crate::dict_builder::zdict::synthesize_formatted_dictionary(
+                raw_content,
+                dict,
+                formatted_dict_id(dict),
+            )?;
+            let dict = StructuredDictionary::decode_dict(&synthetic)
+                .map_err(|_| ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted)?;
+            decode_with_structured_dict(frame, header, format, dict)
+        }
+    }
 }
 
 fn decode_with_raw_dict(
     frame: &[u8],
+    header: ZSTD_frameHeader,
     format: ZSTD_format_e,
     dict: &[u8],
 ) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    let synthetic =
+        crate::dict_builder::zdict::synthesize_formatted_dictionary(dict, dict, 1)?;
+    let dict = StructuredDictionary::decode_dict(&synthetic)
+        .map_err(|_| ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted)?;
+    decode_with_structured_dict(frame, header, format, dict)
+}
+
+fn decode_without_dict(
+    frame: &[u8],
+    format: ZSTD_format_e,
+) -> Result<Vec<u8>, ZSTD_ErrorCode> {
     let input = build_modern_frame_bytes(frame, format);
-    let mut decoder = oxiarc_zstd::ZstdDecoder::new();
-    decoder.set_dictionary(dict);
-    decoder.decode_frame(&input).map_err(map_oxiarc_error)
+    static OXIARC_PANIC_HOOK_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    let hook_guard = OXIARC_PANIC_HOOK_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("panic hook mutex poisoned");
+    let panic_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let oxiarc_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut decoder = oxiarc_zstd::ZstdDecoder::new();
+        decoder.decode_frame(&input).map_err(map_oxiarc_error)
+    }));
+    std::panic::set_hook(panic_hook);
+    drop(hook_guard);
+    match oxiarc_result {
+        Ok(Ok(decoded)) => return Ok(decoded),
+        Ok(Err(_)) | Err(_) => {}
+    }
+
+    let mut remaining = input.as_slice();
+    let mut decoder = FrameDecoder::new();
+    decoder.init(&mut remaining).map_err(map_structured_error)?;
+    collect_structured_output(&mut decoder, &mut remaining)
 }
 
 fn decode_single_modern_frame(
@@ -489,7 +576,7 @@ fn decode_single_modern_frame(
 
     match dict {
         DictionaryRef::Raw(bytes) if !bytes.is_empty() => {
-            return decode_with_raw_dict(frame, format, bytes)
+            return decode_with_raw_dict(frame, header, format, bytes)
         }
         DictionaryRef::Formatted(bytes) if !bytes.is_empty() => {
             return decode_with_formatted_dict(frame, header, format, bytes)
@@ -497,9 +584,7 @@ fn decode_single_modern_frame(
         _ => {}
     }
 
-    let frame_bytes = build_modern_frame_bytes(frame, format);
-    let mut decoder = oxiarc_zstd::ZstdDecoder::new();
-    decoder.decode_frame(&frame_bytes).map_err(map_oxiarc_error)
+    decode_without_dict(frame, format)
 }
 
 pub(crate) fn find_frame_size_info(

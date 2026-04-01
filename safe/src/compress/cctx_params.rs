@@ -22,6 +22,7 @@ struct CCtxParamsState {
     overlap_log: c_int,
     block_delimiters: c_int,
     enable_long_distance_matching: bool,
+    validate_sequences: bool,
     enable_seq_producer_fallback: bool,
 }
 
@@ -35,6 +36,7 @@ impl Default for CCtxParamsState {
             overlap_log: 0,
             block_delimiters: 0,
             enable_long_distance_matching: false,
+            validate_sequences: false,
             enable_seq_producer_fallback: false,
         }
     }
@@ -53,6 +55,7 @@ impl CCtxParamsState {
             overlap_log: ctx.overlap_log,
             block_delimiters: ctx.block_delimiters as c_int,
             enable_long_distance_matching: ctx.enable_long_distance_matching,
+            validate_sequences: ctx.validate_sequences,
             enable_seq_producer_fallback: ctx.enable_seq_producer_fallback,
         }
     }
@@ -71,6 +74,7 @@ impl CCtxParamsState {
             crate::ffi::types::ZSTD_sequenceFormat_e::ZSTD_sf_noBlockDelimiters
         };
         ctx.enable_long_distance_matching = self.enable_long_distance_matching;
+        ctx.validate_sequences = self.validate_sequences;
         ctx.enable_seq_producer_fallback = self.enable_seq_producer_fallback;
         ctx
     }
@@ -87,6 +91,7 @@ impl CCtxParamsState {
             crate::ffi::types::ZSTD_sequenceFormat_e::ZSTD_sf_noBlockDelimiters
         };
         cctx.enable_long_distance_matching = self.enable_long_distance_matching;
+        cctx.validate_sequences = self.validate_sequences;
         cctx.enable_seq_producer_fallback = self.enable_seq_producer_fallback;
     }
 }
