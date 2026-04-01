@@ -10,8 +10,8 @@ use zstd::{
     common::{frame, skippable, version},
     decompress::{dctx, ddict, dstream, legacy},
     ffi::types::{
-        ZSTD_DCtx, ZSTD_DDict, ZSTD_DStream, ZSTD_ResetDirective, ZSTD_dParameter,
-        ZSTD_format_e, ZSTD_inBuffer, ZSTD_nextInputType_e, ZSTD_outBuffer,
+        ZSTD_DCtx, ZSTD_DDict, ZSTD_DStream, ZSTD_ErrorCode, ZSTD_ResetDirective, ZSTD_dParameter,
+        ZSTD_format_e, ZSTD_frameHeader, ZSTD_inBuffer, ZSTD_nextInputType_e, ZSTD_outBuffer,
     },
 };
 
@@ -32,11 +32,34 @@ fn golden_file(name: &str) -> Vec<u8> {
 }
 
 fn check_result(code: usize, what: &str) {
-    assert_eq!(zstd::common::error::ZSTD_isError(code), 0, "{what}: {}", unsafe {
-        CStr::from_ptr(zstd::common::error::ZSTD_getErrorName(code))
-            .to_string_lossy()
-            .into_owned()
-    });
+    assert_eq!(
+        zstd::common::error::ZSTD_isError(code),
+        0,
+        "{what}: {}",
+        unsafe {
+            CStr::from_ptr(zstd::common::error::ZSTD_getErrorName(code))
+                .to_string_lossy()
+                .into_owned()
+        }
+    );
+}
+
+fn expect_error(code: usize, expected: ZSTD_ErrorCode, what: &str) {
+    assert_eq!(
+        zstd::common::error::ZSTD_isError(code),
+        1,
+        "{what} unexpectedly succeeded"
+    );
+    assert_eq!(
+        zstd::common::error::ZSTD_getErrorCode(code),
+        expected,
+        "{what}: {}",
+        unsafe {
+            CStr::from_ptr(zstd::common::error::ZSTD_getErrorName(code))
+                .to_string_lossy()
+                .into_owned()
+        }
+    );
 }
 
 fn temp_dir(label: &str) -> PathBuf {
@@ -52,6 +75,35 @@ fn temp_dir(label: &str) -> PathBuf {
 fn run_zstd(args: &[&str]) {
     let status = Command::new("zstd").args(args).status().expect("run zstd");
     assert!(status.success(), "zstd {:?} failed with {status}", args);
+}
+
+fn small_single_segment_frame() -> (Vec<u8>, Vec<u8>) {
+    let dir = temp_dir("small-single-segment");
+    let input = dir.join("tiny.bin");
+    let compressed = dir.join("tiny.zst");
+    let payload = vec![0u8; 31];
+
+    fs::write(&input, &payload).expect("write tiny input");
+    run_zstd(&[
+        "-q",
+        "-f",
+        input.to_str().expect("utf8 path"),
+        "-o",
+        compressed.to_str().expect("utf8 path"),
+    ]);
+
+    let compressed_bytes = fs::read(&compressed).expect("read tiny frame");
+    assert!(
+        compressed_bytes.len() >= 5,
+        "tiny frame should include a full modern header"
+    );
+    assert_ne!(
+        compressed_bytes[4] & 0x20,
+        0,
+        "expected a single-segment frame header"
+    );
+
+    (payload, compressed_bytes)
 }
 
 #[test]
@@ -180,7 +232,10 @@ fn decompress_modern_frames_and_contexts() {
     let mut block_output = vec![0u8; output.len()];
     let mut block_offset = header_size + 3;
     let mut produced = 0usize;
-    check_result(dctx::ZSTD_decompressBegin(dctx), "ZSTD_decompressBegin(block)");
+    check_result(
+        dctx::ZSTD_decompressBegin(dctx),
+        "ZSTD_decompressBegin(block)",
+    );
     assert_eq!(dstream::ZSTD_nextSrcSizeToDecompress(dctx), 5);
     assert_eq!(
         dctx::ZSTD_decompressContinue(
@@ -246,6 +301,45 @@ fn decompress_modern_frames_and_contexts() {
     assert_eq!(block_offset, modern.len());
     assert!(block_output.iter().all(|&byte| byte == 0));
 
+    let mut corrupt_frame = modern.clone();
+    corrupt_frame[header_size] |= 0x06;
+    check_result(
+        dctx::ZSTD_decompressBegin(dctx),
+        "ZSTD_decompressBegin(corrupt frame)",
+    );
+    assert_eq!(
+        dctx::ZSTD_decompressContinue(
+            dctx,
+            block_output.as_mut_ptr().cast(),
+            block_output.len(),
+            corrupt_frame[..5].as_ptr().cast(),
+            5,
+        ),
+        0
+    );
+    assert_eq!(
+        dctx::ZSTD_decompressContinue(
+            dctx,
+            block_output.as_mut_ptr().cast(),
+            block_output.len(),
+            corrupt_frame[5..header_size].as_ptr().cast(),
+            header_size - 5,
+        ),
+        0
+    );
+    let corrupt_result = dctx::ZSTD_decompressContinue(
+        dctx,
+        block_output.as_mut_ptr().cast(),
+        block_output.len(),
+        corrupt_frame[header_size..header_size + 3].as_ptr().cast(),
+        3,
+    );
+    expect_error(
+        corrupt_result,
+        ZSTD_ErrorCode::ZSTD_error_corruption_detected,
+        "ZSTD_decompressContinue(corrupt frame)",
+    );
+
     ddict::ZSTD_freeDDict(std::ptr::null_mut::<ZSTD_DDict>());
     dstream::ZSTD_freeDStream(std::ptr::null_mut::<ZSTD_DStream>());
     dctx::ZSTD_freeDCtx(clone);
@@ -264,6 +358,32 @@ fn decompress_streaming_and_skippable_helpers() {
     assert!(dstream::ZSTD_DStreamInSize() > 0);
     assert!(dstream::ZSTD_DStreamOutSize() > 0);
     assert!(dstream::ZSTD_sizeof_DStream(zds) > 0);
+    let window_size = 1usize << 20;
+    let expected_estimate = dctx::ZSTD_estimateDCtxSize()
+        + window_size.min(dstream::ZSTD_DStreamOutSize())
+        + dstream::ZSTD_decodingBufferSize_min(window_size as u64, u64::MAX);
+    assert_eq!(
+        dstream::ZSTD_estimateDStreamSize(window_size),
+        expected_estimate
+    );
+
+    let mut header = ZSTD_frameHeader::default();
+    check_result(
+        frame::ZSTD_getFrameHeader(&mut header, modern.as_ptr().cast(), modern.len()),
+        "ZSTD_getFrameHeader",
+    );
+    let expected_from_frame = dctx::ZSTD_estimateDCtxSize()
+        + (header.windowSize as usize).min(dstream::ZSTD_DStreamOutSize())
+        + dstream::ZSTD_decodingBufferSize_min(header.windowSize, u64::MAX);
+    assert_eq!(
+        dstream::ZSTD_estimateDStreamSize_fromFrame(modern.as_ptr().cast(), modern.len()),
+        expected_from_frame
+    );
+    expect_error(
+        dstream::ZSTD_estimateDStreamSize_fromFrame(modern.as_ptr().cast(), 3),
+        ZSTD_ErrorCode::ZSTD_error_srcSize_wrong,
+        "ZSTD_estimateDStreamSize_fromFrame(truncated)",
+    );
     check_result(dstream::ZSTD_initDStream(zds), "ZSTD_initDStream");
 
     while offset < modern.len() || produced < output.len() {
@@ -308,7 +428,10 @@ fn decompress_streaming_and_skippable_helpers() {
     let skippable: [u8; 13] = [
         0x53, 0x2A, 0x4D, 0x18, 0x05, 0x00, 0x00, 0x00, b's', b'a', b'f', b'e', b'!',
     ];
-    assert_eq!(frame::ZSTD_isFrame(skippable.as_ptr().cast(), skippable.len()), 1);
+    assert_eq!(
+        frame::ZSTD_isFrame(skippable.as_ptr().cast(), skippable.len()),
+        1
+    );
     assert_eq!(
         frame::ZSTD_isSkippableFrame(skippable.as_ptr().cast(), skippable.len()),
         1
@@ -331,7 +454,10 @@ fn decompress_streaming_and_skippable_helpers() {
 
     let dctx = dctx::ZSTD_createDCtx();
     assert!(!dctx.is_null());
-    check_result(dctx::ZSTD_decompressBegin(dctx), "ZSTD_decompressBegin(skippable)");
+    check_result(
+        dctx::ZSTD_decompressBegin(dctx),
+        "ZSTD_decompressBegin(skippable)",
+    );
     assert_eq!(dstream::ZSTD_nextSrcSizeToDecompress(dctx), 5);
     assert_eq!(
         dstream::ZSTD_nextInputType(dctx),
@@ -378,6 +504,92 @@ fn decompress_streaming_and_skippable_helpers() {
         0
     );
     assert_eq!(dstream::ZSTD_nextSrcSizeToDecompress(dctx), 0);
+    dctx::ZSTD_freeDCtx(dctx);
+}
+
+#[test]
+fn decompress_small_single_segment_frames() {
+    let (payload, compressed) = small_single_segment_frame();
+    let dctx = dctx::ZSTD_createDCtx();
+    let zds = dstream::ZSTD_createDStream();
+    let mut output = vec![0u8; payload.len()];
+
+    assert!(!dctx.is_null());
+    assert!(!zds.is_null());
+    assert_eq!(
+        frame::ZSTD_getFrameContentSize(compressed.as_ptr().cast(), compressed.len()),
+        payload.len() as u64
+    );
+
+    let one_shot = dctx::ZSTD_decompress(
+        output.as_mut_ptr().cast(),
+        output.len(),
+        compressed.as_ptr().cast(),
+        compressed.len(),
+    );
+    assert_eq!(one_shot, payload.len());
+    assert_eq!(output, payload);
+
+    output.fill(0);
+    check_result(
+        dctx::ZSTD_decompressBegin(dctx),
+        "ZSTD_decompressBegin(tiny single-segment)",
+    );
+    let mut produced = 0usize;
+    let mut offset = 0usize;
+    while dstream::ZSTD_nextSrcSizeToDecompress(dctx) != 0 {
+        let need = dstream::ZSTD_nextSrcSizeToDecompress(dctx);
+        let wrote = dctx::ZSTD_decompressContinue(
+            dctx,
+            output[produced..].as_mut_ptr().cast(),
+            output.len() - produced,
+            compressed[offset..offset + need].as_ptr().cast(),
+            need,
+        );
+        check_result(wrote, "ZSTD_decompressContinue(tiny single-segment)");
+        produced += wrote;
+        offset += need;
+    }
+    assert_eq!(offset, compressed.len());
+    assert_eq!(produced, payload.len());
+    assert_eq!(output, payload);
+
+    output.fill(0);
+    check_result(
+        dstream::ZSTD_initDStream(zds),
+        "ZSTD_initDStream(tiny single-segment)",
+    );
+    produced = 0;
+    offset = 0;
+    while offset < compressed.len() || produced < payload.len() {
+        let take = (compressed.len() - offset).min(2);
+        let mut input = ZSTD_inBuffer {
+            src: compressed[offset..].as_ptr().cast(),
+            size: take,
+            pos: 0,
+        };
+        let mut out = ZSTD_outBuffer {
+            dst: output[produced..].as_mut_ptr().cast(),
+            size: (output.len() - produced).min(3),
+            pos: 0,
+        };
+        let ret = dstream::ZSTD_decompressStream(zds, &mut out, &mut input);
+        check_result(ret, "ZSTD_decompressStream(tiny single-segment)");
+        produced += out.pos;
+        offset += input.pos;
+        if ret == 0 && offset == compressed.len() && produced == payload.len() {
+            break;
+        }
+        assert!(
+            input.pos != 0 || out.pos != 0,
+            "tiny frame streaming decoder stalled"
+        );
+    }
+    assert_eq!(offset, compressed.len());
+    assert_eq!(produced, payload.len());
+    assert_eq!(output, payload);
+
+    dstream::ZSTD_freeDStream(zds);
     dctx::ZSTD_freeDCtx(dctx);
 }
 
@@ -471,7 +683,10 @@ fn decompress_dictionary_roundtrip_via_cli() {
     assert_eq!(loaded, input_bytes.len());
     assert_eq!(output, input_bytes);
 
-    check_result(ddict::ZSTD_DCtx_refDDict(dctx, ddict_handle), "ZSTD_DCtx_refDDict");
+    check_result(
+        ddict::ZSTD_DCtx_refDDict(dctx, ddict_handle),
+        "ZSTD_DCtx_refDDict",
+    );
     let referenced = dctx::ZSTD_decompressDCtx(
         dctx,
         output.as_mut_ptr().cast(),
@@ -492,6 +707,91 @@ fn decompress_dictionary_roundtrip_via_cli() {
     );
     assert_eq!(using_ddict, input_bytes.len());
     assert_eq!(output, input_bytes);
+
+    check_result(
+        ddict::ZSTD_DCtx_refDDict(dctx, ddict_handle),
+        "ZSTD_DCtx_refDDict(window limit)",
+    );
+    check_result(
+        dctx::ZSTD_DCtx_setMaxWindowSize(dctx, 1024),
+        "ZSTD_DCtx_setMaxWindowSize(window limit)",
+    );
+    expect_error(
+        dctx::ZSTD_decompressDCtx(
+            dctx,
+            output.as_mut_ptr().cast(),
+            output.len(),
+            compressed_bytes.as_ptr().cast(),
+            compressed_bytes.len(),
+        ),
+        ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge,
+        "ZSTD_decompressDCtx(window limit)",
+    );
+    expect_error(
+        dctx::ZSTD_decompress_usingDict(
+            dctx,
+            output.as_mut_ptr().cast(),
+            output.len(),
+            compressed_bytes.as_ptr().cast(),
+            compressed_bytes.len(),
+            dict_bytes.as_ptr().cast(),
+            dict_bytes.len(),
+        ),
+        ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge,
+        "ZSTD_decompress_usingDict(window limit)",
+    );
+    expect_error(
+        dctx::ZSTD_decompress_usingDDict(
+            dctx,
+            output.as_mut_ptr().cast(),
+            output.len(),
+            compressed_bytes.as_ptr().cast(),
+            compressed_bytes.len(),
+            ddict_handle,
+        ),
+        ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge,
+        "ZSTD_decompress_usingDDict(window limit)",
+    );
+    check_result(
+        dctx::ZSTD_DCtx_setMaxWindowSize(dctx, 1 << 23),
+        "ZSTD_DCtx_setMaxWindowSize(reset window)",
+    );
+
+    let truncated_dict = &dict_bytes[..8];
+    let corrupt_dict_result = dctx::ZSTD_decompress_usingDict(
+        dctx,
+        output.as_mut_ptr().cast(),
+        output.len(),
+        compressed_bytes.as_ptr().cast(),
+        compressed_bytes.len(),
+        truncated_dict.as_ptr().cast(),
+        truncated_dict.len(),
+    );
+    expect_error(
+        corrupt_dict_result,
+        ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted,
+        "ZSTD_decompress_usingDict(corrupt dict)",
+    );
+
+    let mut corrupt_dictionary_frame = compressed_bytes.clone();
+    let corrupt_header_size = frame::ZSTD_frameHeaderSize(
+        corrupt_dictionary_frame.as_ptr().cast(),
+        corrupt_dictionary_frame.len(),
+    );
+    corrupt_dictionary_frame[corrupt_header_size] |= 0x06;
+    let corrupt_frame_result = dctx::ZSTD_decompress_usingDDict(
+        dctx,
+        output.as_mut_ptr().cast(),
+        output.len(),
+        corrupt_dictionary_frame.as_ptr().cast(),
+        corrupt_dictionary_frame.len(),
+        ddict_handle,
+    );
+    expect_error(
+        corrupt_frame_result,
+        ZSTD_ErrorCode::ZSTD_error_corruption_detected,
+        "ZSTD_decompress_usingDDict(corrupt frame)",
+    );
 
     ddict::ZSTD_freeDDict(ddict_handle);
     dctx::ZSTD_freeDCtx(dctx);

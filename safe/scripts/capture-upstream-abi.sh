@@ -38,7 +38,7 @@ def run(*args: str) -> str:
 
 
 def classify_phase(name: str) -> int:
-    phase2 = {
+    phase1 = {
         "ZSTD_versionNumber",
         "ZSTD_versionString",
         "ZSTD_isError",
@@ -98,7 +98,7 @@ def classify_phase(name: str) -> int:
         "ZSTD_decompressContinue",
         "ZSTD_decompressBlock",
     }
-    phase3 = {
+    phase2 = {
         "ZSTD_compressBound",
         "ZSTD_compress",
         "ZSTD_compressCCtx",
@@ -155,11 +155,11 @@ def classify_phase(name: str) -> int:
         "ZSTD_compress_usingDict",
         "ZSTD_compress_usingCDict",
     }
+    if name in phase1:
+        return 1
     if name in phase2:
         return 2
-    if name in phase3:
-        return 3
-    return 4
+    return 3
 
 
 def owner_module(name: str) -> str:
@@ -284,6 +284,36 @@ exports_out = pathlib.Path(sys.argv[3])
 soname_out = pathlib.Path(sys.argv[4])
 export_map_out = pathlib.Path(sys.argv[5])
 repo_root = pathlib.Path(sys.argv[6])
+
+if mode == "check":
+    if not exports_out.exists():
+        raise SystemExit(f"missing checked-in exports baseline: {exports_out}")
+    if not soname_out.exists():
+        raise SystemExit(f"missing checked-in SONAME baseline: {soname_out}")
+    if not export_map_out.exists():
+        raise SystemExit(f"missing checked-in export map: {export_map_out}")
+
+    export_names = []
+    for line in exports_out.read_text(encoding="utf-8").splitlines():
+        if not line or line.startswith("#"):
+            continue
+        export_names.append(line.split("\t", 1)[0])
+    if not export_names:
+        raise SystemExit("checked-in exports baseline is empty")
+
+    soname = soname_out.read_text(encoding="utf-8").strip()
+    if not soname:
+        raise SystemExit("checked-in SONAME baseline is empty")
+
+    export_map = tomllib.loads(export_map_out.read_text(encoding="utf-8"))
+    symbols = export_map.get("symbol", [])
+    if [entry["name"] for entry in symbols] != export_names:
+        raise SystemExit("export_map.toml names do not match original.exports.txt")
+    if export_map.get("upstream_soname") != soname:
+        raise SystemExit("export_map.toml upstream_soname does not match original.soname.txt")
+    if any(entry.get("owning_phase", 0) > 3 for entry in symbols):
+        raise SystemExit("export_map.toml still contains entries above owning_phase 3")
+    raise SystemExit(0)
 
 objdump_output = run("objdump", "-T", str(upstream_so)).splitlines()
 exports = []

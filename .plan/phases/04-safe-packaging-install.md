@@ -1,5 +1,8 @@
 # Packaging, Install Layout, and Drop-In Artifact Flow
 
+## Workflow Position
+Phase 4 of 8 in the linear explicit-phase workflow.
+
 ## Phase Name
 Packaging, Install Layout, and Drop-In Artifact Flow
 

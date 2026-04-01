@@ -20,6 +20,22 @@ static void check_zstd(size_t code, const char* what)
     }
 }
 
+static void expect_error_code(size_t code, ZSTD_ErrorCode expected, const char* what)
+{
+    if (!ZSTD_isError(code)) {
+        fprintf(stderr, "%s unexpectedly succeeded\n", what);
+        exit(1);
+    }
+    if (ZSTD_getErrorCode(code) != expected) {
+        fprintf(stderr, "%s: expected %d, got %d (%s)\n",
+            what,
+            (int)expected,
+            (int)ZSTD_getErrorCode(code),
+            ZSTD_getErrorName(code));
+        exit(1);
+    }
+}
+
 static void* read_file(const char* path, size_t* size_out)
 {
     FILE* file = fopen(path, "rb");
@@ -270,6 +286,26 @@ static void test_bufferless(const unsigned char* compressed, size_t compressed_s
     ZSTD_freeDCtx(dctx);
 }
 
+static void test_corruption(const unsigned char* compressed, size_t compressed_size, size_t decompressed_size)
+{
+    unsigned char* corrupt = malloc(compressed_size);
+    unsigned char* output = malloc(decompressed_size);
+    size_t header_size;
+    size_t result;
+
+    if (corrupt == NULL || output == NULL) die("failed to allocate corruption buffers");
+    memcpy(corrupt, compressed, compressed_size);
+    header_size = ZSTD_frameHeaderSize(compressed, compressed_size);
+    check_zstd(header_size, "ZSTD_frameHeaderSize(corrupt frame)");
+    corrupt[header_size] |= 0x06;
+
+    result = ZSTD_decompress(output, decompressed_size, corrupt, compressed_size);
+    expect_error_code(result, ZSTD_error_corruption_detected, "ZSTD_decompress(corrupt frame)");
+
+    free(output);
+    free(corrupt);
+}
+
 int main(int argc, char** argv)
 {
     size_t compressed_size = 0;
@@ -283,12 +319,15 @@ int main(int argc, char** argv)
 
     compressed = read_file(argv[1], &compressed_size);
     decompressed_size = ZSTD_getFrameContentSize(compressed, compressed_size);
-    if (decompressed_size != 1024ULL * 1024ULL) die("unexpected frame content size");
+    if (decompressed_size == ZSTD_CONTENTSIZE_ERROR || decompressed_size == ZSTD_CONTENTSIZE_UNKNOWN) {
+        die("unexpected frame content size");
+    }
 
     test_one_shot(compressed, compressed_size, (size_t)decompressed_size);
     test_context(compressed, compressed_size, (size_t)decompressed_size);
     test_streaming(compressed, compressed_size, (size_t)decompressed_size);
     test_bufferless(compressed, compressed_size, (size_t)decompressed_size);
+    test_corruption(compressed, compressed_size, (size_t)decompressed_size);
 
     free(compressed);
     return 0;

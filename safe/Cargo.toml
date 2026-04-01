@@ -39,6 +39,7 @@ headers = [
 ]
 
 [dependencies]
+oxiarc-core = "0.2.6"
 oxiarc-zstd = "0.2.5"
 structured-zstd = "0.0.3"
 

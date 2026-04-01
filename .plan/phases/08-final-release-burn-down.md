@@ -1,5 +1,8 @@
 # Final Release Burn-Down
 
+## Workflow Position
+Phase 8 of 8 in the linear explicit-phase workflow.
+
 ## Phase Name
 Final Release Burn-Down
 

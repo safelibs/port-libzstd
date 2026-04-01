@@ -1,0 +1,912 @@
+# Implementation Plan for `libzstd-safe`
+
+## 1. Context
+
+The repo already has a substantial Rust replacement for `libzstd`, a working Debian packaging layer, a broad upstream test harness, and a downstream application harness. Remaining work: remove the last upstream C/runtime dependencies from the shipped library, expand downstream coverage from 10 to 12 applications inside a reproducible image, turn each compatibility gap into a checked-in regression, and finish with a linear review-heavy workflow that leaves a drop-in Ubuntu 24.04 package set.
+
+Current state:
+
+- The safe crate already mirrors upstream subsystem boundaries. [`safe/Cargo.toml`](/home/yans/code/safelibs/ported/libzstd/safe/Cargo.toml#L1) builds `cdylib`, `staticlib`, and `rlib` outputs and exposes `build-shared-default`, `build-static-default`, `variant-mt`, and `variant-nomt` feature switches. [`safe/src/lib.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/lib.rs#L1) splits the implementation into `common`, `compress`, `decompress`, `dict_builder`, `ffi`, and conditional `threading`.
+- The shipped library is not safe-only yet. [`safe/build.rs`](/home/yans/code/safelibs/ported/libzstd/safe/build.rs#L50) compiles a hidden `upstream-phase4` archive from upstream C sources, and [`safe/build.rs`](/home/yans/code/safelibs/ported/libzstd/safe/build.rs#L300) also builds the legacy C shim.
+- Runtime fallback to an upstream shared object remains. [`safe/src/ffi/compress.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/ffi/compress.rs#L11) uses `dlopen()` / `dlsym()` and the `SAFE_UPSTREAM_LIB` environment variable. That path is consumed from [`safe/src/decompress/dctx.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/decompress/dctx.rs#L41), [`safe/src/decompress/frame.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/decompress/frame.rs#L395), and [`safe/src/ffi/decompress.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/ffi/decompress.rs#L18).
+- Large parts of compression, dictionary building, and threading still forward to upstream helper symbols or remain explicit placeholders. Representative forwarding files are [`safe/src/compress/block.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/compress/block.rs#L1), [`safe/src/compress/cctx.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/compress/cctx.rs#L1), [`safe/src/compress/cdict.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/compress/cdict.rs#L1), [`safe/src/compress/cstream.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/compress/cstream.rs#L1), [`safe/src/compress/sequence_api.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/compress/sequence_api.rs#L1), [`safe/src/dict_builder/zdict.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/dict_builder/zdict.rs#L1), and [`safe/src/threading/pool.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/threading/pool.rs#L1). One-line placeholders still document deferred work in [`safe/src/compress/frame.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/compress/frame.rs#L1), [`safe/src/compress/literals.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/compress/literals.rs#L1), [`safe/src/compress/ldm.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/compress/ldm.rs#L1), [`safe/src/compress/match_state.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/compress/match_state.rs#L1), [`safe/src/compress/sequences.rs`](/home/yans/code/safelibs/ported/libzstd/safe/src/compress/sequences.rs#L1), and the strategy stubs under [`safe/src/compress/strategies/`](/home/yans/code/safelibs/ported/libzstd/safe/src/compress/strategies).
+- The ABI baseline is already captured and must be preserved, not regenerated. [`safe/abi/original.exports.txt`](/home/yans/code/safelibs/ported/libzstd/safe/abi/original.exports.txt), [`safe/abi/original.soname.txt`](/home/yans/code/safelibs/ported/libzstd/safe/abi/original.soname.txt), and [`safe/abi/export_map.toml`](/home/yans/code/safelibs/ported/libzstd/safe/abi/export_map.toml#L1) already encode the public ELF contract.
+- The ABI baseline checker is inconsistent. [`safe/scripts/capture-upstream-abi.sh`](/home/yans/code/safelibs/ported/libzstd/safe/scripts/capture-upstream-abi.sh#L1) and [`safe/scripts/verify-baseline-contract.sh`](/home/yans/code/safelibs/ported/libzstd/safe/scripts/verify-baseline-contract.sh#L1) still assume `original/libzstd-1.5.5+dfsg2/lib/libzstd.so.1.5.5` exists, but this repo snapshot does not ship that shared object, and `bash safe/scripts/verify-baseline-contract.sh` currently fails on the missing path. Phase 1 must make baseline verification consume the checked-in `safe/abi/original.*` files in place instead of expecting a rebuilt or vendored upstream library.
+- Packaging and install layout are already substantial and must be updated in place. [`safe/scripts/build-artifacts.sh`](/home/yans/code/safelibs/ported/libzstd/safe/scripts/build-artifacts.sh#L1), [`safe/scripts/build-deb.sh`](/home/yans/code/safelibs/ported/libzstd/safe/scripts/build-deb.sh#L1), [`safe/scripts/build-original-cli-against-safe.sh`](/home/yans/code/safelibs/ported/libzstd/safe/scripts/build-original-cli-against-safe.sh#L1), [`safe/debian/rules`](/home/yans/code/safelibs/ported/libzstd/safe/debian/rules#L1), and [`safe/scripts/verify-install-layout.sh`](/home/yans/code/safelibs/ported/libzstd/safe/scripts/verify-install-layout.sh#L1) already model the Ubuntu/Debian package contract, including docs, examples, manpages, autopkgtests, `pzstd`, and the `libzstd1-udeb` profile.
+- The upstream black-box test surface is already broad. [`safe/scripts/run-full-suite.sh`](/home/yans/code/safelibs/ported/libzstd/safe/scripts/run-full-suite.sh#L1) already aggregates export parity, link compatibility, Rust tests, build variants, Debian profile outputs, Debian autopkgtests, C API suites, upstream `tests/`, playtests, gzip compatibility, zlibWrapper, educational decoder, pzstd, examples, seekable format, and the downstream dependent harness.
+- The downstream harness exists but is not yet a checked-in image workflow. [`test-original.sh`](/home/yans/code/safelibs/ported/libzstd/test-original.sh#L1) validates package installation, compile compatibility, and runtime behavior for 10 applications, but it still embeds its Ubuntu 24.04 container bootstrap as an inline `docker run --rm --privileged ... bash <<EOF` heredoc, bind-mounts the repo plus host Cargo/Rust toolchains, copies `/usr/lib/*/libzstd.so.1` into `SAFE_UPSTREAM_LIB`, and relies on privileged in-container operations such as `mknod`, `losetup`, `mount`, and `umount` for the `btrfs-progs` runtime path plus writable `/run` state for the `systemd-journald` runtime path. [`dependents.json`](/home/yans/code/safelibs/ported/libzstd/dependents.json#L1) and [`safe/tests/dependents/dependent_matrix.toml`](/home/yans/code/safelibs/ported/libzstd/safe/tests/dependents/dependent_matrix.toml#L1) currently cover only `apt`, `dpkg`, `rsync`, `systemd`, `libarchive`, `btrfs-progs`, `squashfs-tools`, `qemu`, `curl`, and `tiff`.
+- The repo already has a baseline contract checker that hardcodes the same 10-dependent matrix and current phase ownership assumptions. [`safe/scripts/verify-baseline-contract.sh`](/home/yans/code/safelibs/ported/libzstd/safe/scripts/verify-baseline-contract.sh#L1) must be updated twice: first in Phase 1 to apply the exact post-scaffold `owning_phase` rebase and stop routing `--check` through the missing upstream shared object (`safe/abi/export_map.toml`: `2 -> 1`, `3 -> 2`, `4 -> 3`; `safe/tests/upstream_test_matrix.toml` and the checker's upstream-suite assertions: `2 -> 1`, `3 -> 2`, `4 -> 3`, `5 -> 4`, `6 -> 5`), and again in Phase 6 when the downstream matrix expands from 10 to 12 applications.
+- The workspace already has prior planning artifacts. [`.plan/workflow-structure.yaml`](/home/yans/code/safelibs/ported/libzstd/.plan/workflow-structure.yaml) and [`.plan/phases`](/home/yans/code/safelibs/ported/libzstd/.plan/phases) describe an earlier scaffold-first linear workflow and still reference stale preexisting inputs such as `original/libzstd-1.5.5+dfsg2/lib/libzstd.so.1.5.5`, `original/libzstd-1.5.5+dfsg2/lib/libzstd.a`, and `original/libzstd-1.5.5+dfsg2/lib/libzstd.pc`, none of which exist in this source snapshot. Phase 1 must rewrite those tracked `.plan` artifacts in place to the new 8-phase order and regenerate plus commit [`workflow.yaml`](/home/yans/code/safelibs/ported/libzstd/workflow.yaml#L1) from them instead of carrying dead paths, ignored side files, or parallel planning files forward.
+- Local Ubuntu package metadata on this host already supports the planned dependent expansion. `apt-cache showsrc rpm` and `apt-cache showsrc zarchive` both list `libzstd-dev` in build dependencies, while `apt-cache show rpm` and `apt-cache show zarchive-tools` expose the concrete runtime binaries to exercise in the downstream image. This grounds `rpm` and `zarchive` as additions to the current 10-package matrix.
+- Preserve existing conventions. Shell scripts use `set -euo pipefail`, Rust modules map closely to upstream subsystem names, Debian metadata mirrors upstream package names and install layout, and test metadata already lives in [`safe/tests/upstream_test_matrix.toml`](/home/yans/code/safelibs/ported/libzstd/safe/tests/upstream_test_matrix.toml#L1) and [`safe/tests/dependents/dependent_matrix.toml`](/home/yans/code/safelibs/ported/libzstd/safe/tests/dependents/dependent_matrix.toml#L1).
+- The remaining non-memory CVE pressure is limited to CLI file-permission behavior. [`relevant_cves.json`](/home/yans/code/safelibs/ported/libzstd/relevant_cves.json#L1) narrows this to CVE-2021-24031 and CVE-2021-24032, which are already guarded by [`safe/scripts/check-cli-permissions.sh`](/home/yans/code/safelibs/ported/libzstd/safe/scripts/check-cli-permissions.sh#L1) and must stay in the release gate.
+
+Execution order:
+
+1. Remove decompression-side upstream shared-object dependence.
+2. Remove compression-side shared-object and helper-archive dependence.
+3. Complete the advanced ABI, dictionary-builder, and multithreaded surfaces in Rust.
+4. Make packaging and install flows safe-only while preserving Ubuntu/Debian behavior.
+5. Preserve and tighten the upstream black-box suites against the installed safe artifacts.
+6. Expand the dependent inventory from 10 to 12 applications and replace the inline container bootstrap with a checked-in image definition.
+7. Convert every discovered compatibility issue into a checked-in reproducer before fixing it.
+8. Finish with a single full verification pass and no remaining shipping dependency on upstream C except the minimum legacy ABI glue that truly cannot move out of C.
+
+## 2. Generated Workflow Contract
+
+Workflow rules:
+
+- Execution is strictly linear. Do not use `parallel_groups`.
+- Keep the workflow YAML fully self-contained and inline-only. Do not use top-level `include` or phase-level `prompt_file`, `workflow_file`, `workflow_dir`, `checks`, or any other YAML indirection that loads phase content from a second source.
+- Do not use agent-guided `bounce_targets` lists. Every verifier must declare exactly one fixed `bounce_target`.
+- Every verifier must be an explicit top-level `script` phase or top-level `check` phase.
+- Every verifier must remain in the implement block it verifies and bounce only to that implement phase.
+- Every implement prompt must explicitly instruct the implementer to commit work to git before yielding. That commit must exist before the phase's three verifier IDs run.
+- Consume existing artifacts in place instead of refetching, recollecting, rediscovering, or regenerating them from scratch.
+- Phase 4 defines the canonical safe build/package artifact roots under `safe/out/install/release-default/`, `safe/out/original-cli/lib/`, `safe/out/debian-src/default/libzstd-1.5.5+dfsg2/`, and `safe/out/deb/default/`. Later phases must consume only those roots and may refresh only those same paths in place. Do not fall back to host toolchain bind mounts, inline container bootstraps, or alternate rebuild paths.
+- If a later implement phase edits any input currently hashed or staged by `safe/scripts/build-artifacts.sh`, `safe/scripts/build-original-cli-against-safe.sh`, or `safe/scripts/build-deb.sh`, rerun `bash safe/scripts/build-artifacts.sh --release`, `bash safe/scripts/build-original-cli-against-safe.sh`, and `bash safe/scripts/build-deb.sh` before any verifier or downstream-image step that consumes the Phase 4 roots.
+- Phase 6 defines the canonical downstream-image artifact roots under `safe/out/dependents/image-context/`, `safe/out/dependents/compile-compat/`, and `safe/out/dependents/logs/`. Later phases must keep using those roots. If they edit any file staged into the dependent image or refresh the Phase 4 package roots, rerun `bash safe/scripts/build-dependent-image.sh` before any downstream verifier. Do not create a second image/context root, image-building script, or dependent-results manifest.
+- Phase 6 must also define one canonical downstream-image metadata file under `safe/out/dependents/image-context/` that records the local image tag/name and base image used for the matrix. `safe/scripts/run-dependent-matrix.sh`, `test-original.sh`, and later phases must consume that metadata in place instead of inventing alternate image tags or discovery logic.
+- Preserve the consume-existing-artifacts contract for these workspace artifacts:
+  - `.plan/goal.md`
+  - `.plan/phases/*.md`
+  - `.plan/workflow-structure.yaml`
+  - `workflow.yaml`
+  - `original/libzstd-1.5.5+dfsg2/`
+  - `safe/abi/original.exports.txt`
+  - `safe/abi/original.soname.txt`
+  - `safe/abi/export_map.toml`
+  - `safe/tests/upstream_test_matrix.toml`
+  - `safe/tests/dependents/dependent_matrix.toml`
+  - `safe/scripts/verify-baseline-contract.sh`
+  - `safe/tests/fixtures/versions/`
+  - `safe/tests/fixtures/regression/`
+  - `safe/tests/fixtures/fuzz-corpora/`
+  - `dependents.json`
+  - `relevant_cves.json`
+  - `test-original.sh`
+  - `safe/debian/`
+  - `safe/scripts/run-full-suite.sh`
+- If prepared artifacts already exist, update them in place. That includes the upstream source snapshot, ABI baselines, Debian metadata, dependent inventories, the current test matrices, the CVE summary, the current harness scripts, and the already-generated planning/workflow files.
+- Baseline ABI verification must consume `safe/abi/original.exports.txt`, `safe/abi/original.soname.txt`, and `safe/abi/export_map.toml` in place. It must not require absent prebuilt upstream artifacts such as `original/libzstd-1.5.5+dfsg2/lib/libzstd.so.1.5.5`, `original/libzstd-1.5.5+dfsg2/lib/libzstd.a`, or `original/libzstd-1.5.5+dfsg2/lib/libzstd.pc`.
+- `original/libzstd-1.5.5+dfsg2/` is a consumed baseline, not a normal patch target. Default to zero edits under `original/`; only safe-side code, scripts, tests, metadata, and packaging may change unless there is no safe-side way to preserve a required public interface.
+- Rewrite `.plan/workflow-structure.yaml` and the existing numbered `.plan/phases/*.md` files in place to this 8-phase order, then regenerate and commit `workflow.yaml` from those rewritten sources. Do not leave the scaffold-era plan files as a parallel or stale second workflow description, and do not leave the generated workflow only as an ignored working-tree file.
+- Update the existing `owning_phase` metadata in `safe/abi/export_map.toml` and `safe/tests/upstream_test_matrix.toml` in place so those files match the new phase order.
+- The old scaffold/baseline implement phase from `.plan/workflow-structure.yaml` is removed. Use this fixed post-scaffold `owning_phase` mapping:
+  - `safe/abi/export_map.toml` must rebase every existing export from old Phase `2 -> 1`, `3 -> 2`, and `4 -> 3`. Representative required results are `ZSTD_decompress`, `ZSTD_decompressDCtx`, `ZSTD_DCtx_reset`, and `ZSTD_getDictID_fromFrame` at Phase 1; `ZSTD_compressBound`, `ZSTD_copyCCtx`, `ZSTD_flushStream`, and `ZSTD_endStream` at Phase 2; and `ZSTD_createThreadPool`, `ZSTD_freeThreadPool`, `ZSTD_CCtx_refThreadPool`, `ZSTD_estimateCStreamSize_usingCParams`, and `ZDICT_addEntropyTablesFromBuffer` at Phase 3. No export may remain assigned to Phase 4 or higher after the rebase.
+  - `safe/tests/upstream_test_matrix.toml` must rebase every existing entry from old Phase `2 -> 1`, `3 -> 2`, `4 -> 3`, `5 -> 4`, and `6 -> 5`. Representative required results are `tests:decodecorpus` and `tests:legacy` at Phase 1; `tests:paramgrill`, `tests:external_matchfinder`, `tests:bigdict`, `tests:invalidDictionaries`, `tests:roundTripCrash`, `tests:fullbench`, `tests:datagen`, and `tests:longmatch` at Phase 2; `tests:fuzzer`, `tests:zstreamtest`, and `tests:poolTests` at Phase 3; `debian:zstd-selftest`, `debian:build-pkg-config`, and `debian:build-cmake` at Phase 4; and every preserved upstream black-box wrapper or variant currently tagged Phase 6, including `tests:all32`, `tests:allnothread`, `tests:zstd-nolegacy`, `tests:test-valgrind`, `tests:playTests.sh`, `tests:test-variants.sh`, `tests:test-zstd-versions.py`, `tests:versionsTest`, `tests:check_size.py`, `tests:test-license.py`, `tests:cli-tests`, `tests:gzip`, `tests:regression`, `tests:fuzz`, `zlibWrapper:test`, `zlibWrapper:test-valgrind`, `educational_decoder:test`, `contrib/pzstd:test-pzstd`, `contrib/pzstd:roundtripcheck`, `contrib/pzstd:test-pzstd32`, `contrib/pzstd:test-pzstd-tsan`, `contrib/pzstd:test-pzstd-asan`, `examples:test`, and `contrib/seekable_format:test`, at Phase 5. No upstream-suite entry may remain assigned to Phase 6 or higher after the rebase.
+  - `safe/scripts/verify-baseline-contract.sh` must hardcode and verify those rebased export/test ownership values in Phase 1. Phase 6 may then extend only the dependent-inventory and runtime-test assertions from 10 to 12 applications; it must not invent or re-shift the already rebased `owning_phase` table.
+- Phase 1 is the only global `owning_phase` renumbering step. Later phases may update status, owner-module, prerequisite, helper-path, and `release_gate` metadata in place, and may assign already-existing-but-missing entries to the fixed Phase 1-5 numbering when necessary, but they must not re-shift the rebased `owning_phase` values for preexisting entries.
+- Drive the shipping library to a safe-only implementation boundary:
+  - no shipping path may depend on `SAFE_UPSTREAM_LIB`, `dlopen()`, `dlsym()`, or `load_upstream!`;
+  - `safe/build.rs` must stop compiling the `upstream-phase4` helper archive into the final library;
+  - if any C remains linked into the final library, it must be justified as ABI-boundary or legacy-format glue only, with `safe/src/ffi/legacy_shim.c` as the ceiling, not the baseline.
+- Preserve the upstream header identity contract. `safe/include/zstd.h`, `safe/include/zdict.h`, and `safe/include/zstd_errors.h` are existing inputs and must remain source-compatible with the upstream headers.
+- Preserve the Ubuntu/Debian package identities and layout already modeled by `safe/debian/`, including `libzstd1`, `libzstd-dev`, `zstd`, `libzstd1-udeb`, pkg-config metadata, CMake metadata, examples, docs, manpages, and autopkgtests.
+- Preserve the existing upstream release-gate families already encoded in the repo:
+  - export parity
+  - header identity
+  - link compatibility
+  - Rust integration tests
+  - C API decompression and roundtrip tests
+  - build/install layout variant tests
+  - Debian profile outputs and Debian autopkgtests
+  - upstream `tests/Makefile` targets
+  - playtests and CLI variant tests
+  - CLI smoke tests
+  - gzip compatibility tests
+  - zlibWrapper tests
+  - educational decoder tests
+  - pzstd tests
+  - examples
+  - seekable format tests
+  - version compatibility fixtures
+  - offline regression harness
+  - fuzz corpus replay
+  - CLI permission checks for the CVE-derived file-mode contract
+  - downstream compile/runtime tests from `test-original.sh`
+- Extend downstream testing from 10 to 12 applications by updating `dependents.json`, `safe/tests/dependents/dependent_matrix.toml`, and `test-original.sh` in place. Do not introduce a second dependent inventory file.
+- Build a reproducible checked-in image definition. Do not leave downstream testing as only an inline `docker run ... bash <<EOF` script.
+- Build the downstream image workflow from the current safe Debian package outputs produced by `safe/scripts/build-deb.sh`. Do not depend on host Cargo or Rust toolchain bind mounts at runtime.
+- The downstream image base distribution is fixed to Ubuntu 24.04. If the Dockerfile exposes a base-image `ARG`, it must default to `ubuntu:24.04`, and all phase verifiers must use that default.
+- The downstream compile-compat pass must execute inside that built image after the safe Debian packages are installed there. `safe/scripts/check-dependent-compile-compat.sh` is an in-image helper only; host-side verifiers must go through `safe/scripts/run-dependent-matrix.sh` or `test-original.sh`.
+- The downstream runtime container contract is fixed: Phase 6 and later must run the dependent image with `docker run --rm --privileged` or an exactly equivalent inline container-runner setting, must keep `/run` writable inside the container, and must preserve the existing `btrfs` loop-device/mount coverage and `systemd-journald` coverage. Do not narrow that capability or device profile later.
+- The downstream image runtime may bind-mount host result directories only for `safe/out/dependents/logs/` and `safe/out/dependents/compile-compat/`. It must not bind-mount the repo, Cargo, Rustup, or any upstream `libzstd` into the test container.
+- Do not copy or export `SAFE_UPSTREAM_LIB` anywhere in the final runtime path.
+- The downstream inventory expansion is fixed: the 11th and 12th dependents must be `rpm` and `zarchive`, with exact new matrix artifacts `safe/tests/dependents/src/rpm_probe.c`, `safe/tests/dependents/src/zarchive_probe.c`, runtime functions `test_rpm` and `test_zarchive`, and checked-in runtime fixtures under `safe/tests/dependents/fixtures/rpm/` and `safe/tests/dependents/fixtures/zarchive/`.
+- The downstream runtime tests must validate installed safe Debian packages inside the image, not only build-tree artifacts via `LD_LIBRARY_PATH`.
+- Every new compatibility failure found by upstream or downstream testing must gain a checked-in regression reproducer before the corresponding fix is complete.
+- Every implement phase below must have exactly three explicit verifier phases:
+  - one `script` verifier that runs executable gates;
+  - one `check` verifier performed by a software tester;
+  - one `check` verifier performed by a senior tester.
+
+## 3. Implementation Phases
+
+### Phase 1
+
+- Phase Name: Safe Decompression Independence and Metadata Rebase
+- Implement Phase ID: `impl_safe_decompression_independence`
+- Verification Phases:
+  - `script_safe_decompression_independence` — type: `script`; `bounce_target: impl_safe_decompression_independence`; purpose: build the library, run decompression-side Rust/C ABI gates, and prove that decompression no longer requires an upstream shared object.
+  - `check_safe_decompression_software_tester` — type: `check`; `bounce_target: impl_safe_decompression_independence`; purpose: review decompression semantics, new regression coverage, and negative-path handling.
+  - `check_safe_decompression_senior_tester` — type: `check`; `bounce_target: impl_safe_decompression_independence`; purpose: review ABI preservation, unsafe reduction, and elimination of decompression-side dynamic loading.
+- Preexisting Inputs:
+  - `.plan/goal.md`
+  - `safe/Cargo.toml`
+  - `safe/build.rs`
+  - `safe/abi/original.exports.txt`
+  - `safe/abi/original.soname.txt`
+  - `safe/abi/export_map.toml`
+  - `safe/tests/upstream_test_matrix.toml`
+  - `safe/src/decompress/dctx.rs`
+  - `safe/src/decompress/ddict.rs`
+  - `safe/src/decompress/dstream.rs`
+  - `safe/src/decompress/frame.rs`
+  - `safe/src/decompress/huf.rs`
+  - `safe/src/decompress/fse.rs`
+  - `safe/src/decompress/legacy.rs`
+  - `safe/src/ffi/compress.rs`
+  - `safe/src/ffi/decompress.rs`
+  - `safe/tests/rust/decompress.rs`
+  - `safe/tests/capi/decompress_smoke.c`
+  - `safe/tests/capi/frame_probe.c`
+  - `safe/tests/capi/legacy_decode.c`
+  - `safe/scripts/run-capi-decompression.sh`
+  - `safe/scripts/capture-upstream-abi.sh`
+  - `safe/scripts/verify-baseline-contract.sh`
+  - `safe/docs/unsafe-audit.md`
+  - `original/libzstd-1.5.5+dfsg2/lib/common/*`
+  - `original/libzstd-1.5.5+dfsg2/lib/decompress/*`
+  - `original/libzstd-1.5.5+dfsg2/lib/legacy/*`
+  - `original/libzstd-1.5.5+dfsg2/tests/golden-decompression/*`
+  - `original/libzstd-1.5.5+dfsg2/tests/golden-dictionaries/*`
+- New Outputs:
+  - rewritten `safe/abi/export_map.toml`
+  - rewritten `safe/tests/upstream_test_matrix.toml`
+  - rewritten `safe/src/decompress/dctx.rs`
+  - rewritten `safe/src/decompress/ddict.rs`
+  - rewritten `safe/src/decompress/dstream.rs`
+  - rewritten `safe/src/decompress/frame.rs`
+  - rewritten `safe/src/decompress/huf.rs`
+  - rewritten `safe/src/decompress/fse.rs`
+  - rewritten `safe/src/ffi/decompress.rs`
+  - rewritten `safe/tests/rust/decompress.rs`
+  - rewritten `safe/tests/capi/decompress_smoke.c`
+  - rewritten `safe/tests/capi/frame_probe.c`
+  - rewritten `safe/tests/capi/legacy_decode.c`
+  - rewritten `safe/scripts/run-capi-decompression.sh`
+  - rewritten `safe/scripts/capture-upstream-abi.sh`
+  - rewritten `safe/scripts/verify-baseline-contract.sh`
+  - rewritten `safe/docs/unsafe-audit.md`
+- File Changes:
+  - Remove all decompression-side `load_upstream!` calls.
+  - Remove all decompression-side `SAFE_UPSTREAM_LIB` use from scripts.
+  - Rebase `safe/abi/export_map.toml` exactly from old ownership `2 -> 1`, `3 -> 2`, `4 -> 3`; after this edit no export entry may still carry an `owning_phase` above 3.
+  - Rebase `safe/tests/upstream_test_matrix.toml` exactly from old ownership `2 -> 1`, `3 -> 2`, `4 -> 3`, `5 -> 4`, `6 -> 5`; after this edit no upstream-suite entry may still carry an `owning_phase` above 5.
+  - Decouple the baseline ABI checker from the missing upstream shared object so `verify-baseline-contract.sh` and `capture-upstream-abi.sh --check` validate the checked-in ABI baseline files directly instead of trying to inspect `original/libzstd-1.5.5+dfsg2/lib/libzstd.so.1.5.5`.
+  - Rebase the phase-ownership checks in `safe/scripts/verify-baseline-contract.sh` to that same fixed mapping while keeping the pre-Phase-6 10-dependent contract unchanged.
+  - Add checked-in decompression regressions for dict-backed decode, bufferless decode replay, and malformed-input behavior.
+- Implementation Details:
+  - Replace the temporary upstream-`DCtx` compatibility path in `safe/src/decompress/dctx.rs` and `safe/src/decompress/frame.rs` with native Rust dictionary-backed decompression that preserves frame format, dict-ID, and error-code behavior.
+  - Replace the upstream-formatted-dictionary validation path in `safe/src/ffi/decompress.rs` with native validation derived from the existing FSE/HUF dictionary parsing logic.
+  - Replace `UpstreamBufferlessSession` in `safe/src/ffi/decompress.rs` with a native bufferless/session state machine that drives `ZSTD_decompressBegin`, `ZSTD_decompressContinue`, `ZSTD_nextSrcSizeToDecompress`, `ZSTD_decompressBlock`, and `ZSTD_decompressStream` without loading upstream symbols.
+  - `safe/scripts/capture-upstream-abi.sh --check` and `safe/scripts/verify-baseline-contract.sh` must stop assuming any prebuilt upstream `libzstd.so` lives under `original/lib/`; they must validate the checked-in exports, SONAME, and ownership metadata directly and treat `safe/abi/original.*` as the authoritative baseline inputs.
+  - Keep `safe/src/ffi/legacy_shim.c` as the only decompression-side C bridge if legacy v0.5-v0.7 decode truly still requires it; document the exact boundary in `safe/docs/unsafe-audit.md`.
+  - Extend the decompression test surface to cover:
+    - `ZSTD_decompress`, `ZSTD_decompressDCtx`, `ZSTD_decompress_usingDict`, and `ZSTD_decompress_usingDDict`;
+    - `ZSTD_decompressBegin`, `ZSTD_decompressContinue`, `ZSTD_nextSrcSizeToDecompress`, and `ZSTD_decompressBlock`;
+    - legacy decode and size-query behavior;
+    - corrupt-dictionary and corrupt-frame error parity.
+- Verification:
+  - `cargo test --manifest-path safe/Cargo.toml --release --test decompress`
+  - `bash safe/scripts/run-capi-decompression.sh`
+  - `bash safe/scripts/verify-export-parity.sh`
+  - `bash safe/scripts/verify-baseline-contract.sh`
+  - `rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym' safe/src/decompress safe/src/ffi/decompress.rs safe/scripts/run-capi-decompression.sh`
+
+### Phase 2
+
+- Phase Name: Safe Compression Core Independence
+- Implement Phase ID: `impl_safe_compression_core`
+- Verification Phases:
+  - `script_safe_compression_core` — type: `script`; `bounce_target: impl_safe_compression_core`; purpose: run one-shot, block, streaming, and dictionary-using compression gates against the Rust implementation.
+  - `check_safe_compression_core_software_tester` — type: `check`; `bounce_target: impl_safe_compression_core`; purpose: review round-trip correctness, error handling, and test coverage for the core compression APIs.
+  - `check_safe_compression_core_senior_tester` — type: `check`; `bounce_target: impl_safe_compression_core`; purpose: review API completeness and the removal of shared-object fallback from the compression core.
+- Preexisting Inputs:
+  - all outputs from `impl_safe_decompression_independence`
+  - `safe/src/compress/block.rs`
+  - `safe/src/compress/cctx.rs`
+  - `safe/src/compress/cstream.rs`
+  - `safe/src/compress/frame.rs`
+  - `safe/src/compress/literals.rs`
+  - `safe/src/compress/ldm.rs`
+  - `safe/src/compress/match_state.rs`
+  - `safe/src/compress/params.rs`
+  - `safe/src/compress/sequences.rs`
+  - `safe/src/compress/strategies/double_fast.rs`
+  - `safe/src/compress/strategies/fast.rs`
+  - `safe/src/compress/strategies/lazy.rs`
+  - `safe/src/compress/strategies/opt.rs`
+  - `safe/src/ffi/compress.rs`
+  - `safe/tests/rust/compress.rs`
+  - `safe/tests/capi/roundtrip_smoke.c`
+  - `safe/tests/capi/bigdict_driver.c`
+  - `safe/tests/capi/invalid_dictionaries_driver.c`
+  - `safe/tests/capi/zstream_driver.c`
+  - `safe/tests/capi/paramgrill_driver.c`
+  - `safe/tests/capi/external_matchfinder_driver.c`
+  - `safe/scripts/run-capi-roundtrip.sh`
+  - `safe/scripts/run-original-examples.sh`
+  - `original/libzstd-1.5.5+dfsg2/lib/compress/*`
+  - `original/libzstd-1.5.5+dfsg2/tests/bigdict.c`
+  - `original/libzstd-1.5.5+dfsg2/tests/invalidDictionaries.c`
+  - `original/libzstd-1.5.5+dfsg2/tests/roundTripCrash.c`
+  - `original/libzstd-1.5.5+dfsg2/tests/paramgrill.c`
+  - `original/libzstd-1.5.5+dfsg2/tests/external_matchfinder.c`
+  - `original/libzstd-1.5.5+dfsg2/examples/*compression*.c`
+- New Outputs:
+  - rewritten `safe/abi/export_map.toml`
+  - rewritten `safe/tests/upstream_test_matrix.toml`
+  - rewritten `safe/src/compress/block.rs`
+  - rewritten `safe/src/compress/cctx.rs`
+  - rewritten `safe/src/compress/cstream.rs`
+  - implemented `safe/src/compress/frame.rs`
+  - implemented `safe/src/compress/literals.rs`
+  - implemented `safe/src/compress/ldm.rs`
+  - implemented `safe/src/compress/match_state.rs`
+  - rewritten `safe/src/compress/params.rs`
+  - implemented `safe/src/compress/sequences.rs`
+  - implemented `safe/src/compress/strategies/double_fast.rs`
+  - implemented `safe/src/compress/strategies/fast.rs`
+  - implemented `safe/src/compress/strategies/lazy.rs`
+  - implemented `safe/src/compress/strategies/opt.rs`
+  - rewritten `safe/tests/rust/compress.rs`
+  - rewritten `safe/tests/capi/roundtrip_smoke.c`
+  - rewritten `safe/tests/capi/bigdict_driver.c`
+  - rewritten `safe/tests/capi/invalid_dictionaries_driver.c`
+  - rewritten `safe/tests/capi/zstream_driver.c`
+  - rewritten `safe/tests/capi/paramgrill_driver.c`
+  - rewritten `safe/tests/capi/external_matchfinder_driver.c`
+  - rewritten `safe/scripts/run-capi-roundtrip.sh`
+- File Changes:
+  - Remove `load_upstream!` use from the core compression entry points.
+  - Replace placeholder `compress/frame.rs`, `compress/literals.rs`, `compress/ldm.rs`, `compress/match_state.rs`, `compress/sequences.rs`, and strategy modules with real Rust implementations or Rust-facing orchestration around already translated primitives.
+  - Add checked-in round-trip regressions for one-shot, block, streaming, and dictionary-using compression.
+- Implementation Details:
+  - Port the `ZSTD_compress`, `ZSTD_compressCCtx`, `ZSTD_compress2`, `ZSTD_compressBegin`, `ZSTD_compressContinue`, `ZSTD_compressEnd`, and `ZSTD_copyCCtx` surfaces to native Rust state management in `safe/src/compress/cctx.rs`.
+  - Port `ZSTD_getBlockSize`, `ZSTD_compressBlock`, and any required block-insertion behavior in `safe/src/compress/block.rs` so block-level callers no longer hit upstream symbols.
+  - Port the parameter and bounds-query logic in `safe/src/compress/params.rs` instead of resolving it from upstream.
+  - Port streaming compression in `safe/src/compress/cstream.rs` so `ZSTD_initCStream*`, `ZSTD_compressStream*`, `ZSTD_flushStream`, and `ZSTD_endStream` are native.
+  - Keep behavior source-compatible with upstream, especially around pledged source size, checksum flags, dictionary use, and block-size limits.
+- Verification:
+  - `cargo test --manifest-path safe/Cargo.toml --release --test compress`
+  - `bash safe/scripts/run-capi-roundtrip.sh`
+  - `bash safe/scripts/run-original-examples.sh`
+  - `rg -n 'load_upstream!' safe/src/compress/block.rs safe/src/compress/cctx.rs safe/src/compress/cstream.rs safe/src/compress/params.rs`
+
+### Phase 3
+
+- Phase Name: Advanced ABI, Dict-Builder, Threading, and Build Purge
+- Implement Phase ID: `impl_safe_advanced_abi_completion`
+- Verification Phases:
+  - `script_safe_advanced_abi_completion` — type: `script`; `bounce_target: impl_safe_advanced_abi_completion`; purpose: verify advanced APIs, dictionary builders, multithreaded entry points, export parity, and link compatibility after helper-archive removal.
+  - `check_safe_advanced_abi_software_tester` — type: `check`; `bounce_target: impl_safe_advanced_abi_completion`; purpose: review advanced API semantics, new regressions, and multithreaded coverage.
+  - `check_safe_advanced_abi_senior_tester` — type: `check`; `bounce_target: impl_safe_advanced_abi_completion`; purpose: review that the shipping library no longer depends on `dlopen()` or the `upstream-phase4` helper archive.
+- Preexisting Inputs:
+  - all outputs from `impl_safe_compression_core`
+  - `safe/build.rs`
+  - `safe/src/ffi/compress.rs`
+  - `safe/src/ffi/advanced.rs`
+  - `safe/src/compress/cctx_params.rs`
+  - `safe/src/compress/cdict.rs`
+  - `safe/src/compress/sequence_api.rs`
+  - `safe/src/compress/static_ctx.rs`
+  - `safe/src/threading/job_queue.rs`
+  - `safe/src/threading/pool.rs`
+  - `safe/src/threading/zstdmt.rs`
+  - `safe/src/dict_builder/cover.rs`
+  - `safe/src/dict_builder/divsufsort.rs`
+  - `safe/src/dict_builder/fastcover.rs`
+  - `safe/src/dict_builder/zdict.rs`
+  - `safe/tests/capi/dict_builder_driver.c`
+  - `safe/tests/capi/sequence_api_driver.c`
+  - `safe/tests/capi/thread_pool_driver.c`
+  - `safe/tests/link-compat/Makefile`
+  - `safe/tests/link-compat/run_pooltests.c`
+  - `safe/tests/link-compat/run_zstreamtest.c`
+  - `safe/scripts/run-advanced-mt-tests.sh`
+  - `safe/scripts/verify-link-compat.sh`
+  - `safe/docs/unsafe-audit.md`
+  - `original/libzstd-1.5.5+dfsg2/lib/dictBuilder/*`
+  - `original/libzstd-1.5.5+dfsg2/lib/common/pool.*`
+  - `original/libzstd-1.5.5+dfsg2/lib/common/threading.*`
+  - `original/libzstd-1.5.5+dfsg2/lib/compress/zstdmt_compress.*`
+  - `original/libzstd-1.5.5+dfsg2/tests/poolTests.c`
+  - `original/libzstd-1.5.5+dfsg2/tests/zstreamtest.c`
+  - `original/libzstd-1.5.5+dfsg2/tests/fuzz/sequence_compression_api.c`
+  - `original/libzstd-1.5.5+dfsg2/examples/streaming_compression_thread_pool.c`
+  - `original/libzstd-1.5.5+dfsg2/examples/streaming_memory_usage.c`
+- New Outputs:
+  - rewritten `safe/build.rs`
+  - rewritten `safe/abi/export_map.toml`
+  - rewritten `safe/tests/upstream_test_matrix.toml`
+  - rewritten `safe/src/ffi/compress.rs`
+  - rewritten `safe/src/ffi/advanced.rs`
+  - rewritten `safe/src/compress/cctx_params.rs`
+  - rewritten `safe/src/compress/cdict.rs`
+  - rewritten `safe/src/compress/sequence_api.rs`
+  - rewritten `safe/src/compress/static_ctx.rs`
+  - rewritten `safe/src/threading/job_queue.rs`
+  - rewritten `safe/src/threading/pool.rs`
+  - rewritten `safe/src/threading/zstdmt.rs`
+  - rewritten `safe/src/dict_builder/cover.rs`
+  - rewritten `safe/src/dict_builder/divsufsort.rs`
+  - rewritten `safe/src/dict_builder/fastcover.rs`
+  - rewritten `safe/src/dict_builder/zdict.rs`
+  - rewritten `safe/tests/capi/dict_builder_driver.c`
+  - rewritten `safe/tests/capi/sequence_api_driver.c`
+  - rewritten `safe/tests/capi/thread_pool_driver.c`
+  - rewritten `safe/tests/link-compat/Makefile`
+  - rewritten `safe/scripts/run-advanced-mt-tests.sh`
+  - rewritten `safe/scripts/verify-link-compat.sh`
+  - rewritten `safe/docs/unsafe-audit.md`
+- File Changes:
+  - Remove `compile_upstream_phase4_helpers()` and the generated hidden helper archive from `safe/build.rs`.
+  - Remove `dlopen()` / `dlsym()` and the `load_upstream!` macro from `safe/src/ffi/compress.rs`.
+  - Port advanced parameter, dictionary, static-context, sequence API, threading, and dictionary-builder entry points to Rust.
+  - Preserve only the truly required legacy shim C boundary.
+- Implementation Details:
+  - `safe/build.rs` must still emit cfgs, SONAME, and the legacy shim build if needed, but it must stop compiling and linking `common/*.c`, `compress/*.c`, `decompress/*.c`, and `dictBuilder/*.c` as hidden helpers.
+  - `safe/src/compress/cctx_params.rs`, `safe/src/compress/cdict.rs`, `safe/src/compress/sequence_api.rs`, and `safe/src/compress/static_ctx.rs` must stop forwarding to `libzstd_safe_internal_*` helper symbols and become Rust-owned implementations that preserve the public ABI.
+  - `safe/src/threading/*.rs` must preserve the shared-library multithread default and `-mt` / `-nomt` behavior already modeled by `safe/build.rs` and [`original/libzstd-1.5.5+dfsg2/lib/Makefile`](/home/yans/code/safelibs/ported/libzstd/original/libzstd-1.5.5+dfsg2/lib/Makefile#L54).
+  - `safe/src/dict_builder/*.rs` must port COVER/FastCover/divsufsort/zdict behavior into Rust or Rust-side glue that keeps remaining unsafe limited to ABI buffer handling.
+  - Link compatibility must still hold for objects compiled against upstream headers, so the exported symbol list, SONAME, and parameter ABI must stay exact.
+- Verification:
+  - `bash safe/scripts/run-advanced-mt-tests.sh`
+  - `bash safe/scripts/verify-link-compat.sh`
+  - `bash safe/scripts/verify-export-parity.sh`
+  - `cargo test --manifest-path safe/Cargo.toml --release --all-targets`
+  - `rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe`
+
+### Phase 4
+
+- Phase Name: Packaging, Install Layout, and Drop-In Artifact Flow
+- Implement Phase ID: `impl_safe_packaging_install`
+- Verification Phases:
+  - `script_safe_packaging_install` — type: `script`; `bounce_target: impl_safe_packaging_install`; purpose: verify build variants, install layout, Debian profiles, and Debian autopkgtests using only safe-built library artifacts.
+  - `check_safe_packaging_software_tester` — type: `check`; `bounce_target: impl_safe_packaging_install`; purpose: review package contents, install layout, Debian test coverage, and cache/rebuild behavior.
+  - `check_safe_packaging_senior_tester` — type: `check`; `bounce_target: impl_safe_packaging_install`; purpose: review Ubuntu/Debian drop-in compatibility and confirm that the package outputs do not smuggle the old helper-library model back in.
+- Preexisting Inputs:
+  - all outputs from `impl_safe_advanced_abi_completion`
+  - `safe/scripts/build-artifacts.sh`
+  - `safe/scripts/build-deb.sh`
+  - `safe/scripts/build-original-cli-against-safe.sh`
+  - `safe/scripts/install-safe-debs.sh`
+  - `safe/scripts/verify-install-layout.sh`
+  - `safe/scripts/verify-deb-profiles.sh`
+  - `safe/scripts/run-debian-autopkgtests.sh`
+  - `safe/scripts/run-build-variant-tests.sh`
+  - `safe/debian/changelog`
+  - `safe/debian/clean`
+  - `safe/debian/control`
+  - `safe/debian/compat`
+  - `safe/debian/copyright`
+  - `safe/debian/rules`
+  - `safe/debian/source/format`
+  - `safe/debian/libzstd-dev.examples`
+  - `safe/debian/libzstd-dev.install`
+  - `safe/debian/libzstd1.install`
+  - `safe/debian/zstd.install`
+  - `safe/debian/zstd.docs`
+  - `safe/debian/zstd.manpages`
+  - `safe/debian/tests/README.md`
+  - `safe/debian/tests/control`
+  - `safe/debian/tests/python/check_build/*`
+  - `safe/debian/tests/requirements/install.txt`
+  - `safe/debian/tests/requirements/tests.txt`
+  - `safe/debian/tests/ztest/programs.toml`
+  - `safe/debian/tests/ztest/cmake/*`
+  - `safe/debian/tests/ztest/pkg-make/*`
+  - `original/libzstd-1.5.5+dfsg2/programs/*`
+  - `original/libzstd-1.5.5+dfsg2/zlibWrapper/*`
+  - `original/libzstd-1.5.5+dfsg2/examples/*`
+  - `original/libzstd-1.5.5+dfsg2/doc/educational_decoder/*`
+  - `original/libzstd-1.5.5+dfsg2/contrib/pzstd/*`
+  - `original/libzstd-1.5.5+dfsg2/CHANGELOG`
+  - `original/libzstd-1.5.5+dfsg2/CODE_OF_CONDUCT.md`
+  - `original/libzstd-1.5.5+dfsg2/CONTRIBUTING.md`
+  - `original/libzstd-1.5.5+dfsg2/COPYING`
+  - `original/libzstd-1.5.5+dfsg2/LICENSE`
+  - `original/libzstd-1.5.5+dfsg2/README.md`
+  - `original/libzstd-1.5.5+dfsg2/TESTING.md`
+- New Outputs:
+  - rewritten `safe/scripts/build-artifacts.sh`
+  - rewritten `safe/scripts/build-deb.sh`
+  - rewritten `safe/scripts/build-original-cli-against-safe.sh`
+  - rewritten `safe/scripts/install-safe-debs.sh`
+  - rewritten `safe/scripts/verify-install-layout.sh`
+  - rewritten `safe/scripts/verify-deb-profiles.sh`
+  - rewritten `safe/scripts/run-debian-autopkgtests.sh`
+  - rewritten `safe/scripts/run-build-variant-tests.sh`
+  - rewritten `safe/debian/changelog`
+  - rewritten `safe/debian/clean`
+  - rewritten `safe/debian/control`
+  - rewritten `safe/debian/copyright`
+  - rewritten `safe/debian/rules`
+  - rewritten `safe/debian/libzstd-dev.examples`
+  - rewritten `safe/debian/libzstd-dev.install`
+  - rewritten `safe/debian/libzstd1.install`
+  - rewritten `safe/debian/zstd.install`
+  - rewritten `safe/debian/zstd.docs`
+  - rewritten `safe/debian/zstd.manpages`
+  - rewritten `safe/debian/tests/README.md`
+  - rewritten `safe/debian/tests/control`
+  - rewritten `safe/debian/tests/python/check_build/*`
+  - rewritten `safe/debian/tests/requirements/install.txt`
+  - rewritten `safe/debian/tests/requirements/tests.txt`
+  - rewritten `safe/debian/tests/ztest/programs.toml`
+  - rewritten `safe/debian/tests/ztest/cmake/*`
+  - rewritten `safe/debian/tests/ztest/pkg-make/*`
+  - refreshed `safe/out/install/release-default/`
+  - refreshed `safe/out/original-cli/lib/`
+  - refreshed `safe/out/debian-src/default/libzstd-1.5.5+dfsg2/`
+  - refreshed `safe/out/deb/default/metadata.env`
+  - refreshed `safe/out/deb/default/packages/*.deb`
+  - refreshed `safe/out/deb/default/packages/*.udeb` when `SAFE_ENABLE_UDEB=1`
+  - refreshed `safe/out/deb/default/stage-root/`
+- File Changes:
+  - Keep the existing package names and install layout.
+  - Ensure build signatures and reuse logic still work after library internals move fully into Rust.
+  - Ensure CLI and helper-tree build steps link against safe artifacts only.
+  - Make Phase 4 establish the only canonical producer scripts and artifact roots for the install tree, helper root, staged-source tree, and package outputs that later phases may refresh only in place through the same scripts and paths.
+- Implementation Details:
+  - `safe/scripts/build-artifacts.sh` must continue to emit the default, `mt`, and `nomt` variants, with the default shared object multithreaded and the default static archive single-threaded, matching upstream contract.
+  - `safe/scripts/build-original-cli-against-safe.sh` may continue to use upstream CLI/program sources, but the library and headers that those sources see must come from the safe artifact tree, not from upstream `libzstd`.
+  - The Phase 4 script verifier must run the three canonical producer scripts in order, `build-artifacts.sh --release`, `build-original-cli-against-safe.sh`, and `build-deb.sh`, so all four canonical roots exist before the layout, profile, and autopkgtest verifiers run.
+  - `safe/out/original-cli/lib/` must be left populated with the safe headers plus the helper `libzstd.so*` and `libzstd.a` indirection files that the preserved upstream wrappers expect; Phase 4 does not leave that helper root implicit or verifier-optional.
+  - `safe/scripts/build-deb.sh` must keep staging `programs/`, `zlibWrapper/`, `examples/`, `contrib/pzstd/`, `doc/educational_decoder/`, and the upstream top-level doc files because the checked-in Debian metadata already references those paths.
+  - `safe/debian/libzstd-dev.examples` must continue to ship `examples/*`; `safe/debian/zstd.docs` must continue to ship `CHANGELOG` and `*.md`; `safe/debian/zstd.manpages` must continue to install `usr/share/man/man1/*`; and `safe/debian/rules` must keep `execute_after_dh_installman` generating `zstdmt.1` and `pzstd.1` from the safe-built binaries.
+  - `safe/debian/tests/control`, `safe/debian/tests/python/check_build/*`, `safe/debian/tests/requirements/*`, and `safe/debian/tests/ztest/*` must stay fully safe-rooted and checked in. `safe/scripts/run-debian-autopkgtests.sh` must keep using the safe-staged Debian tree, verify that `debian/tests/` no longer points back into `../original`, and keep the three upstream autopkgtest identities from [`original/libzstd-1.5.5+dfsg2/debian/tests/control`](/home/yans/code/safelibs/ported/libzstd/original/libzstd-1.5.5+dfsg2/debian/tests/control#L1).
+  - Phase 4 establishes `safe/out/install/release-default/`, `safe/out/original-cli/lib/`, `safe/out/debian-src/default/libzstd-1.5.5+dfsg2/`, and `safe/out/deb/default/` as the only canonical safe build/package roots. Later phases may refresh those same roots only by explicitly rerunning `bash safe/scripts/build-artifacts.sh --release`, `bash safe/scripts/build-original-cli-against-safe.sh`, and `bash safe/scripts/build-deb.sh` before their verifiers when they edit inputs covered by those producers. They must not use alternate output roots or opportunistic bootstrap logic.
+- Verification:
+  - `bash safe/scripts/build-artifacts.sh --release`
+  - `bash safe/scripts/build-original-cli-against-safe.sh`
+  - `bash safe/scripts/build-deb.sh`
+  - `bash safe/scripts/run-build-variant-tests.sh`
+  - `bash safe/scripts/verify-install-layout.sh`
+  - `bash safe/scripts/verify-install-layout.sh --debian`
+  - `bash safe/scripts/verify-deb-profiles.sh`
+  - `bash safe/scripts/run-debian-autopkgtests.sh`
+
+### Phase 5
+
+- Phase Name: Upstream Black-Box Release Gates
+- Implement Phase ID: `impl_upstream_release_gates`
+- Verification Phases:
+  - `script_upstream_release_gates` — type: `script`; `bounce_target: impl_upstream_release_gates`; purpose: run the preserved upstream black-box families against the installed safe artifacts and confirm that the current wrappers remain accurate and offline-friendly.
+  - `check_upstream_release_gates_software_tester` — type: `check`; `bounce_target: impl_upstream_release_gates`; purpose: review coverage completeness, fixture reuse, and any expected-failure handling.
+  - `check_upstream_release_gates_senior_tester` — type: `check`; `bounce_target: impl_upstream_release_gates`; purpose: review that the black-box suites really exercise the safe install tree instead of an upstream build artifact.
+- Preexisting Inputs:
+  - all outputs from `impl_safe_packaging_install`
+  - `safe/out/install/release-default/`
+  - `safe/out/original-cli/lib/`
+  - `safe/out/deb/default/metadata.env`
+  - `safe/out/deb/default/stage-root/`
+  - `safe/scripts/build-artifacts.sh`
+  - `safe/scripts/build-original-cli-against-safe.sh`
+  - `safe/scripts/build-deb.sh`
+  - `safe/tests/upstream_test_matrix.toml`
+  - `safe/scripts/verify-header-identity.sh`
+  - `safe/scripts/run-upstream-tests.sh`
+  - `safe/scripts/run-original-playtests.sh`
+  - `safe/scripts/run-original-cli-tests.sh`
+  - `safe/scripts/run-original-gzip-tests.sh`
+  - `safe/scripts/run-zlibwrapper-tests.sh`
+  - `safe/scripts/run-educational-decoder-tests.sh`
+  - `safe/scripts/run-pzstd-tests.sh`
+  - `safe/scripts/run-seekable-tests.sh`
+  - `safe/scripts/run-version-compat-tests.sh`
+  - `safe/scripts/run-upstream-regression.sh`
+  - `safe/scripts/run-upstream-fuzz-tests.sh`
+  - `safe/scripts/run-original-examples.sh`
+  - `safe/scripts/phase6-common.sh`
+  - `safe/scripts/verify-baseline-contract.sh`
+  - `safe/scripts/check-cli-permissions.sh`
+  - `safe/scripts/run-performance-smoke.sh`
+  - `safe/scripts/run-full-suite.sh`
+  - `safe/tests/fixtures/versions/*`
+  - `safe/tests/fixtures/regression/*`
+  - `safe/tests/fixtures/fuzz-corpora/*`
+  - `safe/tests/ported/whitebox/Makefile`
+  - `safe/tests/ported/whitebox/offline_regression_data.c`
+  - `original/libzstd-1.5.5+dfsg2/tests/Makefile`
+  - `original/libzstd-1.5.5+dfsg2/tests/fuzz/*`
+  - `original/libzstd-1.5.5+dfsg2/tests/regression/*`
+  - `original/libzstd-1.5.5+dfsg2/tests/gzip/*`
+  - `original/libzstd-1.5.5+dfsg2/zlibWrapper/*`
+  - `original/libzstd-1.5.5+dfsg2/doc/educational_decoder/*`
+  - `original/libzstd-1.5.5+dfsg2/contrib/pzstd/*`
+  - `original/libzstd-1.5.5+dfsg2/contrib/seekable_format/*`
+- New Outputs:
+  - rewritten `safe/tests/upstream_test_matrix.toml`
+  - rewritten `safe/scripts/phase6-common.sh`
+  - rewritten `safe/scripts/run-upstream-tests.sh`
+  - rewritten `safe/scripts/run-original-playtests.sh`
+  - rewritten `safe/scripts/run-original-cli-tests.sh`
+  - rewritten `safe/scripts/run-original-gzip-tests.sh`
+  - rewritten `safe/scripts/run-zlibwrapper-tests.sh`
+  - rewritten `safe/scripts/run-educational-decoder-tests.sh`
+  - rewritten `safe/scripts/run-pzstd-tests.sh`
+  - rewritten `safe/scripts/run-seekable-tests.sh`
+  - rewritten `safe/scripts/run-version-compat-tests.sh`
+  - rewritten `safe/scripts/run-upstream-regression.sh`
+  - rewritten `safe/scripts/run-upstream-fuzz-tests.sh`
+  - rewritten `safe/scripts/run-original-examples.sh`
+  - rewritten `safe/scripts/check-cli-permissions.sh`
+  - rewritten `safe/scripts/run-performance-smoke.sh`
+  - rewritten `safe/scripts/run-full-suite.sh`
+  - rewritten `safe/tests/fixtures/versions/manifest.toml`
+  - rewritten `safe/tests/fixtures/regression/README.md`
+  - rewritten `safe/tests/fixtures/fuzz-corpora/manifest.toml`
+  - refreshed `safe/out/install/release-default/`
+  - refreshed `safe/out/original-cli/lib/`
+  - refreshed `safe/out/debian-src/default/libzstd-1.5.5+dfsg2/`
+  - refreshed `safe/out/deb/default/metadata.env`
+  - refreshed `safe/out/deb/default/packages/*.deb`
+  - refreshed `safe/out/deb/default/packages/*.udeb` when `SAFE_ENABLE_UDEB=1`
+  - refreshed `safe/out/deb/default/stage-root/`
+- File Changes:
+  - Keep all current upstream suite families in the release gate.
+  - Keep the current fixture directories and whitebox harnesses; update them in place if gaps are found.
+  - Preserve the explicit zlibWrapper, educational decoder, pzstd, seekable, version, regression, fuzz, and CLI-permission coverage.
+  - Make the upstream black-box wrappers consume the Phase 4 install tree, helper root, and staged package metadata instead of rebuilding those artifacts on demand.
+- Implementation Details:
+  - Preserve the fixed Phase 1 rebased `owning_phase` values in `safe/tests/upstream_test_matrix.toml`; this phase may update only helper-path, prerequisite, `release_gate`, and other wrapper-alignment metadata in place, plus any already-existing suite entries that were missing from the matrix and must be assigned to the already-fixed Phase 1-5 numbering.
+  - Keep the wrappers offline and reproducible. Reuse existing fixture directories under `safe/tests/fixtures/` instead of downloading or regenerating large corpora.
+  - `safe/scripts/phase6-common.sh` and every wrapper that sources it must treat `safe/out/install/release-default/`, `safe/out/original-cli/lib/`, and `safe/out/deb/default/metadata.env` as required Phase 4 inputs. They may validate freshness and path resolution, but they must not call `build-artifacts.sh`, `build-original-cli-against-safe.sh`, or `build-deb.sh`.
+  - Because `safe/scripts/build-deb.sh` currently hashes the full `safe/scripts/` tree, this phase must explicitly rerun the canonical Phase 4 refresh sequence after its wrapper edits and before its verifiers: `bash safe/scripts/build-artifacts.sh --release`, `bash safe/scripts/build-original-cli-against-safe.sh`, and `bash safe/scripts/build-deb.sh`. The wrapper scripts themselves must still not trigger those rebuilds implicitly at runtime.
+  - `safe/scripts/run-zlibwrapper-tests.sh`, `safe/scripts/run-pzstd-tests.sh`, `safe/scripts/run-seekable-tests.sh`, and `safe/tests/ported/whitebox/Makefile` currently rely on a helper library root built from the safe artifacts plus selected upstream sources; that helper root must keep resolving `libzstd` to the Phase 4 safe build.
+  - `safe/scripts/run-full-suite.sh` must grow into the single top-level release gate and include `safe/scripts/verify-header-identity.sh`, `safe/scripts/verify-baseline-contract.sh`, the preserved upstream black-box families maintained in this phase, and the downstream image-based matrix once Phase 6 lands. It must not hide missing-artifact rebuilds behind implicit helper calls.
+  - Preserve the CLI permission regression checks derived from `relevant_cves.json`.
+- Verification:
+  - `bash safe/scripts/build-artifacts.sh --release`
+  - `bash safe/scripts/build-original-cli-against-safe.sh`
+  - `bash safe/scripts/build-deb.sh`
+  - `bash safe/scripts/verify-header-identity.sh`
+  - `bash safe/scripts/verify-baseline-contract.sh`
+  - `bash safe/scripts/run-upstream-tests.sh`
+  - `bash safe/scripts/run-original-playtests.sh`
+  - `bash safe/scripts/run-original-cli-tests.sh`
+  - `bash safe/scripts/run-original-gzip-tests.sh`
+  - `bash safe/scripts/run-zlibwrapper-tests.sh`
+  - `bash safe/scripts/run-educational-decoder-tests.sh`
+  - `bash safe/scripts/run-pzstd-tests.sh`
+  - `bash safe/scripts/run-seekable-tests.sh`
+  - `bash safe/scripts/run-version-compat-tests.sh`
+  - `bash safe/scripts/run-upstream-regression.sh`
+  - `bash safe/scripts/run-upstream-fuzz-tests.sh`
+  - `bash safe/scripts/run-original-examples.sh`
+  - `bash safe/scripts/check-cli-permissions.sh`
+  - `bash safe/scripts/run-performance-smoke.sh`
+
+### Phase 6
+
+- Phase Name: Dependent Inventory Expansion and Reproducible Image
+- Implement Phase ID: `impl_dependent_image_matrix`
+- Verification Phases:
+  - `script_dependent_image_matrix` — type: `script`; `bounce_target: impl_dependent_image_matrix`; purpose: build the checked-in image, install safe Debian packages in it, compile dependent probes, and exercise the current runtime matrix.
+  - `check_dependent_image_matrix_software_tester` — type: `check`; `bounce_target: impl_dependent_image_matrix`; purpose: review dependent selection, compile-probe quality, and runtime-test determinism.
+  - `check_dependent_image_matrix_senior_tester` — type: `check`; `bounce_target: impl_dependent_image_matrix`; purpose: review that the workflow now uses a reproducible checked-in image instead of an inline container bootstrap.
+- Preexisting Inputs:
+  - all outputs from `impl_upstream_release_gates`
+  - `safe/scripts/build-artifacts.sh`
+  - `safe/scripts/build-original-cli-against-safe.sh`
+  - `safe/out/deb/default/metadata.env`
+  - `safe/out/deb/default/packages/*.deb`
+  - `safe/out/deb/default/packages/*.udeb` when present
+  - `safe/out/deb/default/stage-root/`
+  - `dependents.json`
+  - `safe/tests/dependents/dependent_matrix.toml`
+  - `safe/tests/dependents/src/apt_probe.c`
+  - `safe/tests/dependents/src/btrfs-progs_probe.c`
+  - `safe/tests/dependents/src/curl_probe.c`
+  - `safe/tests/dependents/src/dpkg_probe.c`
+  - `safe/tests/dependents/src/libarchive_probe.c`
+  - `safe/tests/dependents/src/qemu_probe.c`
+  - `safe/tests/dependents/src/rsync_probe.c`
+  - `safe/tests/dependents/src/squashfs-tools_probe.c`
+  - `safe/tests/dependents/src/systemd_probe.c`
+  - `safe/tests/dependents/src/tiff_probe.c`
+  - `safe/scripts/build-deb.sh`
+  - `safe/scripts/check-dependent-compile-compat.sh`
+  - `safe/scripts/verify-baseline-contract.sh`
+  - `test-original.sh`
+- New Outputs:
+  - refreshed `safe/out/install/release-default/`
+  - refreshed `safe/out/original-cli/lib/`
+  - refreshed `safe/out/debian-src/default/libzstd-1.5.5+dfsg2/`
+  - refreshed `safe/out/deb/default/metadata.env`
+  - refreshed `safe/out/deb/default/packages/*.deb`
+  - refreshed `safe/out/deb/default/packages/*.udeb` when `SAFE_ENABLE_UDEB=1`
+  - refreshed `safe/out/deb/default/stage-root/`
+  - rewritten `dependents.json`
+  - rewritten `safe/tests/dependents/dependent_matrix.toml`
+  - new `safe/tests/dependents/src/rpm_probe.c`
+  - new `safe/tests/dependents/src/zarchive_probe.c`
+  - new `safe/tests/dependents/fixtures/rpm/hello.spec`
+  - new `safe/tests/dependents/fixtures/rpm/hello.txt`
+  - new `safe/tests/dependents/fixtures/zarchive/input/a.txt`
+  - new `safe/tests/dependents/fixtures/zarchive/input/sub/b.txt`
+  - new `safe/docker/dependents/Dockerfile`
+  - new `safe/docker/dependents/entrypoint.sh`
+  - new `safe/scripts/build-dependent-image.sh`
+  - new `safe/scripts/run-dependent-matrix.sh`
+  - rewritten `safe/scripts/check-dependent-compile-compat.sh`
+  - rewritten `safe/scripts/verify-baseline-contract.sh`
+  - rewritten `test-original.sh`
+  - refreshed `safe/out/dependents/image-context/`
+  - new `safe/out/dependents/image-context/metadata.env`
+  - refreshed `safe/out/dependents/compile-compat/`
+  - refreshed `safe/out/dependents/logs/`
+- File Changes:
+  - Freeze a 12-application dependent inventory in `dependents.json` and `safe/tests/dependents/dependent_matrix.toml`.
+  - Replace the inline `docker run ... bash <<EOF` body in `test-original.sh` with checked-in scripts and a checked-in image definition that installs the safe `.deb` artifacts before tests run.
+  - Keep the current 10 applications and add exactly 2 more fixed runtime consumers: `rpm` and `zarchive`.
+  - Materialize checked-in runtime fixtures for the 2 new dependents instead of generating their only inputs from shell heredocs.
+  - Remove downstream use of `SAFE_UPSTREAM_LIB`, repo bind mounts, host Cargo binds, and host Rust toolchain binds from the final image-based test flow.
+  - Fix the downstream execution topology so compile compatibility and runtime coverage both execute inside the built image, while the host only orchestrates image build/run and persists logs plus probe outputs under `safe/out/dependents/`.
+  - Pin a single Ubuntu 24.04 image definition plus a single canonical image-tag metadata file under `safe/out/dependents/image-context/` so later phases reuse the same image identity instead of inventing new tags.
+  - Preserve the current inventory-consistency checks, safe-package version checks, and safe-library-resolution checks while moving them into the checked-in image workflow.
+- Implementation Details:
+  - Preserve the existing 10 packages already curated in `dependents.json`.
+  - Add these exact 2 new dependent entries and keep them in both `dependents.json` and `safe/tests/dependents/dependent_matrix.toml`:
+    - source package `rpm`, binary package `rpm`, compile probe `safe/tests/dependents/src/rpm_probe.c`, runtime test `test_rpm`, `compile_mode = "pkg-config-c"`, and `pkg_config_modules = ["libzstd"]`. The JSON entry must record that Ubuntu Noble source package `rpm` Build-Depends on `libzstd-dev`, and that the runtime path under test is `rpm`/`rpmbuild`/`rpm2cpio` using the `librpmio9t64 -> libzstd1` dependency chain.
+    - source package `zarchive`, binary package `zarchive-tools`, compile probe `safe/tests/dependents/src/zarchive_probe.c`, runtime test `test_zarchive`, `compile_mode = "pkg-config-c"`, and `pkg_config_modules = ["libzstd"]`. The JSON entry must record that Ubuntu Noble source package `zarchive` Build-Depends-Arch on `libzstd-dev`, and that `zarchive-tools` reaches `libzstd1` through `libzarchive0.1`.
+  - `safe/tests/dependents/src/rpm_probe.c` must follow the current minimal `pkg-config-c` pattern and reference the core one-shot APIs that the RPM payload path needs: `ZSTD_compressBound`, `ZSTD_createCCtx`, `ZSTD_CCtx_setParameter(..., ZSTD_c_compressionLevel, 19)`, `ZSTD_compress2`, `ZSTD_createDCtx`, `ZSTD_decompressDCtx`, and the matching free calls.
+  - `safe/tests/dependents/src/zarchive_probe.c` must follow the same pattern but exercise stream-oriented APIs appropriate for archive creation/extraction: `ZSTD_CStreamInSize`, `ZSTD_CStreamOutSize`, `ZSTD_createCStream`, `ZSTD_createDStream`, `ZSTD_compressStream2`, `ZSTD_decompressStream`, and the matching free calls.
+  - Add checked-in runtime fixtures for the new dependents:
+    - `safe/tests/dependents/fixtures/rpm/hello.spec` and `safe/tests/dependents/fixtures/rpm/hello.txt` for a tiny noarch RPM whose payload compressor must be queried as `zstd`;
+    - `safe/tests/dependents/fixtures/zarchive/input/a.txt` and `safe/tests/dependents/fixtures/zarchive/input/sub/b.txt` for a create-then-extract round trip.
+  - `safe/docker/dependents/Dockerfile` must build the reproducible downstream image from the safe Debian artifacts already produced by Phase 4 and materialized under `safe/out/deb/default/`. It must use Ubuntu 24.04 as the fixed base (`FROM ubuntu:24.04`, or an equivalent `ARG` whose default is exactly `ubuntu:24.04`). It must install the current downstream package set from `test-original.sh` that the matrix already relies on: `apt`, `apt-utils`, `btrfs-progs`, `build-essential`, `ca-certificates`, `cmake`, `curl`, `debhelper`, `devscripts`, `dh-package-notes`, `dpkg-dev`, `fakeroot`, `help2man`, `jq`, `libarchive-tools`, `liblz4-dev`, `liblzma-dev`, `libtiff-tools`, `less`, `pkgconf`, `python3`, `python3-pil`, `qemu-utils`, `rsync`, `squashfs-tools`, `systemd`, `zlib1g-dev`, and `zstd`, plus the new runtime packages `rpm`, `cpio`, `file`, and `zarchive-tools`. The image must also bake in the dependent fixtures, matrix metadata, and checked-in helper scripts so later `docker run` invocations do not require a repo mount. Because the image is built from already-produced safe `.deb` outputs, it must not need `cargo`, `rustc`, `HOST_CARGO_HOME`, or `HOST_RUSTUP_HOME`.
+  - Because `safe/scripts/build-deb.sh` currently hashes the full `safe/scripts/` tree and this phase rewrites scripts inside that tree, this phase must explicitly rerun the canonical Phase 4 refresh sequence before image assembly: `bash safe/scripts/build-artifacts.sh --release`, `bash safe/scripts/build-original-cli-against-safe.sh`, and `bash safe/scripts/build-deb.sh`.
+  - `safe/scripts/build-dependent-image.sh` must stage an image context under `safe/out/dependents/` that copies in the current safe `libzstd1`, `libzstd-dev`, and `zstd` `.deb` outputs plus `safe/out/deb/default/metadata.env`, `dependents.json`, `safe/tests/dependents/`, `safe/scripts/check-dependent-compile-compat.sh`, and `safe/docker/dependents/entrypoint.sh`, then `docker build` from `safe/docker/dependents/Dockerfile`. It must write `safe/out/dependents/image-context/metadata.env` with the single canonical local image tag/name and the base image default used for the matrix, and later phases must source that file instead of inventing alternate tags. The staged context must be sufficient for later runtime containers to execute without bind-mounting the repo. If the Phase 4 package outputs are missing or stale, the caller must first rerun the canonical Phase 4 refresh sequence; `build-dependent-image.sh` itself may validate freshness and fail if that caller step was skipped, but it must not shell out to alternate packaging/bootstrap logic.
+  - `safe/docker/dependents/entrypoint.sh` must define the full runtime matrix formerly embedded in `test-original.sh`, including the new `test_rpm` and `test_zarchive` functions:
+    - it must expose explicit subcommands for `compile`, `runtime`, and `all`, where `compile` invokes `safe/scripts/check-dependent-compile-compat.sh` inside the image and `runtime` dispatches the per-application test functions;
+    - it must keep the container root filesystem writable and use the existing `/tmp/libzstd-dependent-tests` scratch-root pattern so the preserved runtime tests can still create loopback images, mount them, and manage transient journald state under `/run`;
+    - `test_rpm` must assert that `/usr/bin/rpm`, `/usr/bin/rpmbuild`, and `/usr/bin/rpm2cpio` resolve `libzstd.so.1`; copy the checked-in RPM fixtures into `$TEST_ROOT/rpm/`; run `rpmbuild --define '_binary_payload w19.zstdio'`; assert `%{PAYLOADCOMPRESSOR}` is `zstd`; extract the resulting RPM with `rpm2cpio | cpio -idmu`; and compare the extracted `hello.txt` with the fixture source.
+    - `test_zarchive` must assert that `/usr/bin/zarchive` resolves `libzstd.so.1`; copy the checked-in zarchive fixture tree into `$TEST_ROOT/zarchive/in/`; run `zarchive "$dir/in" "$dir/archive.za"` and `zarchive "$dir/archive.za" "$dir/out"`; and `diff -ru` the input and output trees.
+  - `safe/scripts/run-dependent-matrix.sh` must be the only host-side executor for the downstream matrix. It must read the canonical image identity from `safe/out/dependents/image-context/metadata.env`, own image execution, in-image compile-compat execution, per-dependent runtime dispatch, and selective modes such as `--compile-only`, `--runtime-only`, and `--apps rpm,zarchive` so the new dependents can be debugged independently. Its runtime container invocation must use `docker run --rm --privileged`, must keep `/run` writable, and must bind-mount only host output directories for `safe/out/dependents/logs/` and `safe/out/dependents/compile-compat/`. It must write per-app logs under `safe/out/dependents/logs/` and compile outputs under `safe/out/dependents/compile-compat/` so Phase 7 can consume the existing evidence instead of rediscovering it.
+  - `safe/scripts/check-dependent-compile-compat.sh` and `safe/scripts/verify-baseline-contract.sh` must be updated in place to expect all 12 source packages and the new runtime mappings `rpm -> test_rpm` and `zarchive -> test_zarchive`. `safe/scripts/check-dependent-compile-compat.sh` must assume it is running inside the dependent image after the safe packages are installed there, and it must not remain a host-side verifier entry point.
+  - `safe/docker/dependents/entrypoint.sh` and `test-original.sh` must preserve the current inventory-consistency check, the installed safe-package version equality and `safelibs` suffix checks for `libzstd1`, `libzstd-dev`, and `zstd`, and the `assert_uses_safe_lib` checks before any app-specific runtime coverage runs.
+  - `test-original.sh` must become the stable top-level wrapper that validates inventory consistency, ensures the existing safe Debian artifacts exist, delegates to `safe/scripts/build-dependent-image.sh` and `safe/scripts/run-dependent-matrix.sh`, and no longer exports `SAFE_UPSTREAM_LIB` or mounts the repo/toolchain into runtime containers.
+- Verification:
+  - `bash safe/scripts/build-artifacts.sh --release`
+  - `bash safe/scripts/build-original-cli-against-safe.sh`
+  - `bash safe/scripts/build-deb.sh`
+  - `bash safe/scripts/build-dependent-image.sh`
+  - `bash safe/scripts/run-dependent-matrix.sh --compile-only`
+  - `bash safe/scripts/run-dependent-matrix.sh --runtime-only --apps btrfs-progs,systemd`
+  - `bash safe/scripts/run-dependent-matrix.sh --runtime-only --apps rpm,zarchive`
+  - `bash safe/scripts/verify-baseline-contract.sh`
+  - `bash test-original.sh`
+
+### Phase 7
+
+- Phase Name: Dependent Regressions and Compatibility Fixes
+- Implement Phase ID: `impl_compat_regressions_and_fixes`
+- Verification Phases:
+  - `script_compat_regressions_and_fixes` — type: `script`; `bounce_target: impl_compat_regressions_and_fixes`; purpose: run the full 12-application runtime matrix, execute the new regressions, and validate the fixes.
+  - `check_compat_regressions_software_tester` — type: `check`; `bounce_target: impl_compat_regressions_and_fixes`; purpose: review that every discovered bug gained a reproducer before being fixed.
+  - `check_compat_regressions_senior_tester` — type: `check`; `bounce_target: impl_compat_regressions_and_fixes`; purpose: review the appropriateness of each fix, the minimality of the unsafe surface, and any cross-suite regression risk.
+- Preexisting Inputs:
+  - all outputs from `impl_dependent_image_matrix`
+  - `safe/out/install/release-default/`
+  - `safe/out/original-cli/lib/`
+  - `safe/out/debian-src/default/libzstd-1.5.5+dfsg2/`
+  - `safe/out/deb/default/metadata.env`
+  - `safe/out/deb/default/packages/*.deb`
+  - `safe/out/deb/default/packages/*.udeb` when present
+  - `safe/out/deb/default/stage-root/`
+  - `safe/out/dependents/image-context/`
+  - `safe/out/dependents/compile-compat/`
+  - `safe/out/dependents/logs/`
+  - `safe/src/**/*`
+  - `safe/tests/rust/*`
+  - `safe/tests/capi/*`
+  - `safe/tests/dependents/*`
+  - `safe/scripts/*`
+  - `safe/docs/unsafe-audit.md`
+- New Outputs:
+  - rewritten library/source files in the specific safe modules implicated by downstream failures
+  - new or rewritten checked-in regressions under the closest existing harness:
+    - `safe/tests/rust/*.rs`
+    - `safe/tests/capi/*.c`
+    - `safe/tests/dependents/src/*.c`
+    - `safe/tests/dependents/regressions/*`
+    - `safe/scripts/*`
+  - rewritten `safe/docs/unsafe-audit.md`
+  - rewritten `safe/tests/upstream_test_matrix.toml` and `safe/tests/dependents/dependent_matrix.toml` if coverage metadata changes
+  - refreshed `safe/out/install/release-default/`
+  - refreshed `safe/out/original-cli/lib/`
+  - refreshed `safe/out/debian-src/default/libzstd-1.5.5+dfsg2/`
+  - refreshed `safe/out/deb/default/metadata.env`
+  - refreshed `safe/out/deb/default/packages/*.deb`
+  - refreshed `safe/out/deb/default/packages/*.udeb` when `SAFE_ENABLE_UDEB=1`
+  - refreshed `safe/out/deb/default/stage-root/`
+  - refreshed `safe/out/dependents/image-context/`
+  - refreshed `safe/out/dependents/compile-compat/`
+  - refreshed `safe/out/dependents/logs/`
+- File Changes:
+  - Add a reproducer before fixing every newly discovered compatibility issue.
+  - Keep each reproducer as close as possible to the failing surface rather than creating a disconnected ad hoc test location.
+  - Update the downstream image/runtime harness only when the failure is in the harness, not when the failure is in the library behavior.
+- Implementation Details:
+  - Triage failures from the existing Phase 6 logs and artifacts under `safe/out/dependents/` first; do not create a second dependent-results manifest and do not broaden the app set beyond the fixed 12-application inventory.
+  - Route failures to the narrowest appropriate harness:
+    - ABI or pointer-semantics bugs go to `safe/tests/capi/`;
+    - algorithmic or Rust API bugs go to `safe/tests/rust/`;
+    - packaging or CLI integration bugs go to `safe/scripts/` or Debian tests;
+    - app-specific failures go to `safe/tests/dependents/`.
+  - If this phase edits any file hashed or staged by the canonical Phase 4 or Phase 6 producers, it must explicitly rerun the canonical refresh chain in order before downstream verifiers: `bash safe/scripts/build-artifacts.sh --release`, `bash safe/scripts/build-original-cli-against-safe.sh`, `bash safe/scripts/build-deb.sh`, and `bash safe/scripts/build-dependent-image.sh`. Reuse the existing Phase 4 and Phase 6 paths; do not create alternate output roots, an alternate image tag flow, or an extra results manifest.
+  - If a harness fix requires refreshing the staged downstream image context, update `safe/out/dependents/` in place through the existing scripts; do not reintroduce inline `docker run ... bash <<EOF` logic, repo mounts, host toolchain binds, or a host-side compile-compat path outside the image.
+  - Update `safe/docs/unsafe-audit.md` whenever a fix changes where `unsafe` is used or why it remains.
+  - Re-run affected upstream suites after each fix so dependent fixes do not silently regress the broader black-box surface.
+- Verification:
+  - `bash safe/scripts/build-artifacts.sh --release`
+  - `bash safe/scripts/build-original-cli-against-safe.sh`
+  - `bash safe/scripts/build-deb.sh`
+  - `bash safe/scripts/build-dependent-image.sh`
+  - `bash safe/scripts/run-dependent-matrix.sh --compile-only`
+  - `bash safe/scripts/run-dependent-matrix.sh --runtime-only`
+  - `bash test-original.sh`
+  - run the exact new regression tests added in this phase
+  - rerun whichever upstream suites exercise the touched surface before yielding
+
+### Phase 8
+
+- Phase Name: Final Release Burn-Down
+- Implement Phase ID: `impl_final_release_burn_down`
+- Verification Phases:
+  - `script_final_release_burn_down` — type: `script`; `bounce_target: impl_final_release_burn_down`; purpose: run the end-to-end release gate after all fixes and ensure no shipping dependency on upstream C remains outside the approved boundary.
+  - `check_final_release_software_tester` — type: `check`; `bounce_target: impl_final_release_burn_down`; purpose: review residual risks, testing completeness, and final regression coverage.
+  - `check_final_release_senior_tester` — type: `check`; `bounce_target: impl_final_release_burn_down`; purpose: review drop-in replaceability, linear workflow discipline, and final unsafe justification.
+- Preexisting Inputs:
+  - all outputs from `impl_compat_regressions_and_fixes`
+  - `safe/out/install/release-default/`
+  - `safe/out/original-cli/lib/`
+  - `safe/out/deb/default/metadata.env`
+  - `safe/out/deb/default/packages/*.deb`
+  - `safe/out/deb/default/packages/*.udeb` when present
+  - `safe/out/deb/default/stage-root/`
+  - `safe/out/dependents/image-context/`
+  - `safe/out/dependents/compile-compat/`
+  - `safe/out/dependents/logs/`
+  - `safe/scripts/build-artifacts.sh`
+  - `safe/scripts/build-original-cli-against-safe.sh`
+  - `safe/scripts/build-deb.sh`
+  - `safe/scripts/build-dependent-image.sh`
+  - `safe/scripts/run-full-suite.sh`
+  - `safe/abi/export_map.toml`
+  - `safe/tests/upstream_test_matrix.toml`
+  - `safe/tests/dependents/dependent_matrix.toml`
+  - `safe/docs/unsafe-audit.md`
+  - git history from the previous implement phases
+- New Outputs:
+  - rewritten `safe/scripts/run-full-suite.sh`
+  - final cleanup edits across any touched safe files
+  - rewritten `safe/abi/export_map.toml`
+  - rewritten `safe/tests/upstream_test_matrix.toml`
+  - rewritten `safe/tests/dependents/dependent_matrix.toml`
+  - rewritten `safe/docs/unsafe-audit.md`
+  - refreshed `safe/out/install/release-default/`
+  - refreshed `safe/out/original-cli/lib/`
+  - refreshed `safe/out/debian-src/default/libzstd-1.5.5+dfsg2/`
+  - refreshed `safe/out/deb/default/metadata.env`
+  - refreshed `safe/out/deb/default/packages/*.deb`
+  - refreshed `safe/out/deb/default/packages/*.udeb` when `SAFE_ENABLE_UDEB=1`
+  - refreshed `safe/out/deb/default/stage-root/`
+  - refreshed `safe/out/dependents/image-context/`
+  - refreshed `safe/out/dependents/compile-compat/`
+  - refreshed `safe/out/dependents/logs/`
+- File Changes:
+  - Finalize the aggregator so it includes the image-based downstream workflow and any new regressions from Phase 7.
+  - Remove temporary comments, compatibility scaffolding, or metadata that became obsolete during earlier phases.
+  - Leave the repository in a state where the next reviewer can see one commit per implement phase before its verifier phases.
+- Implementation Details:
+  - `safe/scripts/run-full-suite.sh` must remain the single top-level release gate and must include `safe/scripts/verify-header-identity.sh`, `safe/scripts/verify-baseline-contract.sh`, the preserved upstream suite wrappers, the downstream image-based test flow, and performance smoke, all consuming the existing Phase 4 and Phase 6 artifact roots instead of rebuilding them. Its downstream leg must keep the Phase 6 topology unchanged: compile compatibility executes inside the built image, and runtime coverage executes in the same image with the preserved `--privileged` plus writable-`/run` container contract.
+  - If this phase makes any cleanup edit that touches files hashed or staged by the canonical Phase 4 or Phase 6 producers, it must explicitly rerun `bash safe/scripts/build-artifacts.sh --release`, `bash safe/scripts/build-original-cli-against-safe.sh`, `bash safe/scripts/build-deb.sh`, and `bash safe/scripts/build-dependent-image.sh` before the final verification suite. `safe/scripts/run-full-suite.sh` itself must not hide that refresh work behind implicit helper calls.
+  - Final metadata cleanup must keep `safe/abi/export_map.toml`, `safe/tests/upstream_test_matrix.toml`, and `safe/tests/dependents/dependent_matrix.toml` consistent with the finished workflow.
+  - Final code cleanup must not weaken coverage or reintroduce upstream runtime dependencies.
+- Verification:
+  - `bash safe/scripts/build-artifacts.sh --release`
+  - `bash safe/scripts/build-original-cli-against-safe.sh`
+  - `bash safe/scripts/build-deb.sh`
+  - `bash safe/scripts/build-dependent-image.sh`
+  - `cargo test --manifest-path safe/Cargo.toml --release --all-targets`
+  - `bash safe/scripts/verify-header-identity.sh`
+  - `bash safe/scripts/verify-export-parity.sh`
+  - `bash safe/scripts/verify-link-compat.sh`
+  - `bash safe/scripts/run-capi-decompression.sh`
+  - `bash safe/scripts/run-capi-roundtrip.sh`
+  - `bash safe/scripts/run-advanced-mt-tests.sh`
+  - `bash safe/scripts/run-build-variant-tests.sh`
+  - `bash safe/scripts/verify-install-layout.sh`
+  - `bash safe/scripts/verify-install-layout.sh --debian`
+  - `bash safe/scripts/verify-deb-profiles.sh`
+  - `bash safe/scripts/run-debian-autopkgtests.sh`
+  - `bash safe/scripts/run-upstream-tests.sh`
+  - `bash safe/scripts/run-original-playtests.sh`
+  - `bash safe/scripts/run-original-cli-tests.sh`
+  - `bash safe/scripts/run-original-gzip-tests.sh`
+  - `bash safe/scripts/run-zlibwrapper-tests.sh`
+  - `bash safe/scripts/run-educational-decoder-tests.sh`
+  - `bash safe/scripts/run-pzstd-tests.sh`
+  - `bash safe/scripts/run-seekable-tests.sh`
+  - `bash safe/scripts/run-version-compat-tests.sh`
+  - `bash safe/scripts/run-upstream-regression.sh`
+  - `bash safe/scripts/run-upstream-fuzz-tests.sh`
+  - `bash safe/scripts/check-cli-permissions.sh`
+  - `bash safe/scripts/run-performance-smoke.sh`
+  - `bash safe/scripts/run-dependent-matrix.sh --compile-only`
+  - `bash safe/scripts/run-dependent-matrix.sh --runtime-only`
+  - `bash safe/scripts/verify-baseline-contract.sh`
+  - `bash test-original.sh`
+  - `bash safe/scripts/run-full-suite.sh`
+  - `rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe`
+
+## 4. Critical Files
+
+- `safe/Cargo.toml`: keep crate types and feature matrix intact; add or adjust Rust dependencies only if needed to finish the safe-only implementation.
+- `safe/build.rs`: remove the hidden upstream helper archive build, preserve cfg emission, variant selection, SONAME, and any unavoidable legacy C build.
+- `safe/abi/export_map.toml`: keep the full symbol inventory, apply the fixed post-scaffold rebase `2 -> 1`, `3 -> 2`, `4 -> 3`, and keep every symbol status synchronized with the real implementation.
+- `safe/tests/upstream_test_matrix.toml`: keep the full upstream suite inventory and apply the fixed post-scaffold rebase `2 -> 1`, `3 -> 2`, `4 -> 3`, `5 -> 4`, `6 -> 5` while updating prerequisite metadata in place.
+- `safe/tests/dependents/dependent_matrix.toml`: expand from 10 to 12 dependents, keep runtime test names aligned with `test-original.sh`, and preserve the current source inventory linkage to `dependents.json`.
+- `dependents.json`: freeze the 12-application dependent inventory, add `rpm` and `zarchive`, and record the verified Ubuntu Noble build/runtime evidence for those entries without creating a parallel manifest.
+- `test-original.sh`: replace the inline Ubuntu image bootstrap; keep it as the top-level downstream wrapper that validates inventory consistency, preserves the safe-package version/suffix checks, ensures the existing safe `.deb` artifacts exist, and delegates to the checked-in image scripts without `SAFE_UPSTREAM_LIB`, repo mounts, or host toolchain mounts in the runtime container path.
+- `safe/scripts/verify-baseline-contract.sh`: in Phase 1, rebase the hardcoded export and upstream-suite ownership checks to the fixed mapping above; in Phase 6, extend only the dependent set and runtime-test mapping so the repo-wide contract checker matches the 12-app matrix without re-shifting the already rebased workflow numbering.
+- `safe/scripts/capture-upstream-abi.sh`: keep the write path available for explicit baseline recapture when intentionally requested later, but make `--check` consume the checked-in ABI baseline files instead of requiring missing prebuilt artifacts under `original/lib/`.
+- `safe/scripts/check-dependent-compile-compat.sh`: keep it as the in-image compile-probe helper for the 12-app matrix; it must assume the safe packages are already installed inside the dependent image and must not remain a separate host-side verifier path.
+- `safe/scripts/phase6-common.sh`: make the upstream black-box wrappers consume the Phase 4 install tree and helper root in place instead of rebuilding them on demand.
+- `safe/src/ffi/compress.rs`: delete the dynamic-loader path entirely once no callers remain.
+- `safe/src/ffi/decompress.rs`: remove formatted-dictionary validation and bufferless replay dependencies on upstream `libzstd`.
+- `safe/src/decompress/dctx.rs`, `safe/src/decompress/frame.rs`, `safe/src/decompress/ddict.rs`, `safe/src/decompress/dstream.rs`, `safe/src/decompress/huf.rs`, `safe/src/decompress/fse.rs`: complete native dictionary and streaming semantics and preserve decompression-side ABI behavior.
+- `safe/src/compress/block.rs`, `safe/src/compress/cctx.rs`, `safe/src/compress/cstream.rs`, `safe/src/compress/params.rs`, `safe/src/compress/frame.rs`, `safe/src/compress/literals.rs`, `safe/src/compress/ldm.rs`, `safe/src/compress/match_state.rs`, `safe/src/compress/sequences.rs`, `safe/src/compress/strategies/*.rs`: remove core compression fallback and implement the remaining placeholder modules.
+- `safe/src/compress/cctx_params.rs`, `safe/src/compress/cdict.rs`, `safe/src/compress/sequence_api.rs`, `safe/src/compress/static_ctx.rs`: port advanced ABI surfaces away from upstream helper symbols.
+- `safe/src/threading/job_queue.rs`, `safe/src/threading/pool.rs`, `safe/src/threading/zstdmt.rs`: keep the multithreaded shared-library contract while making the implementation native to the safe crate.
+- `safe/src/dict_builder/cover.rs`, `safe/src/dict_builder/divsufsort.rs`, `safe/src/dict_builder/fastcover.rs`, `safe/src/dict_builder/zdict.rs`: port dictionary-building behavior and keep remaining unsafe limited to ABI buffer glue.
+- `safe/src/ffi/legacy_shim.c`: keep only if required for legacy frame ABI compatibility; do not expand it beyond that role.
+- `safe/docs/unsafe-audit.md`: keep the unsafe inventory accurate after each implementation phase.
+- `safe/tests/rust/compress.rs`, `safe/tests/rust/decompress.rs`: extend Rust integration tests with checked-in regressions for every library-side compatibility bug found.
+- `safe/tests/capi/*.c`: keep the C ABI smoke and driver tests aligned with the public API surface and add new regressions close to the failing ABI.
+- `safe/tests/link-compat/Makefile` and `safe/tests/link-compat/*.c`: preserve the object-then-link compatibility harness for upstream-compiled objects.
+- `safe/scripts/run-capi-decompression.sh`, `safe/scripts/run-capi-roundtrip.sh`, `safe/scripts/run-advanced-mt-tests.sh`, `safe/scripts/verify-link-compat.sh`: stop using `SAFE_UPSTREAM_LIB` and validate only safe artifacts.
+- `safe/scripts/build-artifacts.sh`, `safe/scripts/build-deb.sh`, `safe/scripts/build-original-cli-against-safe.sh`, `safe/scripts/install-safe-debs.sh`, `safe/scripts/verify-install-layout.sh`, `safe/scripts/verify-deb-profiles.sh`, `safe/scripts/run-debian-autopkgtests.sh`, `safe/scripts/run-build-variant-tests.sh`, `safe/scripts/phase6-common.sh`: preserve the packaging/install/drop-in contract while moving the library implementation fully into Rust.
+- `safe/debian/control`, `safe/debian/rules`, `safe/debian/*.install`, `safe/debian/*.docs`, `safe/debian/*.manpages`, `safe/debian/tests/control`, `safe/debian/tests/python/*`, `safe/debian/tests/requirements/*`, and `safe/debian/tests/ztest/*`: preserve the package names, contents, manpages, docs, examples, and autopkgtests in place.
+- `safe/scripts/run-upstream-tests.sh`, `safe/scripts/run-original-playtests.sh`, `safe/scripts/run-original-cli-tests.sh`, `safe/scripts/run-original-gzip-tests.sh`, `safe/scripts/run-zlibwrapper-tests.sh`, `safe/scripts/run-educational-decoder-tests.sh`, `safe/scripts/run-pzstd-tests.sh`, `safe/scripts/run-seekable-tests.sh`, `safe/scripts/run-version-compat-tests.sh`, `safe/scripts/run-upstream-regression.sh`, `safe/scripts/run-upstream-fuzz-tests.sh`, `safe/scripts/check-cli-permissions.sh`, `safe/scripts/run-performance-smoke.sh`, `safe/scripts/run-full-suite.sh`: keep the current release-gate families intact, include header identity and baseline contract in the aggregator, and wire everything to the existing safe artifacts without implicitly rebuilding Phase 4 outputs inside the wrappers; perform any needed refresh explicitly through the canonical Phase 4 refresh sequence first.
+- `safe/tests/fixtures/versions/*`, `safe/tests/fixtures/regression/*`, `safe/tests/fixtures/fuzz-corpora/*`, `safe/tests/ported/whitebox/*`: preserve and update the current offline fixtures and whitebox harnesses in place.
+- `safe/docker/dependents/Dockerfile`, `safe/docker/dependents/entrypoint.sh`, `safe/scripts/build-dependent-image.sh`, `safe/scripts/run-dependent-matrix.sh`: new files that replace the ad hoc downstream container bootstrap with a reproducible checked-in image workflow built from the safe `.deb` artifacts and the full 12-app matrix, keeping compile compatibility inside the image and preserving the existing `--privileged` plus writable-`/run` runtime contract for `btrfs` and `systemd-journald`.
+- `safe/out/dependents/image-context/metadata.env`: record the single canonical downstream image tag/name and Ubuntu 24.04 base-image default so host-side runners and later phases reuse one image identity.
+- `safe/tests/dependents/src/*.c`, `safe/tests/dependents/fixtures/rpm/*`, `safe/tests/dependents/fixtures/zarchive/**`, and `safe/tests/dependents/regressions/*`: keep compile probes, checked-in runtime fixtures, and app-specific regressions aligned with the final 12-application matrix, including the new `rpm` and `zarchive` coverage.
+- `safe/out/install/release-default/`, `safe/out/original-cli/lib/`, `safe/out/deb/default/`, and `safe/out/dependents/`: generated artifact roots that later phases must consume and refresh only in place through the canonical scripts instead of recreating them through alternate bootstrap paths.
+
+## 5. Final Verification
+
+The final state is acceptable only if all of the following are true:
+
+- The shipping safe library exports the full upstream symbol set with the same SONAME and no extra public exports.
+- No shipping safe library path depends on `SAFE_UPSTREAM_LIB`, `dlopen()`, `dlsym()`, `load_upstream!`, or the `upstream-phase4` helper archive.
+- The only remaining C in the final library build is justified ABI-boundary or legacy-format glue.
+- The default/shared/static/`mt`/`nomt` artifact behavior still matches the upstream contract.
+- The Debian package set installs as `libzstd1`, `libzstd-dev`, `zstd`, and `libzstd1-udeb` on Ubuntu 24.04 and passes the safe-side autopkgtests.
+- All preserved upstream test families still pass against the safe install tree.
+- The downstream image builds reproducibly from the current safe `.deb` artifacts, installs the safe Debian packages plus the 12 dependent applications, runs the compile-compat pass inside that image, and passes all 12 runtime tests there, including `test_rpm` and `test_zarchive`.
+- The downstream runtime containers use the preserved `docker run --rm --privileged` contract with writable `/run` and no repo/Cargo/Rustup/upstream-library bind mounts, so the `btrfs` loop-device/mount path and `systemd-journald` path remain covered.
+- The reusable artifact roots under `safe/out/install/release-default/`, `safe/out/original-cli/lib/`, `safe/out/deb/default/`, and `safe/out/dependents/` remain the only build/install/image state consumed by the release gate, and any needed refresh of them happens explicitly in place through the canonical scripts before the final gate runs.
+- Every compatibility failure found during the work has a checked-in regression reproducer in the closest appropriate harness.
+- The final one-shot verification command succeeds and already includes header identity, baseline-contract verification, the preserved upstream suites, the downstream image matrix, and performance smoke:
+  - `bash safe/scripts/run-full-suite.sh`
+- The final downstream wrapper also succeeds on its own:
+  - `bash test-original.sh`
+
+Treat that pair as the end-of-work release gate. Use the individual suite commands above as phase verifiers and debugging entry points.

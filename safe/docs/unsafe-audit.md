@@ -1,6 +1,6 @@
 # Unsafe Audit
 
-Last reviewed: 2026-03-28
+Last reviewed: 2026-03-30
 
 Remaining `unsafe` is intentionally limited to three categories:
 
@@ -10,8 +10,9 @@ Remaining `unsafe` is intentionally limited to three categories:
    `DecoderDictionary` values are passed through opaque C handles and later
    recovered.
 3. Equivalent low-level glue such as out-parameter writes, raw buffer copies,
-   and dynamic symbol binding that cannot be expressed in safe Rust without
-   changing the upstream ABI contract.
+   compatibility shims for legacy v0.5-v0.7 decode, and the remaining
+   compression-side dynamic symbol binding that cannot be expressed in safe
+   Rust without changing the upstream ABI contract.
 
 No `unsafe` remains in the core frame parser, block decoder, FSE/HUF decoding
 logic, or the high-level Rust compression and decompression algorithms
@@ -92,30 +93,26 @@ themselves.
 
 ### `safe/src/decompress/dctx.rs`
 
-- `54`, `59`, `70`: create, use, and free a temporary upstream `DCtx` when the
-  dict-backed compatibility path must match upstream decode semantics exactly.
-- `337`: writes the current `ZSTD_dParameter` value into the caller-provided
+- writes the current `ZSTD_dParameter` value into the caller-provided
   `int*` out-parameter for `ZSTD_DCtx_getParameter()`.
 
 ### `safe/src/decompress/dstream.rs`
 
 - `72`: reborrows caller-provided `ZSTD_outBuffer*` and `ZSTD_inBuffer*` as
   mutable Rust references for streaming decode.
-- `118`, `124`: call linked helper symbols for stream-size estimators.
 - `145`, `151`: read the caller-owned `dstPos` and `srcPos` values for the
   simple-args streaming wrapper.
 - `155`: writes updated `dstPos` and `srcPos` values back to the caller.
 
 ### `safe/src/decompress/frame.rs`
 
-- `410`, `415`, `426`: create, use, and free a temporary upstream `DCtx` when
-  dictionary-backed decode must match upstream exactly.
-- `795`: copies the decoded frame payload into the caller's destination buffer.
+- copies the decoded frame payload into the caller's destination buffer.
 
 ### `safe/src/decompress/legacy.rs`
 
-- `28`, `32`, `41`, `46`, `55`, `67`: call the legacy-support C shim for
-  version probing, sizing, and decompression of legacy frames.
+- calls the legacy-support C shim for version probing, sizing, one-shot
+  decompression, and the streaming context lifecycle used only for legacy
+  v0.5-v0.7 frames. This is the sole remaining decompression-side C bridge.
 
 ### `safe/src/dict_builder/cover.rs`
 
@@ -147,20 +144,17 @@ themselves.
 
 ### `safe/src/ffi/decompress.rs`
 
-- `31`: calls upstream `ZSTD_createDDict()` to validate that a formatted
-  dictionary is acceptable to the reference implementation.
-- `35`: calls upstream `ZSTD_freeDDict()` to release that temporary validation
-  handle.
-- `250`, `257`, `261`, `267`, `268`, `271`, `272`: create and initialize a
-  temporary upstream `DCtx` for bufferless decode replay, including format,
-  window-size, and dict/no-dict start paths that must exactly match upstream.
-- `307`: calls upstream `ZSTD_decompressContinue()` on the temporary session.
-- `333`: calls upstream `ZSTD_nextSrcSizeToDecompress()` on the temporary
-  session.
-- `351`: calls upstream `ZSTD_decompressBlock()` on the temporary session.
-- `381`: calls upstream `ZSTD_decompressStream()` on the temporary session.
-- `403`: frees the temporary upstream `DCtx` in `Drop`.
-- `431`: copies staged decoded output into the caller's destination buffer.
+- validates caller-provided buffers, converts incoming `src` pointers into
+  borrowed byte slices, and copies staged decode output into the caller's
+  destination buffer.
+- reinterprets opaque `ZSTD_DCtx*` / `ZSTD_DDict*` handles as the owned Rust
+  `DecoderContext` / `DecoderDictionary` values that back the public ABI.
+- recovers `Box<DecoderContext>` and `Box<DecoderDictionary>` ownership in the
+  free functions.
+- preserves a raw legacy stream-context pointer returned by the legacy C shim
+  while legacy streaming decode is active.
+- the native bufferless/session state machine is fully Rust-owned; there is no
+  decompression-side dynamic loading or temporary upstream `DCtx` replay left.
 - `788`: converts an incoming `src` pointer plus size into a borrowed byte
   slice for the C ABI entry points.
 - `796`: reinterprets an opaque `ZSTD_DCtx*` as the owned internal
@@ -208,7 +202,6 @@ These items are still part of the audited surface even though they are not
 - `safe/src/compress/params.rs:10`
 - `safe/src/compress/sequence_api.rs:4`
 - `safe/src/compress/static_ctx.rs:10`
-- `safe/src/decompress/dstream.rs:17`
 - `safe/src/decompress/legacy.rs:6`
 - `safe/src/dict_builder/cover.rs:4`
 - `safe/src/dict_builder/fastcover.rs:4`
@@ -240,6 +233,6 @@ The remaining unsafe surface is now restricted to:
   ABI,
 - allocator and opaque-handle ownership transfers across that ABI, and
 - unavoidable raw buffer/out-parameter glue needed to interoperate with C
-  callers.
+  callers, including the bounded legacy decode shim for v0.5-v0.7 frames.
 
 There is no remaining `unsafe` used only for convenience.

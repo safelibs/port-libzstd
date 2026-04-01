@@ -1,5 +1,8 @@
 # Upstream Black-Box Release Gates
 
+## Workflow Position
+Phase 5 of 8 in the linear explicit-phase workflow.
+
 ## Phase Name
 Upstream Black-Box Release Gates
 

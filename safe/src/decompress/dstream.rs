@@ -7,18 +7,21 @@ use crate::{
     ffi::{
         decompress,
         types::{
-            ZSTD_DCtx, ZSTD_DStream, ZSTD_customMem, ZSTD_inBuffer,
+            ZSTD_DCtx, ZSTD_DStream, ZSTD_ErrorCode, ZSTD_customMem, ZSTD_format_e, ZSTD_inBuffer,
             ZSTD_nextInputType_e, ZSTD_outBuffer,
         },
     },
 };
 use core::ffi::c_void;
 
-unsafe extern "C" {
-    #[link_name = "libzstd_safe_internal_ZSTD_estimateDStreamSize_fromFrame"]
-    fn internal_ZSTD_estimateDStreamSize_fromFrame(src: *const c_void, srcSize: usize) -> usize;
-    #[link_name = "libzstd_safe_internal_ZSTD_estimateDStreamSize"]
-    fn internal_ZSTD_estimateDStreamSize(windowSize: usize) -> usize;
+fn estimate_dstream_size(window_size: usize) -> Result<usize, ZSTD_ErrorCode> {
+    let block_size = window_size.min(BLOCK_SIZE_MAX);
+    let out_buffer_size =
+        decompress::decoding_buffer_size_min(window_size as u64, frame::ZSTD_CONTENTSIZE_UNKNOWN)?;
+    crate::decompress::dctx::ZSTD_estimateDCtxSize()
+        .checked_add(block_size)
+        .and_then(|size| size.checked_add(out_buffer_size))
+        .ok_or(ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge)
 }
 
 fn custom_mem_supported(custom_mem: ZSTD_customMem) -> bool {
@@ -110,18 +113,39 @@ pub extern "C" fn ZSTD_sizeof_DStream(zds: *const ZSTD_DStream) -> usize {
 }
 
 #[no_mangle]
-pub extern "C" fn ZSTD_estimateDStreamSize_fromFrame(
-    src: *const c_void,
-    srcSize: usize,
-) -> usize {
-    // SAFETY: The linked helper uses the same ABI and takes the arguments unchanged.
-    unsafe { internal_ZSTD_estimateDStreamSize_fromFrame(src, srcSize) }
+pub extern "C" fn ZSTD_estimateDStreamSize_fromFrame(src: *const c_void, srcSize: usize) -> usize {
+    let Some(src) = decompress::optional_src_slice(src, srcSize) else {
+        return error_result(ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+
+    let header = match frame::parse_frame_header(src, ZSTD_format_e::ZSTD_f_zstd1) {
+        Ok(frame::HeaderProbe::Need(_)) => {
+            return error_result(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong);
+        }
+        Ok(frame::HeaderProbe::Header(header)) => header,
+        Err(code) => return error_result(code),
+    };
+
+    let window_size_max = 1_u64 << frame::ZSTD_WINDOWLOG_MAX;
+    if header.windowSize > window_size_max {
+        return error_result(ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge);
+    }
+
+    match usize::try_from(header.windowSize)
+        .map_err(|_| ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge)
+        .and_then(estimate_dstream_size)
+    {
+        Ok(size) => size,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_estimateDStreamSize(windowSize: usize) -> usize {
-    // SAFETY: The linked helper uses the same ABI and takes the argument unchanged.
-    unsafe { internal_ZSTD_estimateDStreamSize(windowSize) }
+    match estimate_dstream_size(windowSize) {
+        Ok(size) => size,
+        Err(code) => error_result(code),
+    }
 }
 
 #[no_mangle]
@@ -160,9 +184,7 @@ pub extern "C" fn ZSTD_decompressStream_simpleArgs(
 }
 
 #[no_mangle]
-pub extern "C" fn ZSTD_createDStream_advanced(
-    customMem: ZSTD_customMem,
-) -> *mut ZSTD_DStream {
+pub extern "C" fn ZSTD_createDStream_advanced(customMem: ZSTD_customMem) -> *mut ZSTD_DStream {
     if !custom_mem_supported(customMem) {
         return core::ptr::null_mut();
     }

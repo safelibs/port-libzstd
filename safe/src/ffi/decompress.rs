@@ -1,11 +1,9 @@
 use crate::{
-    common::{
-        alloc,
-        error::{decode_error, is_error_result},
-    },
+    common::alloc,
     decompress::{
-        block::{parse_block_header, BlockHeader, BlockType, BLOCK_HEADER_SIZE, BLOCK_SIZE_MAX},
+        block::{parse_block_header, BlockHeader, BlockType, BLOCK_HEADER_SIZE},
         frame::{self, DictionaryRef},
+        legacy,
     },
     ffi::types::{
         ZSTD_DCtx, ZSTD_DDict, ZSTD_ErrorCode, ZSTD_dParameter, ZSTD_dictContentType_e,
@@ -15,27 +13,12 @@ use crate::{
 use core::ffi::c_void;
 
 fn validate_formatted_dictionary(bytes: &[u8]) -> Result<(), ZSTD_ErrorCode> {
-    type CreateDDict = unsafe extern "C" fn(*const c_void, usize) -> *mut ZSTD_DDict;
-    type FreeDDict = unsafe extern "C" fn(*mut ZSTD_DDict) -> usize;
-
-    let Some(create_ddict) =
-        crate::ffi::compress::load_upstream!("ZSTD_createDDict", CreateDDict)
-    else {
-        return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
-    };
-    let Some(free_ddict) = crate::ffi::compress::load_upstream!("ZSTD_freeDDict", FreeDDict)
-    else {
-        return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
-    };
-
-    let ddict = unsafe { create_ddict(bytes.as_ptr().cast(), bytes.len()) };
-    if ddict.is_null() {
+    if bytes.len() < 8 {
         return Err(ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted);
     }
-    unsafe {
-        free_ddict(ddict);
-    }
-    Ok(())
+    structured_zstd::decoding::Dictionary::decode_dict(bytes)
+        .map(|_| ())
+        .map_err(|_| ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -97,6 +80,16 @@ impl DictionarySelection {
             }
         ) {
             self.clear();
+        }
+    }
+
+    fn dict_id(&self) -> Result<u32, ZSTD_ErrorCode> {
+        match self {
+            DictionarySelection::None => Ok(0),
+            DictionarySelection::Referenced(ptr) => ddict_ref(*ptr)
+                .map(|ddict| ddict.dict_id)
+                .ok_or(ZSTD_ErrorCode::ZSTD_error_dictionary_wrong),
+            DictionarySelection::Owned { dict_id, .. } => Ok(*dict_id),
         }
     }
 }
@@ -164,6 +157,8 @@ struct StreamState {
     decoded: Vec<u8>,
     output_pos: usize,
     deferred_input_advance: usize,
+    legacy_context: *mut c_void,
+    legacy_version: u32,
 }
 
 impl StreamState {
@@ -172,238 +167,20 @@ impl StreamState {
         self.decoded.clear();
         self.output_pos = 0;
         self.deferred_input_advance = 0;
+        self.legacy_context = core::ptr::null_mut();
+        self.legacy_version = 0;
     }
 
     fn is_busy(&self) -> bool {
         !self.compressed.is_empty()
             || self.output_pos < self.decoded.len()
             || self.deferred_input_advance != 0
+            || !self.legacy_context.is_null()
+            || self.legacy_version != 0
     }
 
     fn size_of(&self) -> usize {
         alloc::heap_bytes(self.compressed.len() + self.decoded.len())
-    }
-}
-
-#[derive(Debug)]
-struct UpstreamBufferlessSession {
-    ptr: *mut ZSTD_DCtx,
-}
-
-impl UpstreamBufferlessSession {
-    fn new(dctx: &DecoderContext) -> Result<Self, ZSTD_ErrorCode> {
-        Self::new_inner(dctx, false)
-    }
-
-    fn new_stream(dctx: &DecoderContext) -> Result<Self, ZSTD_ErrorCode> {
-        Self::new_inner(dctx, true)
-    }
-
-    fn new_inner(dctx: &DecoderContext, stream_mode: bool) -> Result<Self, ZSTD_ErrorCode> {
-        type CreateDCtx = unsafe extern "C" fn() -> *mut ZSTD_DCtx;
-        type SetFormat = unsafe extern "C" fn(*mut ZSTD_DCtx, ZSTD_format_e) -> usize;
-        type SetMaxWindowSize = unsafe extern "C" fn(*mut ZSTD_DCtx, usize) -> usize;
-        type DecompressBegin = unsafe extern "C" fn(*mut ZSTD_DCtx) -> usize;
-        type DecompressBeginUsingDict =
-            unsafe extern "C" fn(*mut ZSTD_DCtx, *const c_void, usize) -> usize;
-        type InitDStream = unsafe extern "C" fn(*mut ZSTD_DCtx) -> usize;
-        type InitDStreamUsingDict =
-            unsafe extern "C" fn(*mut ZSTD_DCtx, *const c_void, usize) -> usize;
-
-        let Some(create_dctx) = crate::ffi::compress::load_upstream!("ZSTD_createDCtx", CreateDCtx)
-        else {
-            return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
-        };
-        let Some(set_format) =
-            crate::ffi::compress::load_upstream!("ZSTD_DCtx_setFormat", SetFormat)
-        else {
-            return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
-        };
-        let Some(set_max_window_size) = crate::ffi::compress::load_upstream!(
-            "ZSTD_DCtx_setMaxWindowSize",
-            SetMaxWindowSize
-        ) else {
-            return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
-        };
-        let Some(decompress_begin) =
-            crate::ffi::compress::load_upstream!("ZSTD_decompressBegin", DecompressBegin)
-        else {
-            return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
-        };
-        let Some(decompress_begin_using_dict) = crate::ffi::compress::load_upstream!(
-            "ZSTD_decompressBegin_usingDict",
-            DecompressBeginUsingDict
-        ) else {
-            return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
-        };
-        let Some(init_dstream) = crate::ffi::compress::load_upstream!("ZSTD_initDStream", InitDStream)
-        else {
-            return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
-        };
-        let Some(init_dstream_using_dict) = crate::ffi::compress::load_upstream!(
-            "ZSTD_initDStream_usingDict",
-            InitDStreamUsingDict
-        ) else {
-            return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
-        };
-
-        let ptr = unsafe { create_dctx() };
-        if ptr.is_null() {
-            return Err(ZSTD_ErrorCode::ZSTD_error_memory_allocation);
-        }
-
-        let session = Self { ptr };
-        let result = (|| {
-            let setup = unsafe { set_format(session.ptr, dctx.format) };
-            if is_error_result(setup) {
-                return Err(decode_error(setup));
-            }
-            let setup = unsafe { set_max_window_size(session.ptr, dctx.max_window_size) };
-            if is_error_result(setup) {
-                return Err(decode_error(setup));
-            }
-
-            let init = match (stream_mode, dctx.resolved_dict()?) {
-                (false, DictionaryRef::None) => unsafe { decompress_begin(session.ptr) },
-                (false, DictionaryRef::Raw(bytes) | DictionaryRef::Formatted(bytes)) => unsafe {
-                    decompress_begin_using_dict(session.ptr, bytes.as_ptr().cast(), bytes.len())
-                },
-                (true, DictionaryRef::None) => unsafe { init_dstream(session.ptr) },
-                (true, DictionaryRef::Raw(bytes) | DictionaryRef::Formatted(bytes)) => unsafe {
-                    init_dstream_using_dict(session.ptr, bytes.as_ptr().cast(), bytes.len())
-                },
-            };
-            if is_error_result(init) {
-                return Err(decode_error(init));
-            }
-
-            Ok(())
-        })();
-
-        if let Err(code) = result {
-            drop(session);
-            return Err(code);
-        }
-
-        Ok(session)
-    }
-
-    fn continue_decode(
-        &mut self,
-        dst: *mut c_void,
-        dst_capacity: usize,
-        src: &[u8],
-    ) -> Result<usize, ZSTD_ErrorCode> {
-        type DecompressContinue =
-            unsafe extern "C" fn(*mut ZSTD_DCtx, *mut c_void, usize, *const c_void, usize) -> usize;
-
-        let Some(decompress_continue) = crate::ffi::compress::load_upstream!(
-            "ZSTD_decompressContinue",
-            DecompressContinue
-        ) else {
-            return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
-        };
-
-        let wrote = unsafe {
-            decompress_continue(
-                self.ptr,
-                dst,
-                dst_capacity,
-                src.as_ptr().cast(),
-                src.len(),
-            )
-        };
-        if is_error_result(wrote) {
-            Err(decode_error(wrote))
-        } else {
-            Ok(wrote)
-        }
-    }
-
-    fn next_src_size_to_decompress(&mut self) -> Result<usize, ZSTD_ErrorCode> {
-        type NextSrcSizeToDecompress = unsafe extern "C" fn(*mut ZSTD_DCtx) -> usize;
-
-        let Some(next_src_size_to_decompress) = crate::ffi::compress::load_upstream!(
-            "ZSTD_nextSrcSizeToDecompress",
-            NextSrcSizeToDecompress
-        ) else {
-            return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
-        };
-
-        Ok(unsafe { next_src_size_to_decompress(self.ptr) })
-    }
-
-    fn decompress_block(
-        &mut self,
-        dst: *mut c_void,
-        dst_capacity: usize,
-        src: &[u8],
-    ) -> Result<usize, ZSTD_ErrorCode> {
-        type DecompressBlock =
-            unsafe extern "C" fn(*mut ZSTD_DCtx, *mut c_void, usize, *const c_void, usize) -> usize;
-
-        let Some(decompress_block) =
-            crate::ffi::compress::load_upstream!("ZSTD_decompressBlock", DecompressBlock)
-        else {
-            return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
-        };
-
-        let wrote = unsafe {
-            decompress_block(
-                self.ptr,
-                dst,
-                dst_capacity,
-                src.as_ptr().cast(),
-                src.len(),
-            )
-        };
-        if is_error_result(wrote) {
-            Err(decode_error(wrote))
-        } else {
-            Ok(wrote)
-        }
-    }
-
-    fn decompress_stream(
-        &mut self,
-        output: &mut ZSTD_outBuffer,
-        input: &mut ZSTD_inBuffer,
-    ) -> Result<usize, ZSTD_ErrorCode> {
-        type DecompressStream =
-            unsafe extern "C" fn(*mut ZSTD_DCtx, *mut ZSTD_outBuffer, *mut ZSTD_inBuffer) -> usize;
-
-        let Some(decompress_stream) =
-            crate::ffi::compress::load_upstream!("ZSTD_decompressStream", DecompressStream)
-        else {
-            return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
-        };
-
-        let wrote = unsafe { decompress_stream(self.ptr, output, input) };
-        if is_error_result(wrote) {
-            Err(decode_error(wrote))
-        } else {
-            Ok(wrote)
-        }
-    }
-}
-
-impl Drop for UpstreamBufferlessSession {
-    fn drop(&mut self) {
-        type FreeDCtx = unsafe extern "C" fn(*mut ZSTD_DCtx) -> usize;
-
-        if self.ptr.is_null() {
-            return;
-        }
-
-        let Some(free_dctx) = crate::ffi::compress::load_upstream!("ZSTD_freeDCtx", FreeDCtx)
-        else {
-            return;
-        };
-
-        unsafe {
-            free_dctx(self.ptr);
-        }
-        self.ptr = core::ptr::null_mut();
     }
 }
 
@@ -457,7 +234,7 @@ struct BufferlessState {
     stage: BufferlessStage,
     frame_bytes: Vec<u8>,
     header: Option<crate::ffi::types::ZSTD_frameHeader>,
-    upstream: Option<UpstreamBufferlessSession>,
+    decoded_prefix: Vec<u8>,
 }
 
 impl Default for BufferlessState {
@@ -466,7 +243,7 @@ impl Default for BufferlessState {
             stage: BufferlessStage::Idle,
             frame_bytes: Vec::new(),
             header: None,
-            upstream: None,
+            decoded_prefix: Vec::new(),
         }
     }
 }
@@ -477,7 +254,7 @@ impl Clone for BufferlessState {
             stage: self.stage.clone(),
             frame_bytes: self.frame_bytes.clone(),
             header: self.header,
-            upstream: None,
+            decoded_prefix: self.decoded_prefix.clone(),
         }
     }
 }
@@ -487,7 +264,7 @@ impl BufferlessState {
         self.stage = BufferlessStage::NeedStart;
         self.frame_bytes.clear();
         self.header = None;
-        self.upstream = None;
+        self.decoded_prefix.clear();
     }
 
     fn reset(&mut self) {
@@ -495,7 +272,10 @@ impl BufferlessState {
     }
 
     fn is_busy(&self) -> bool {
-        !matches!(self.stage, BufferlessStage::Idle | BufferlessStage::Finished)
+        !matches!(
+            self.stage,
+            BufferlessStage::Idle | BufferlessStage::Finished
+        )
     }
 
     fn next_src_size(&self, format: ZSTD_format_e) -> usize {
@@ -518,9 +298,7 @@ impl BufferlessState {
         }
     }
 
-    fn next_input_type(
-        &self,
-    ) -> crate::ffi::types::ZSTD_nextInputType_e {
+    fn next_input_type(&self) -> crate::ffi::types::ZSTD_nextInputType_e {
         use crate::ffi::types::ZSTD_nextInputType_e as Next;
 
         match self.stage {
@@ -543,7 +321,7 @@ impl BufferlessState {
     }
 
     fn size_of(&self) -> usize {
-        alloc::heap_bytes(self.frame_bytes.len())
+        alloc::heap_bytes(self.frame_bytes.len() + self.decoded_prefix.len())
     }
 }
 
@@ -581,7 +359,9 @@ impl DecoderContext {
         alloc::base_size::<Self>()
             + match &self.dict {
                 DictionarySelection::None => 0,
-                DictionarySelection::Referenced(ptr) => ddict_ref(*ptr).map_or(0, DecoderDictionary::heap_size),
+                DictionarySelection::Referenced(ptr) => {
+                    ddict_ref(*ptr).map_or(0, DecoderDictionary::heap_size)
+                }
                 DictionarySelection::Owned { raw, .. } => alloc::heap_bytes(raw.len()),
             }
             + self.stream.size_of()
@@ -593,6 +373,7 @@ impl DecoderContext {
     }
 
     pub(crate) fn reset_session(&mut self) {
+        self.release_legacy_stream();
         self.stream.reset();
         self.bufferless.reset();
     }
@@ -654,7 +435,10 @@ impl DecoderContext {
         Ok(())
     }
 
-    pub(crate) fn ref_ddict(&mut self, ddict: *const DecoderDictionary) -> Result<(), ZSTD_ErrorCode> {
+    pub(crate) fn ref_ddict(
+        &mut self,
+        ddict: *const DecoderDictionary,
+    ) -> Result<(), ZSTD_ErrorCode> {
         if !self.can_set_parameters() {
             return Err(ZSTD_ErrorCode::ZSTD_error_stage_wrong);
         }
@@ -670,8 +454,18 @@ impl DecoderContext {
         self.dict.resolve()
     }
 
+    pub(crate) fn resolved_dict_id(&self) -> Result<u32, ZSTD_ErrorCode> {
+        self.dict.dict_id()
+    }
+
     pub(crate) fn clear_once_dict(&mut self) {
         self.dict.consume_once();
+    }
+
+    pub(crate) fn release_legacy_stream(&mut self) {
+        let _ = legacy::free_stream_context(self.stream.legacy_context, self.stream.legacy_version);
+        self.stream.legacy_context = core::ptr::null_mut();
+        self.stream.legacy_version = 0;
     }
 
     pub(crate) fn set_parameter(
@@ -683,8 +477,8 @@ impl DecoderContext {
             return Err(ZSTD_ErrorCode::ZSTD_error_stage_wrong);
         }
 
-        let (lower, upper) = dparam_bounds(param)
-            .ok_or(ZSTD_ErrorCode::ZSTD_error_parameter_unsupported)?;
+        let (lower, upper) =
+            dparam_bounds(param).ok_or(ZSTD_ErrorCode::ZSTD_error_parameter_unsupported)?;
         if param == ZSTD_dParameter::ZSTD_d_windowLogMax && value == 0 {
             value = frame::ZSTD_WINDOWLOG_LIMIT_DEFAULT as i32;
         }
@@ -737,7 +531,10 @@ impl DecoderContext {
         self.set_parameter(ZSTD_dParameter::ZSTD_d_experimentalParam1, format as i32)
     }
 
-    pub(crate) fn set_max_window_size(&mut self, max_window_size: usize) -> Result<(), ZSTD_ErrorCode> {
+    pub(crate) fn set_max_window_size(
+        &mut self,
+        max_window_size: usize,
+    ) -> Result<(), ZSTD_ErrorCode> {
         let min = 1usize << frame::ZSTD_WINDOWLOG_ABSOLUTEMIN;
         let max = 1usize << frame::ZSTD_WINDOWLOG_MAX;
         if !self.can_set_parameters() {
@@ -836,8 +633,13 @@ pub(crate) fn free_dctx(ptr: *mut ZSTD_DCtx) -> usize {
     if ptr.is_null() {
         return 0;
     }
+    if let Some(dctx) = dctx_mut(ptr) {
+        dctx.release_legacy_stream();
+    }
     // SAFETY: `ptr` originated from `create_dctx`.
-    unsafe { drop(Box::from_raw(ptr.cast::<DecoderContext>())); }
+    unsafe {
+        drop(Box::from_raw(ptr.cast::<DecoderContext>()));
+    }
     0
 }
 
@@ -859,7 +661,9 @@ pub(crate) fn free_ddict(ptr: *mut ZSTD_DDict) -> usize {
         return 0;
     }
     // SAFETY: `ptr` originated from `create_ddict`.
-    unsafe { drop(Box::from_raw(ptr.cast::<DecoderDictionary>())); }
+    unsafe {
+        drop(Box::from_raw(ptr.cast::<DecoderDictionary>()));
+    }
     0
 }
 
@@ -868,7 +672,9 @@ pub(crate) fn sizeof_dctx(ptr: *const ZSTD_DCtx) -> usize {
 }
 
 pub(crate) fn sizeof_ddict(ptr: *const ZSTD_DDict) -> usize {
-    ddict_ref(ptr.cast()).map_or(0, |ddict| alloc::base_size::<DecoderDictionary>() + ddict.heap_size())
+    ddict_ref(ptr.cast()).map_or(0, |ddict| {
+        alloc::base_size::<DecoderDictionary>() + ddict.heap_size()
+    })
 }
 
 pub(crate) fn get_dict_id_from_ddict(ptr: *const ZSTD_DDict) -> u32 {
@@ -893,9 +699,7 @@ pub(crate) fn next_src_size_to_decompress(ptr: *mut ZSTD_DCtx) -> usize {
         .unwrap_or(0)
 }
 
-pub(crate) fn next_input_type(
-    ptr: *mut ZSTD_DCtx,
-) -> crate::ffi::types::ZSTD_nextInputType_e {
+pub(crate) fn next_input_type(ptr: *mut ZSTD_DCtx) -> crate::ffi::types::ZSTD_nextInputType_e {
     dctx_mut(ptr)
         .map(|dctx| dctx.bufferless.next_input_type())
         .unwrap_or(crate::ffi::types::ZSTD_nextInputType_e::ZSTDnit_frameHeader)
@@ -917,7 +721,10 @@ pub(crate) fn bufferless_continue(
         BufferlessStage::NeedStart => {
             dctx.bufferless.frame_bytes.extend_from_slice(src);
             if dctx.format != ZSTD_format_e::ZSTD_f_zstd1_magicless
-                && matches!(frame::classify_frame(&dctx.bufferless.frame_bytes), Some(frame::FrameKind::Legacy(_)))
+                && matches!(
+                    frame::classify_frame(&dctx.bufferless.frame_bytes),
+                    Some(frame::FrameKind::Legacy(_))
+                )
             {
                 return Err(ZSTD_ErrorCode::ZSTD_error_version_unsupported);
             }
@@ -931,14 +738,17 @@ pub(crate) fn bufferless_continue(
                             size - dctx.bufferless.frame_bytes.len(),
                         )
                     } else {
-                        BufferlessStage::NeedHeaderRemainder(size - dctx.bufferless.frame_bytes.len())
+                        BufferlessStage::NeedHeaderRemainder(
+                            size - dctx.bufferless.frame_bytes.len(),
+                        )
                     };
-                    forward_bufferless_chunk(dctx, dst, dst_capacity, src, allow_staging)
+                    let _ = (dst, dst_capacity, allow_staging);
+                    Ok(0)
                 }
                 frame::HeaderProbe::Header(header) => {
+                    validate_frame_dictionary(dctx, header)?;
                     dctx.bufferless.header = Some(header);
-                    if header.frameType
-                        == crate::ffi::types::ZSTD_frameType_e::ZSTD_skippableFrame
+                    if header.frameType == crate::ffi::types::ZSTD_frameType_e::ZSTD_skippableFrame
                     {
                         let payload_size = usize::try_from(header.frameContentSize)
                             .map_err(|_| ZSTD_ErrorCode::ZSTD_error_frameParameter_unsupported)?;
@@ -951,7 +761,8 @@ pub(crate) fn bufferless_continue(
                     } else {
                         dctx.bufferless.stage = BufferlessStage::NeedBlockHeader;
                     }
-                    forward_bufferless_chunk(dctx, dst, dst_capacity, src, allow_staging)
+                    let _ = (dst, dst_capacity, allow_staging);
+                    Ok(0)
                 }
             }
         }
@@ -959,14 +770,18 @@ pub(crate) fn bufferless_continue(
             dctx.bufferless.frame_bytes.extend_from_slice(src);
             match frame::parse_frame_header(&dctx.bufferless.frame_bytes, dctx.format)? {
                 frame::HeaderProbe::Need(size) => {
-                    dctx.bufferless.stage =
-                        BufferlessStage::NeedHeaderRemainder(size - dctx.bufferless.frame_bytes.len());
-                    forward_bufferless_chunk(dctx, dst, dst_capacity, src, allow_staging)
+                    dctx.bufferless.stage = BufferlessStage::NeedHeaderRemainder(
+                        size - dctx.bufferless.frame_bytes.len(),
+                    );
+                    let _ = (dst, dst_capacity, allow_staging);
+                    Ok(0)
                 }
                 frame::HeaderProbe::Header(header) => {
+                    validate_frame_dictionary(dctx, header)?;
                     dctx.bufferless.header = Some(header);
                     dctx.bufferless.stage = BufferlessStage::NeedBlockHeader;
-                    forward_bufferless_chunk(dctx, dst, dst_capacity, src, allow_staging)
+                    let _ = (dst, dst_capacity, allow_staging);
+                    Ok(0)
                 }
             }
         }
@@ -977,7 +792,8 @@ pub(crate) fn bufferless_continue(
                     dctx.bufferless.stage = BufferlessStage::NeedSkippableHeaderRemainder(
                         size - dctx.bufferless.frame_bytes.len(),
                     );
-                    forward_bufferless_chunk(dctx, dst, dst_capacity, src, allow_staging)
+                    let _ = (dst, dst_capacity, allow_staging);
+                    Ok(0)
                 }
                 frame::HeaderProbe::Header(header) => {
                     let payload_size = usize::try_from(header.frameContentSize)
@@ -989,13 +805,13 @@ pub(crate) fn bufferless_continue(
                     } else {
                         BufferlessStage::NeedSkippablePayload(payload_size)
                     };
-                    forward_bufferless_chunk(dctx, dst, dst_capacity, src, allow_staging)
+                    let _ = (dst, dst_capacity, allow_staging);
+                    Ok(0)
                 }
             }
         }
         BufferlessStage::NeedBlockHeader => {
             dctx.bufferless.frame_bytes.extend_from_slice(src);
-            let written = forward_bufferless_chunk(dctx, dst, dst_capacity, src, allow_staging)?;
             let header = parse_block_header(src)?;
             if header.content_size == 0 {
                 if header.last_block {
@@ -1004,94 +820,93 @@ pub(crate) fn bufferless_continue(
                     } else {
                         dctx.bufferless.stage = BufferlessStage::Finished;
                         dctx.clear_once_dict();
-                        return Ok(written);
+                        return Ok(0);
                     }
                 } else {
                     dctx.bufferless.stage = BufferlessStage::NeedBlockHeader;
                 }
-                Ok(written)
+                Ok(0)
             } else {
                 dctx.bufferless.stage = BufferlessStage::NeedBlockBody(header);
-                Ok(written)
+                Ok(0)
             }
         }
         BufferlessStage::NeedBlockBody(_) => {
             decompress_block_continue(dctx, dst, dst_capacity, src, allow_staging)
         }
         BufferlessStage::NeedSkippablePayload(_) => {
-            let written = forward_bufferless_chunk(dctx, dst, dst_capacity, src, allow_staging)?;
             dctx.bufferless.frame_bytes.extend_from_slice(src);
             dctx.bufferless.stage = BufferlessStage::Finished;
             dctx.clear_once_dict();
-            Ok(written)
+            let _ = (dst, dst_capacity, allow_staging);
+            Ok(0)
         }
         BufferlessStage::NeedChecksum(_) => {
-            let written = forward_bufferless_chunk(dctx, dst, dst_capacity, src, allow_staging)?;
             dctx.bufferless.frame_bytes.extend_from_slice(src);
             dctx.bufferless.stage = BufferlessStage::Finished;
             dctx.clear_once_dict();
-            Ok(written)
+            let _ = (dst, dst_capacity, allow_staging);
+            Ok(0)
         }
         BufferlessStage::Finished => Ok(0),
     }
 }
 
-fn ensure_bufferless_upstream_session(
-    dctx: &mut DecoderContext,
-) -> Result<&mut UpstreamBufferlessSession, ZSTD_ErrorCode> {
-    if dctx.bufferless.upstream.is_none() {
-        dctx.bufferless.upstream = Some(UpstreamBufferlessSession::new(dctx)?);
+fn validate_frame_dictionary(
+    dctx: &DecoderContext,
+    header: crate::ffi::types::ZSTD_frameHeader,
+) -> Result<(), ZSTD_ErrorCode> {
+    if header.dictID != 0 && dctx.resolved_dict_id()? != header.dictID {
+        return Err(ZSTD_ErrorCode::ZSTD_error_dictionary_wrong);
     }
-    Ok(dctx.bufferless.upstream.as_mut().expect("session initialized"))
+    Ok(())
 }
 
-fn forward_bufferless_chunk(
+fn write_bufferless_output(
     dctx: &mut DecoderContext,
     dst: *mut c_void,
     dst_capacity: usize,
-    src: &[u8],
+    decoded: &[u8],
     allow_staging: bool,
 ) -> Result<usize, ZSTD_ErrorCode> {
+    if decoded.is_empty() {
+        return Ok(0);
+    }
+
     if allow_staging {
-        let mut block_output = vec![0u8; BLOCK_SIZE_MAX];
-        let produced = ensure_bufferless_upstream_session(dctx)?.continue_decode(
-            block_output.as_mut_ptr().cast(),
-            block_output.len(),
-            src,
-        )?;
-        let to_write = produced.min(dst_capacity);
+        let to_write = decoded.len().min(dst_capacity);
         if to_write != 0 {
+            if dst.is_null() {
+                return Err(ZSTD_ErrorCode::ZSTD_error_dstBuffer_null);
+            }
+            // SAFETY: `dst` points to `dst_capacity` writable bytes.
             unsafe {
-                core::ptr::copy_nonoverlapping(block_output.as_ptr(), dst.cast::<u8>(), to_write);
+                core::ptr::copy_nonoverlapping(decoded.as_ptr(), dst.cast::<u8>(), to_write);
             }
         }
-        if to_write < produced {
-            stage_decoded_output(dctx, &block_output[to_write..produced]);
+        if to_write < decoded.len() {
+            stage_decoded_output(dctx, &decoded[to_write..]);
         }
         Ok(to_write)
     } else {
-        ensure_bufferless_upstream_session(dctx)?.continue_decode(dst, dst_capacity, src)
+        let written = frame::copy_decoded_to_ptr(decoded, dst, dst_capacity);
+        frame::decode_error_result(written)
     }
 }
 
-fn replay_bufferless_prefix_with_upstream(dctx: &mut DecoderContext) -> Result<(), ZSTD_ErrorCode> {
-    let mut session = UpstreamBufferlessSession::new(dctx)?;
-    let mut scratch = vec![0u8; BLOCK_SIZE_MAX];
-    let mut replayed = 0usize;
-    while replayed < dctx.bufferless.frame_bytes.len() {
-        let need = session.next_src_size_to_decompress()?;
-        if need == 0 || replayed + need > dctx.bufferless.frame_bytes.len() {
-            return Err(ZSTD_ErrorCode::ZSTD_error_corruption_detected);
-        }
-        session.continue_decode(
-            scratch.as_mut_ptr().cast(),
-            scratch.len(),
-            &dctx.bufferless.frame_bytes[replayed..replayed + need],
-        )?;
-        replayed += need;
-    }
-    dctx.bufferless.upstream = Some(session);
-    Ok(())
+fn decode_bufferless_prefix(dctx: &DecoderContext, src: &[u8]) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    let header = dctx
+        .bufferless
+        .header
+        .ok_or(ZSTD_ErrorCode::ZSTD_error_corruption_detected)?;
+    let synthetic =
+        frame::build_synthetic_block_frame(&dctx.bufferless.frame_bytes, header, dctx.format, src)?;
+    frame::decode_all_frames(
+        &synthetic,
+        dctx.resolved_dict()?,
+        dctx.format,
+        dctx.max_window_size,
+    )
 }
 
 fn finish_bufferless_block(dctx: &mut DecoderContext, block: BlockHeader) {
@@ -1126,7 +941,19 @@ fn decompress_block_continue(
         return Err(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong);
     }
 
-    let written = forward_bufferless_chunk(dctx, dst, dst_capacity, src, allow_staging)?;
+    let decoded = decode_bufferless_prefix(dctx, src)?;
+    let prefix_len = dctx.bufferless.decoded_prefix.len();
+    if decoded.len() < prefix_len || !decoded.starts_with(&dctx.bufferless.decoded_prefix) {
+        return Err(ZSTD_ErrorCode::ZSTD_error_corruption_detected);
+    }
+    let written = write_bufferless_output(
+        dctx,
+        dst,
+        dst_capacity,
+        &decoded[prefix_len..],
+        allow_staging,
+    )?;
+    dctx.bufferless.decoded_prefix = decoded;
     dctx.bufferless.frame_bytes.extend_from_slice(src);
     finish_bufferless_block(dctx, block);
     Ok(written)
@@ -1138,24 +965,112 @@ pub(crate) fn decompress_block_body(
     dst_capacity: usize,
     src: &[u8],
 ) -> Result<usize, ZSTD_ErrorCode> {
-    let BufferlessStage::NeedBlockBody(block) = dctx.bufferless.stage.clone() else {
-        return Err(ZSTD_ErrorCode::ZSTD_error_stage_wrong);
-    };
-    let expected = if block.block_type == BlockType::Rle {
-        1
-    } else {
-        block.content_size
-    };
-    if src.len() != expected {
-        return Err(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong);
+    decompress_block_continue(dctx, dst, dst_capacity, src, false)
+}
+
+fn output_remaining(output: &ZSTD_outBuffer) -> usize {
+    output.size.saturating_sub(output.pos)
+}
+
+fn output_ptr(output: &mut ZSTD_outBuffer) -> *mut c_void {
+    if output_remaining(output) == 0 || output.dst.is_null() {
+        return core::ptr::null_mut();
+    }
+    // SAFETY: `output.pos < output.size`, so the pointer arithmetic stays in-bounds.
+    unsafe { (output.dst.cast::<u8>()).add(output.pos).cast() }
+}
+
+fn dictionary_bytes(dict: DictionaryRef<'_>) -> Option<&[u8]> {
+    match dict {
+        DictionaryRef::None => None,
+        DictionaryRef::Raw(bytes) | DictionaryRef::Formatted(bytes) => Some(bytes),
+    }
+}
+
+fn stream_hint(dctx: &DecoderContext) -> usize {
+    dctx.bufferless
+        .next_src_size(dctx.format)
+        .saturating_sub(dctx.stream.compressed.len())
+}
+
+fn try_stream_legacy(
+    dctx: &mut DecoderContext,
+    output: &mut ZSTD_outBuffer,
+    input: &mut ZSTD_inBuffer,
+) -> Result<Option<usize>, ZSTD_ErrorCode> {
+    if !matches!(
+        dctx.bufferless.stage,
+        BufferlessStage::Idle
+            | BufferlessStage::NeedStart
+            | BufferlessStage::NeedHeaderRemainder(_)
+    ) && dctx.stream.legacy_version == 0
+    {
+        return Ok(None);
     }
 
-    let written = ensure_bufferless_upstream_session(dctx)?.decompress_block(dst, dst_capacity, src)?;
-    dctx.bufferless.frame_bytes.extend_from_slice(src);
-    dctx.bufferless.upstream = None;
-    replay_bufferless_prefix_with_upstream(dctx)?;
-    finish_bufferless_block(dctx, block);
-    Ok(written)
+    let Some(full_input) = optional_src_slice(input.src, input.size) else {
+        return Err(ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+    };
+    let remaining = &full_input[input.pos..];
+
+    if dctx.stream.legacy_version == 0 {
+        let candidate = if dctx.stream.compressed.is_empty() {
+            remaining
+        } else {
+            dctx.stream.compressed.as_slice()
+        };
+        let Some(version) = legacy::supported_version(candidate) else {
+            return Ok(None);
+        };
+        let dict_storage = dictionary_bytes(dctx.resolved_dict()?).map(|bytes| bytes.to_vec());
+        legacy::init_stream_context(
+            &mut dctx.stream.legacy_context,
+            dctx.stream.legacy_version,
+            version,
+            dict_storage.as_deref(),
+        )?;
+        dctx.stream.legacy_version = version;
+    }
+
+    let buffered = dctx.stream.compressed.clone();
+    let old_len = buffered.len();
+    let mut combined = buffered;
+    combined.extend_from_slice(remaining);
+    let mut legacy_input = ZSTD_inBuffer {
+        src: if combined.is_empty() {
+            core::ptr::null()
+        } else {
+            combined.as_ptr().cast()
+        },
+        size: combined.len(),
+        pos: 0,
+    };
+    let hint = legacy::decompress_stream(
+        dctx.stream.legacy_context,
+        dctx.stream.legacy_version,
+        output,
+        &mut legacy_input,
+    )?;
+    let consumed = legacy_input.pos;
+    let consumed_from_current = consumed.saturating_sub(old_len);
+    dctx.stream.compressed.clear();
+    if consumed < old_len {
+        dctx.stream
+            .compressed
+            .extend_from_slice(&combined[consumed..old_len]);
+    }
+    input.pos = input.pos.saturating_add(consumed_from_current);
+    if hint == 0 {
+        dctx.bufferless.stage = BufferlessStage::Finished;
+        dctx.bufferless.frame_bytes.clear();
+        dctx.bufferless.header = None;
+        dctx.bufferless.decoded_prefix.clear();
+        dctx.release_legacy_stream();
+        dctx.clear_once_dict();
+    } else {
+        dctx.bufferless.stage = BufferlessStage::NeedStart;
+    }
+    Ok(Some(hint))
 }
 
 pub(crate) fn stream_decompress(
@@ -1163,41 +1078,93 @@ pub(crate) fn stream_decompress(
     output: &mut crate::ffi::types::ZSTD_outBuffer,
     input: &mut crate::ffi::types::ZSTD_inBuffer,
 ) -> Result<usize, ZSTD_ErrorCode> {
+    if !dctx.stream.decoded.is_empty() {
+        if output_remaining(output) == 0 {
+            return Ok(stream_hint(dctx).max(1));
+        }
+        output.pos += drain_staged_output(dctx, output_ptr(output), output_remaining(output))?;
+        if !dctx.stream.decoded.is_empty() || output_remaining(output) == 0 {
+            return Ok(stream_hint(dctx).max(1));
+        }
+    }
+
     if matches!(dctx.bufferless.stage, BufferlessStage::Finished) {
+        if input.pos == input.size {
+            return Ok(0);
+        }
         dctx.bufferless.reset();
         dctx.stream.reset();
     }
 
-    if dctx.bufferless.upstream.is_none() {
-        dctx.bufferless.upstream = Some(UpstreamBufferlessSession::new_stream(dctx)?);
-        dctx.bufferless.stage = BufferlessStage::NeedStart;
+    if matches!(dctx.bufferless.stage, BufferlessStage::Idle) {
+        begin_bufferless(dctx);
     }
 
-    let ret = dctx
-        .bufferless
-        .upstream
-        .as_mut()
-        .expect("stream session initialized")
-        .decompress_stream(output, input)?;
-
-    if ret == 0 {
-        dctx.bufferless.upstream = None;
-        dctx.bufferless.stage = BufferlessStage::Finished;
-        dctx.stream.reset();
-        dctx.clear_once_dict();
-    } else {
-        dctx.bufferless.stage = BufferlessStage::NeedStart;
+    if let Some(ret) = try_stream_legacy(dctx, output, input)? {
+        return Ok(ret);
     }
 
-    Ok(ret)
+    loop {
+        let need = dctx.bufferless.next_src_size(dctx.format);
+        if need == 0 {
+            return Ok(0);
+        }
+
+        if dctx.stream.compressed.len() < need {
+            let available = input.size.saturating_sub(input.pos);
+            if available == 0 {
+                return Ok(need - dctx.stream.compressed.len());
+            }
+            let to_take = (need - dctx.stream.compressed.len()).min(available);
+            let Some(src) = optional_src_slice(input.src, input.size) else {
+                return Err(ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
+            };
+            dctx.stream
+                .compressed
+                .extend_from_slice(&src[input.pos..input.pos + to_take]);
+            input.pos += to_take;
+            if dctx.stream.compressed.len() < need {
+                return Ok(need - dctx.stream.compressed.len());
+            }
+        }
+
+        if let Some(ret) = try_stream_legacy(dctx, output, input)? {
+            return Ok(ret);
+        }
+
+        let chunk = dctx.stream.compressed.clone();
+        let produced = bufferless_continue(
+            dctx,
+            output_ptr(output),
+            output_remaining(output),
+            &chunk,
+            true,
+        )?;
+        dctx.stream.compressed.clear();
+        output.pos += produced;
+
+        if !dctx.stream.decoded.is_empty() {
+            return Ok(stream_hint(dctx).max(1));
+        }
+        if output_remaining(output) == 0 {
+            return Ok(stream_hint(dctx).max(1));
+        }
+        if matches!(dctx.bufferless.stage, BufferlessStage::Finished) {
+            return Ok(0);
+        }
+        if input.pos == input.size {
+            return Ok(stream_hint(dctx).max(1));
+        }
+    }
 }
 
 pub(crate) fn dparam_bounds(param: ZSTD_dParameter) -> Option<(i32, i32)> {
     match param {
         ZSTD_dParameter::ZSTD_d_windowLogMax => Some((10, frame::ZSTD_WINDOWLOG_MAX as i32)),
-        ZSTD_dParameter::ZSTD_d_experimentalParam1 => {
-            Some((ZSTD_format_e::ZSTD_f_zstd1 as i32, ZSTD_format_e::ZSTD_f_zstd1_magicless as i32))
-        }
+        ZSTD_dParameter::ZSTD_d_experimentalParam1 => Some((
+            ZSTD_format_e::ZSTD_f_zstd1 as i32,
+            ZSTD_format_e::ZSTD_f_zstd1_magicless as i32,
+        )),
         ZSTD_dParameter::ZSTD_d_experimentalParam2
         | ZSTD_dParameter::ZSTD_d_experimentalParam3
         | ZSTD_dParameter::ZSTD_d_experimentalParam4
@@ -1216,5 +1183,6 @@ pub(crate) fn decoding_buffer_size_min(
         .and_then(|value| value.checked_add((frame::WILDCOPY_OVERLENGTH * 2) as u64))
         .ok_or(ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge)?;
     let needed_size = frame_content_size.min(needed_rb_size);
-    usize::try_from(needed_size).map_err(|_| ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge)
+    usize::try_from(needed_size)
+        .map_err(|_| ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge)
 }

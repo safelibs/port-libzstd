@@ -30,6 +30,22 @@ static void check_zstd(size_t code, const char* what)
     }
 }
 
+static void expect_error_code(size_t code, ZSTD_ErrorCode expected, const char* what)
+{
+    if (!ZSTD_isError(code)) {
+        fprintf(stderr, "%s unexpectedly succeeded\n", what);
+        exit(1);
+    }
+    if (ZSTD_getErrorCode(code) != expected) {
+        fprintf(stderr, "%s: expected %d, got %d (%s)\n",
+            what,
+            (int)expected,
+            (int)ZSTD_getErrorCode(code),
+            ZSTD_getErrorName(code));
+        exit(1);
+    }
+}
+
 static const unsigned char* find_magic(const unsigned char* input, size_t input_size, uint32_t magic)
 {
     unsigned char marker[4] = {
@@ -152,6 +168,12 @@ static void test_frame_walk(
 
         check_zstd(frame_size, "ZSTD_findFrameCompressedSize");
         if (frame_size == 0 || frame_size > remaining) die("legacy frame walk returned invalid size");
+        if (frame_size > 1) {
+            expect_error_code(
+                ZSTD_findFrameCompressedSize(cursor, frame_size - 1),
+                ZSTD_error_srcSize_wrong,
+                "ZSTD_findFrameCompressedSize(truncated legacy)");
+        }
 
         decoded = ZSTD_decompress(output + produced, expected_size - produced, cursor, frame_size);
         check_zstd(decoded, "ZSTD_decompress(frame walk)");

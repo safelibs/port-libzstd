@@ -21,6 +21,22 @@ static void check_zstd(size_t code, const char* what)
     }
 }
 
+static void expect_error_code(size_t code, ZSTD_ErrorCode expected, const char* what)
+{
+    if (!ZSTD_isError(code)) {
+        fprintf(stderr, "%s unexpectedly succeeded\n", what);
+        exit(1);
+    }
+    if (ZSTD_getErrorCode(code) != expected) {
+        fprintf(stderr, "%s: expected %d, got %d (%s)\n",
+            what,
+            (int)expected,
+            (int)ZSTD_getErrorCode(code),
+            ZSTD_getErrorName(code));
+        exit(1);
+    }
+}
+
 static void* read_file(const char* path, size_t* size_out)
 {
     FILE* file = fopen(path, "rb");
@@ -59,6 +75,12 @@ static void probe_frame(const void* compressed, size_t compressed_size, unsigned
     check_zstd(margin, "ZSTD_decompressionMargin");
 
     if (frame_size != compressed_size) die("frame size probe did not match buffer length");
+    if (compressed_size > 1) {
+        expect_error_code(
+            ZSTD_findFrameCompressedSize(compressed, compressed_size - 1),
+            ZSTD_error_srcSize_wrong,
+            "ZSTD_findFrameCompressedSize(truncated)");
+    }
     if (content_size != expected_size) die("unexpected frame content size");
     if (deprecated_size != expected_size) die("unexpected deprecated content size");
     if (series_size != expected_size) die("unexpected series decompressed size");

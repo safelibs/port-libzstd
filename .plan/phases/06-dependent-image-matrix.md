@@ -1,5 +1,8 @@
 # Dependent Inventory Expansion and Reproducible Image
 
+## Workflow Position
+Phase 6 of 8 in the linear explicit-phase workflow.
+
 ## Phase Name
 Dependent Inventory Expansion and Reproducible Image
 

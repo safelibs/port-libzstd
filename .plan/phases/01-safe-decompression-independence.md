@@ -1,5 +1,8 @@
 # Safe Decompression Independence and Metadata Rebase
 
+## Workflow Position
+Phase 1 of 8 in the linear explicit-phase workflow.
+
 ## Phase Name
 Safe Decompression Independence and Metadata Rebase
 
@@ -88,8 +91,8 @@ Safe Decompression Independence and Metadata Rebase
 - Rebase the phase-ownership checks in `safe/scripts/verify-baseline-contract.sh` to that same fixed mapping while keeping the pre-Phase-6 10-dependent contract unchanged.
 - Preserve the representative fixed rebase results from the workflow contract in both metadata files and the checker: `ZSTD_decompress`, `ZSTD_decompressDCtx`, `ZSTD_DCtx_reset`, and `ZSTD_getDictID_fromFrame` at Phase 1; `ZSTD_compressBound`, `ZSTD_copyCCtx`, `ZSTD_flushStream`, and `ZSTD_endStream` at Phase 2; `ZSTD_createThreadPool`, `ZSTD_freeThreadPool`, `ZSTD_CCtx_refThreadPool`, `ZSTD_estimateCStreamSize_usingCParams`, and `ZDICT_addEntropyTablesFromBuffer` at Phase 3; `tests:decodecorpus` and `tests:legacy` at Phase 1; `tests:paramgrill`, `tests:external_matchfinder`, `tests:bigdict`, `tests:invalidDictionaries`, `tests:roundTripCrash`, `tests:fullbench`, `tests:datagen`, and `tests:longmatch` at Phase 2; `tests:fuzzer`, `tests:zstreamtest`, and `tests:poolTests` at Phase 3; `debian:zstd-selftest`, `debian:build-pkg-config`, and `debian:build-cmake` at Phase 4; and the preserved upstream black-box wrappers, examples, and seekable suites at Phase 5.
 - Add checked-in decompression regressions for dict-backed decode, bufferless decode replay, and malformed-input behavior.
-- Preserve the consume-existing-artifacts contract for `workflow.yaml`, `.plan/workflow-structure.yaml`, and the numbered `.plan/phases/*.md` files by rewriting those planning artifacts in place instead of rediscovering or regenerating them as a parallel workflow description.
-- Rewrite `workflow.yaml`, `.plan/workflow-structure.yaml`, and `.plan/phases/*.md` in place to the new 8-phase order instead of leaving a scaffold-era parallel workflow description.
+- Preserve the consume-existing-artifacts contract for `.plan/workflow-structure.yaml` and the numbered `.plan/phases/*.md` files by rewriting those planning artifacts in place instead of rediscovering or regenerating them as a parallel workflow description.
+- Rewrite `.plan/workflow-structure.yaml` and `.plan/phases/*.md` in place to the new 8-phase order, then regenerate and commit `workflow.yaml` from those rewritten inputs instead of leaving it as an ignored side file or a scaffold-era parallel workflow description.
 - Keep the generated workflow strictly linear, inline-only, and explicit-phase-only: no `parallel_groups`, no top-level `include`, and no phase-level `prompt_file`, `workflow_file`, `workflow_dir`, `checks`, or bounce-target lists.
 
 ## Implementation Details
@@ -98,7 +101,7 @@ Safe Decompression Independence and Metadata Rebase
 - Replace `UpstreamBufferlessSession` in `safe/src/ffi/decompress.rs` with a native bufferless/session state machine that drives `ZSTD_decompressBegin`, `ZSTD_decompressContinue`, `ZSTD_nextSrcSizeToDecompress`, `ZSTD_decompressBlock`, and `ZSTD_decompressStream` without loading upstream symbols.
 - `safe/scripts/capture-upstream-abi.sh --check` and `safe/scripts/verify-baseline-contract.sh` must stop assuming any prebuilt upstream `libzstd.so` lives under `original/lib/`; they must validate the checked-in exports, SONAME, and ownership metadata directly and treat `safe/abi/original.*` as the authoritative baseline inputs.
 - `safe/scripts/capture-upstream-abi.sh` must remain the explicit baseline recapture path for `safe/abi/original.exports.txt` and `safe/abi/original.soname.txt`; only its verification path changes in this phase.
-- When rewriting `workflow.yaml`, `.plan/workflow-structure.yaml`, and the numbered phase markdown files, keep every verifier as an explicit top-level `script` or `check` phase with exactly one fixed `bounce_target` equal to the implement phase it verifies.
+- When materializing the committed `workflow.yaml` from the rewritten `.plan/workflow-structure.yaml` and numbered phase markdown files, keep every verifier as an explicit top-level `script` or `check` phase with exactly one fixed `bounce_target` equal to the implement phase it verifies.
 - `original/libzstd-1.5.5+dfsg2/` remains a consumed baseline, not a normal patch target; default to zero edits under `original/` and keep fixes on the safe side unless no safe-side change can preserve the required public interface.
 - Keep `safe/src/ffi/legacy_shim.c` as the only decompression-side C bridge if legacy v0.5-v0.7 decode truly still requires it; document the exact boundary in `safe/docs/unsafe-audit.md`.
 - Extend the decompression test surface to cover:
@@ -123,7 +126,7 @@ Safe Decompression Independence and Metadata Rebase
 - Decompression-side library code and decompression harness scripts no longer depend on `SAFE_UPSTREAM_LIB`, `load_upstream!`, `dlopen()`, or `dlsym()`, except for any explicitly documented legacy shim boundary.
 - `safe/abi/export_map.toml`, `safe/tests/upstream_test_matrix.toml`, and `safe/scripts/verify-baseline-contract.sh` reflect the fixed ownership rebase and validate the checked-in ABI baseline files directly.
 - No export entry remains assigned above Phase 3 and no upstream-suite entry remains assigned above Phase 5 after the Phase 1 rebase.
-- `workflow.yaml`, `.plan/workflow-structure.yaml`, and the numbered `.plan/phases/*.md` files are rewritten in place, remain aligned with `.plan/plan.md`, and preserve a strictly linear, inline-only, explicit-phase workflow with one fixed `bounce_target` per verifier.
+- `.plan/workflow-structure.yaml` and the numbered `.plan/phases/*.md` files are rewritten in place, `workflow.yaml` is regenerated from them and committed, and the resulting workflow remains aligned with `.plan/plan.md` while preserving a strictly linear, inline-only, explicit-phase workflow with one fixed `bounce_target` per verifier.
 - The listed verification commands pass and the new decompression regressions are checked in next to the touched Rust and C API surfaces.
 
 ## Git Commit Requirement

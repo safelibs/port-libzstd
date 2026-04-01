@@ -1,5 +1,5 @@
 use crate::{
-    common::error::{decode_error, error_result, is_error_result},
+    common::error::error_result,
     decompress::frame::{self, DictionaryRef},
     ffi::{
         decompress::{self, DictionaryUse},
@@ -13,68 +13,6 @@ use core::ffi::{c_int, c_void};
 
 fn custom_mem_supported(custom_mem: ZSTD_customMem) -> bool {
     custom_mem.customAlloc.is_none() && custom_mem.customFree.is_none()
-}
-
-fn decode_with_upstream_dict(
-    dst: *mut c_void,
-    dst_capacity: usize,
-    src: *const c_void,
-    src_size: usize,
-    dict: &[u8],
-) -> usize {
-    type CreateDCtx = unsafe extern "C" fn() -> *mut ZSTD_DCtx;
-    type FreeDCtx = unsafe extern "C" fn(*mut ZSTD_DCtx) -> usize;
-    type DecompressUsingDict = unsafe extern "C" fn(
-        *mut ZSTD_DCtx,
-        *mut c_void,
-        usize,
-        *const c_void,
-        usize,
-        *const c_void,
-        usize,
-    ) -> usize;
-
-    let Some(src_bytes) = decompress::optional_src_slice(src, src_size) else {
-        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
-    };
-    let Some(create_dctx) =
-        crate::ffi::compress::load_upstream!("ZSTD_createDCtx", CreateDCtx)
-    else {
-        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_GENERIC);
-    };
-    let Some(free_dctx) = crate::ffi::compress::load_upstream!("ZSTD_freeDCtx", FreeDCtx) else {
-        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_GENERIC);
-    };
-    let Some(decompress_using_dict) =
-        crate::ffi::compress::load_upstream!("ZSTD_decompress_usingDict", DecompressUsingDict)
-    else {
-        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_GENERIC);
-    };
-
-    let upstream_dctx = unsafe { create_dctx() };
-    if upstream_dctx.is_null() {
-        return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_memory_allocation);
-    }
-
-    let decoded = unsafe {
-        decompress_using_dict(
-            upstream_dctx,
-            dst,
-            dst_capacity,
-            src_bytes.as_ptr().cast(),
-            src_bytes.len(),
-            dict.as_ptr().cast(),
-            dict.len(),
-        )
-    };
-    unsafe {
-        free_dctx(upstream_dctx);
-    }
-
-    if is_error_result(decoded) {
-        return error_result(decode_error(decoded));
-    }
-    decoded
 }
 
 fn decode_into(
@@ -201,8 +139,34 @@ pub extern "C" fn ZSTD_decompress_usingDict(
     let Some(dict_bytes) = decompress::optional_src_slice(dict, dictSize) else {
         return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
     };
-    match decompress::with_dctx_ref(dctx, |_| Ok(())) {
-        Ok(()) => decode_with_upstream_dict(dst, dstCapacity, src, srcSize, dict_bytes),
+    match decompress::with_dctx_ref(dctx, |dctx| {
+        if dict_bytes.is_empty() {
+            Ok(decode_into(
+                dst,
+                dstCapacity,
+                src,
+                srcSize,
+                DictionaryRef::None,
+                dctx.format,
+                dctx.max_window_size,
+            ))
+        } else {
+            let prepared = decompress::DecoderDictionary::from_bytes_with_content_type(
+                dict_bytes,
+                ZSTD_dictContentType_e::ZSTD_dct_auto,
+            )?;
+            Ok(decode_into(
+                dst,
+                dstCapacity,
+                src,
+                srcSize,
+                prepared.as_dictionary_ref(),
+                dctx.format,
+                dctx.max_window_size,
+            ))
+        }
+    }) {
+        Ok(size) => size,
         Err(code) => error_result(code),
     }
 }
@@ -216,23 +180,25 @@ pub extern "C" fn ZSTD_decompress_usingDDict(
     srcSize: usize,
     ddict: *const ZSTD_DDict,
 ) -> usize {
-    match decompress::with_dctx_ref(dctx, |_| Ok(())) {
-        Ok(()) if ddict.is_null() => decode_into(
+    match decompress::with_dctx_ref(dctx, |dctx| Ok((dctx.format, dctx.max_window_size))) {
+        Ok((format, max_window_size)) if ddict.is_null() => decode_into(
             dst,
             dstCapacity,
             src,
             srcSize,
             DictionaryRef::None,
-            ZSTD_format_e::ZSTD_f_zstd1,
-            (1usize << frame::ZSTD_WINDOWLOG_LIMIT_DEFAULT) + 1,
+            format,
+            max_window_size,
         ),
-        Ok(()) => match decompress::with_ddict_ref(ddict, |prepared| {
-            Ok(decode_with_upstream_dict(
+        Ok((format, max_window_size)) => match decompress::with_ddict_ref(ddict, |prepared| {
+            Ok(decode_into(
                 dst,
                 dstCapacity,
                 src,
                 srcSize,
-                &prepared.raw,
+                prepared.as_dictionary_ref(),
+                format,
+                max_window_size,
             ))
         }) {
             Ok(size) => size,

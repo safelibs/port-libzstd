@@ -1,5 +1,8 @@
 # Safe Compression Core Independence
 
+## Workflow Position
+Phase 2 of 8 in the linear explicit-phase workflow.
+
 ## Phase Name
 Safe Compression Core Independence
 
