@@ -90,6 +90,7 @@ paths = [
     safe_root / "build.rs",
     safe_root / "include",
     safe_root / "src",
+    safe_root / "third_party",
     safe_root / "scripts",
     safe_root / "pkgconfig",
     safe_root / "cmake",
@@ -244,6 +245,7 @@ install -d "$STAGE_ROOT" "$PACKAGE_DIR" "$INSTALL_ROOT"
 
 rsync_tree "$SAFE_ROOT/include/" "$STAGE_ROOT/include/"
 rsync_tree "$SAFE_ROOT/src/" "$STAGE_ROOT/src/"
+rsync_tree "$SAFE_ROOT/third_party/" "$STAGE_ROOT/third_party/"
 rsync_tree "$SAFE_ROOT/scripts/" "$STAGE_ROOT/scripts/"
 rsync_tree "$SAFE_ROOT/pkgconfig/" "$STAGE_ROOT/pkgconfig/"
 rsync_tree "$SAFE_ROOT/cmake/" "$STAGE_ROOT/cmake/"

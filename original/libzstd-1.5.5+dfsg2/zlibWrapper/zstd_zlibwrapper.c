@@ -150,7 +150,7 @@ static void ZWRAP_customFree(void* ptr, ZSTD_customMem customMem)
 
 
 /* ===   Compression   === */
-typedef enum { ZWRAP_useInit, ZWRAP_useReset, ZWRAP_streamEnd } ZWRAP_state_t;
+typedef enum { ZWRAP_useInit, ZWRAP_useReset, ZWRAP_useActive, ZWRAP_streamEnd } ZWRAP_state_t;
 
 typedef struct {
     ZSTD_CStream* zbc;
@@ -838,16 +838,19 @@ ZEXTERN int ZEXPORT z_inflate _Z_OF((z_streamp strm, int flush))
 
     if (zwd->totalInBytes < ZSTD_HEADERSIZE) {
         if (zwd->totalInBytes == 0 && strm->avail_in >= ZSTD_HEADERSIZE) {
-            if (zwd->decompState == ZWRAP_useInit) {
-                size_t const initErr = ZSTD_initDStream(zwd->zbd);
-                if (ZSTD_isError(initErr)) {
-                    LOG_WRAPPERD("ERROR: ZSTD_initDStream errorCode=%s\n",
-                                 ZSTD_getErrorName(initErr));
-                    goto error;
+            if (zwd->decompState != ZWRAP_useActive) {
+                if (zwd->decompState == ZWRAP_useInit) {
+                    size_t const initErr = ZSTD_initDStream(zwd->zbd);
+                    if (ZSTD_isError(initErr)) {
+                        LOG_WRAPPERD("ERROR: ZSTD_initDStream errorCode=%s\n",
+                                     ZSTD_getErrorName(initErr));
+                        goto error;
+                    }
+                } else {
+                    size_t const resetErr = ZSTD_DCtx_reset(zwd->zbd, ZSTD_reset_session_only);
+                    if (ZSTD_isError(resetErr)) goto error;
                 }
-            } else {
-                size_t const resetErr = ZSTD_DCtx_reset(zwd->zbd, ZSTD_reset_session_only);
-                if (ZSTD_isError(resetErr)) goto error;
+                zwd->decompState = ZWRAP_useActive;
             }
         } else {
             size_t const srcSize = MIN(strm->avail_in, ZSTD_HEADERSIZE - zwd->totalInBytes);
@@ -858,16 +861,19 @@ ZEXTERN int ZEXPORT z_inflate _Z_OF((z_streamp strm, int flush))
             strm->avail_in -= srcSize;
             if (zwd->totalInBytes < ZSTD_HEADERSIZE) return Z_OK;
 
-            if (zwd->decompState == ZWRAP_useInit) {
-                size_t const initErr = ZSTD_initDStream(zwd->zbd);
-                if (ZSTD_isError(initErr)) {
-                    LOG_WRAPPERD("ERROR: ZSTD_initDStream errorCode=%s\n",
-                                ZSTD_getErrorName(initErr));
-                    goto error;
+            if (zwd->decompState != ZWRAP_useActive) {
+                if (zwd->decompState == ZWRAP_useInit) {
+                    size_t const initErr = ZSTD_initDStream(zwd->zbd);
+                    if (ZSTD_isError(initErr)) {
+                        LOG_WRAPPERD("ERROR: ZSTD_initDStream errorCode=%s\n",
+                                    ZSTD_getErrorName(initErr));
+                        goto error;
+                    }
+                } else {
+                    size_t const resetErr = ZSTD_DCtx_reset(zwd->zbd, ZSTD_reset_session_only);
+                    if (ZSTD_isError(resetErr)) goto error;
                 }
-            } else {
-                size_t const resetErr = ZSTD_DCtx_reset(zwd->zbd, ZSTD_reset_session_only);
-                if (ZSTD_isError(resetErr)) goto error;
+                zwd->decompState = ZWRAP_useActive;
             }
 
             zwd->inBuffer.src = zwd->headerBuf;

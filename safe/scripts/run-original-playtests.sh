@@ -4,15 +4,28 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/phase6-common.sh"
 
-phase6_ensure_safe_install
+phase6_require_phase4_inputs "$0"
 phase6_ensure_datagen
 phase6_export_safe_env
+phase6_require_command rsync
 
-phase6_log "running playTests.sh against the safe install tree"
+stage_playtests_sandbox() {
+    local sandbox_root="$PHASE6_OUT/playtests-sandbox"
+
+    rm -rf "$sandbox_root"
+    install -d "$sandbox_root"
+    rsync -a "$TESTS_ROOT/" "$sandbox_root/tests/"
+    rsync -a "$ORIGINAL_ROOT/programs/" "$sandbox_root/programs/"
+    printf '%s\n' "$sandbox_root"
+}
+
+playtests_sandbox=$(stage_playtests_sandbox)
+
+phase6_log "running playTests.sh against the safe install tree from a staged sandbox"
 (
-    cd "$TESTS_ROOT"
+    cd "$playtests_sandbox/tests"
     ZSTD_BIN="$BINDIR/zstd" \
-    DATAGEN_BIN="$TESTS_ROOT/datagen" \
+    DATAGEN_BIN="$playtests_sandbox/tests/datagen" \
     EXEC_PREFIX="${EXEC_PREFIX:-}" \
     bash ./playTests.sh
 )
@@ -22,6 +35,6 @@ phase6_build_original_cli_variants
 
 phase6_log "running test-variants.sh against the safe library variants"
 (
-    cd "$TESTS_ROOT"
+    cd "$PHASE6_VARIANTS_TESTS"
     sh ./test-variants.sh
 )

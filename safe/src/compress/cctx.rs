@@ -142,6 +142,9 @@ pub extern "C" fn ZSTD_CCtx_getParameter(
 #[no_mangle]
 pub extern "C" fn ZSTD_CCtx_setPledgedSrcSize(cctx: *mut ZSTD_CCtx, pledgedSrcSize: u64) -> usize {
     to_result(with_cctx_mut(cctx, |cctx| {
+        if cctx.stream.frame_finished && cctx.stream.pending_pos == cctx.stream.pending.len() {
+            cctx.reset(ZSTD_ResetDirective::ZSTD_reset_session_only);
+        }
         cctx.pledged_src_size = pledgedSrcSize;
         Ok(0)
     }))

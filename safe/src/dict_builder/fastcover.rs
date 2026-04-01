@@ -5,6 +5,8 @@ use crate::{
 };
 use core::ffi::{c_uint, c_void};
 
+const FASTCOVER_MAX_ACCEL: c_uint = 10;
+
 fn normalize_params(mut parameters: ZDICT_fastCover_params_t) -> ZDICT_fastCover_params_t {
     if parameters.k == 0 {
         parameters.k = 64;
@@ -25,6 +27,19 @@ fn normalize_params(mut parameters: ZDICT_fastCover_params_t) -> ZDICT_fastCover
         parameters.splitPoint = 0.75;
     }
     parameters
+}
+
+fn validate_params(
+    parameters: ZDICT_fastCover_params_t,
+) -> Result<ZDICT_fastCover_params_t, ZSTD_ErrorCode> {
+    let parameters = normalize_params(parameters);
+    if !(parameters.splitPoint > 0.0 && parameters.splitPoint <= 1.0) {
+        return Err(ZSTD_ErrorCode::ZSTD_error_parameter_outOfBound);
+    }
+    if parameters.accel > FASTCOVER_MAX_ACCEL {
+        return Err(ZSTD_ErrorCode::ZSTD_error_parameter_outOfBound);
+    }
+    Ok(parameters)
 }
 
 fn zparams(parameters: ZDICT_fastCover_params_t) -> ZDICT_params_t {
@@ -94,7 +109,10 @@ pub extern "C" fn ZDICT_trainFromBuffer_fastCover(
     nbSamples: c_uint,
     parameters: ZDICT_fastCover_params_t,
 ) -> usize {
-    let parameters = normalize_params(parameters);
+    let parameters = match validate_params(parameters) {
+        Ok(parameters) => parameters,
+        Err(code) => return error_result(code),
+    };
     let preferred_segment_size = parameters.k.max(parameters.f).max(parameters.d) as usize;
     train_dictionary(
         dictBuffer,
@@ -120,12 +138,16 @@ pub extern "C" fn ZDICT_optimizeTrainFromBuffer_fastCover(
     let Some(parameters) = (unsafe { parameters.as_mut() }) else {
         return error_result(ZSTD_ErrorCode::ZSTD_error_GENERIC);
     };
+    let base = match validate_params(*parameters) {
+        Ok(parameters) => parameters,
+        Err(code) => return error_result(code),
+    };
     let samples = match parse_samples(samplesBuffer, samplesSizes, nbSamples) {
         Ok(samples) => samples,
         Err(code) => return error_result(code),
     };
-    let (training_samples, validation_samples) = split_samples(&samples, parameters.splitPoint);
-    let mut best = normalize_params(*parameters);
+    let (training_samples, validation_samples) = split_samples(&samples, base.splitPoint);
+    let mut best = base;
     let mut best_score = usize::MAX;
     let mut best_size = usize::MAX;
 

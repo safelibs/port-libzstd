@@ -2,16 +2,16 @@ use crate::{
     common::error::error_result,
     ffi::{
         compress::{
-            create_cctx, cstream_size_estimate, estimate_cstream_size_from_cparams,
-            estimate_cstream_size_from_level, finalize_stream, flush_stream_data,
-            flush_stream_output, free_cctx, get_cparams, load_dictionary, next_input_size_hint,
-            null_cctx, stage_stream_input, stream_pending_bytes, to_result,
+            create_cctx, cstream_size_estimate, emit_mt_continue_job,
+            estimate_cstream_size_from_cparams, estimate_cstream_size_from_level, finalize_stream,
+            flush_stream_data, flush_stream_output, free_cctx, get_cparams, load_dictionary,
+            next_input_size_hint, null_cctx, stage_stream_input, stream_pending_bytes, to_result,
             validate_custom_mem, with_cctx_mut,
         },
         types::{
-            ZSTD_CCtx, ZSTD_CCtx_params, ZSTD_CStream, ZSTD_EndDirective,
-            ZSTD_ResetDirective, ZSTD_compressionParameters, ZSTD_customMem, ZSTD_inBuffer,
-            ZSTD_outBuffer, ZSTD_parameters, ZSTD_CONTENTSIZE_UNKNOWN,
+            ZSTD_CCtx, ZSTD_CCtx_params, ZSTD_CStream, ZSTD_EndDirective, ZSTD_ResetDirective,
+            ZSTD_compressionParameters, ZSTD_customMem, ZSTD_inBuffer, ZSTD_outBuffer,
+            ZSTD_parameters, ZSTD_CONTENTSIZE_UNKNOWN,
         },
     },
 };
@@ -134,7 +134,7 @@ pub extern "C" fn ZSTD_compressStream(
             return Err(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_init_missing);
         }
         zcs.stream_mode = true;
-        stage_stream_input(zcs, input)?;
+        let _ = stage_stream_input(zcs, input, false)?;
         if zcs.pledged_src_size == ZSTD_CONTENTSIZE_UNKNOWN
             && !zcs.stream.deferred_header
             && zcs.stream.frame_started
@@ -162,11 +162,16 @@ pub extern "C" fn ZSTD_compressStream2(
             return Err(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_init_missing);
         }
         cctx.stream_mode = true;
-        stage_stream_input(cctx, input)?;
+        let mt_continue = matches!(endOp, ZSTD_EndDirective::ZSTD_e_continue);
+        let consumed = stage_stream_input(cctx, input, mt_continue)?;
         match endOp {
             ZSTD_EndDirective::ZSTD_e_end => finalize_stream(cctx)?,
             ZSTD_EndDirective::ZSTD_e_flush => flush_stream_data(cctx)?,
-            ZSTD_EndDirective::ZSTD_e_continue => {}
+            ZSTD_EndDirective::ZSTD_e_continue => {
+                if consumed == 0 {
+                    let _ = emit_mt_continue_job(cctx)?;
+                }
+            }
         }
         flush_stream_output(cctx, output)?;
         Ok(stream_pending_bytes(cctx))

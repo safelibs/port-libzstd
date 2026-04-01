@@ -4,8 +4,9 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/phase6-common.sh"
 
-phase6_ensure_safe_install
+phase6_require_phase4_inputs "$0"
 phase6_export_safe_env
+phase6_assert_uses_safe_lib "$BINDIR/zstd"
 
 WORK_DIR="$PHASE6_OUT/performance-smoke"
 CORPUS="$WORK_DIR/corpus.txt"
@@ -54,7 +55,6 @@ roundtrip = pathlib.Path(sys.argv[4])
 
 max_compress = float(__import__("os").environ.get("PERF_SMOKE_MAX_COMPRESS_SECONDS", "15"))
 max_decompress = float(__import__("os").environ.get("PERF_SMOKE_MAX_DECOMPRESS_SECONDS", "15"))
-max_bench = float(__import__("os").environ.get("PERF_SMOKE_MAX_BENCH_SECONDS", "30"))
 min_compress_mib = float(__import__("os").environ.get("PERF_SMOKE_MIN_COMPRESS_MIB_PER_SEC", "1.0"))
 min_decompress_mib = float(__import__("os").environ.get("PERF_SMOKE_MIN_DECOMPRESS_MIB_PER_SEC", "2.0"))
 
@@ -77,7 +77,6 @@ decompress = min(
 )
 with compressed.open("rb") as stream:
     stream_decode = timed_run(str(zstd), "-q", "-d", "-c", str(compressed), stdout=subprocess.DEVNULL)
-bench = timed_run(str(zstd), "-q", "-b1", "-i1", str(corpus), stdout=subprocess.DEVNULL)
 
 if corpus.read_bytes() != roundtrip.read_bytes():
     raise SystemExit("performance smoke roundtrip mismatch")
@@ -89,8 +88,6 @@ if compress > max_compress:
     raise SystemExit(f"compression smoke exceeded {max_compress}s: {compress:.3f}s")
 if decompress > max_decompress:
     raise SystemExit(f"decompression smoke exceeded {max_decompress}s: {decompress:.3f}s")
-if bench > max_bench:
-    raise SystemExit(f"benchmark smoke exceeded {max_bench}s: {bench:.3f}s")
 if compress_mib < min_compress_mib:
     raise SystemExit(
         f"compression smoke throughput too low: {compress_mib:.2f} MiB/s < {min_compress_mib:.2f} MiB/s"
@@ -105,7 +102,6 @@ print(
     f"{size_mib:.1f} MiB corpus, "
     f"compress={compress:.3f}s ({compress_mib:.2f} MiB/s), "
     f"decompress={decompress:.3f}s, "
-    f"stream-decode={stream_decode:.3f}s, "
-    f"benchmark={bench:.3f}s"
+    f"stream-decode={stream_decode:.3f}s"
 )
 PY

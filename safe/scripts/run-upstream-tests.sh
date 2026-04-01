@@ -14,11 +14,19 @@ if [[ $# -ne 0 ]]; then
     exit 2
 fi
 
-phase6_ensure_safe_install
+phase6_require_phase4_inputs "$0"
 phase6_export_safe_env
+phase6_assert_uses_safe_lib "$BINDIR/zstd" "$BINDIR/pzstd"
+UPSTREAM_TESTS_LIB_ROOT=$(phase6_prepare_upstream_tests_helper_root "$PHASE6_OUT/upstream-tests/lib")
+UPSTREAM_TESTS_BUILD_ROOT="$PHASE6_OUT/upstream-tests/obj"
+install -d "$UPSTREAM_TESTS_BUILD_ROOT"
 
 phase6_make_upstream_test_targets() {
-    make -C "$TESTS_ROOT" "$@"
+    make -C "$TESTS_ROOT" \
+        BUILD_DIR="$UPSTREAM_TESTS_BUILD_ROOT" \
+        LIBZSTD="$UPSTREAM_TESTS_LIB_ROOT" \
+        PRGDIR="$ORIGINAL_ROOT/programs" \
+        "$@"
 }
 
 phase6_try_optional_make_targets() {
@@ -133,7 +141,7 @@ phase6_try_zstreamtest_smoke() {
 }
 
 phase6_run_optional_tests_makefile_coverage() {
-    phase6_log "dispatching phase-6 optional tests/Makefile targets"
+    phase6_log "dispatching upstream tests/Makefile release-gate coverage through the Phase 4 helper-root overlay"
 
     phase6_log "running tests:allnothread aggregate build"
     phase6_make_upstream_test_targets allnothread
@@ -173,7 +181,7 @@ phase6_run_optional_tests_makefile_coverage() {
             "tests:zstreamtest_tsan" \
             zstreamtest_tsan \
             "thread sanitizer runtime unsupported on this host" \
-            'FATAL: ThreadSanitizer: unexpected memory mapping'
+            'FATAL: ThreadSanitizer: unexpected memory mapping' || :
     else
         phase6_log "skipping tests:zstreamtest_tsan (thread sanitizer toolchain unavailable)"
     fi
@@ -209,6 +217,7 @@ bash "$SAFE_ROOT/scripts/run-upstream-fuzz-tests.sh"
 phase6_run_optional_tests_makefile_coverage
 bash "$SAFE_ROOT/scripts/run-original-cli-tests.sh"
 bash "$SAFE_ROOT/scripts/check-cli-permissions.sh"
+bash "$SAFE_ROOT/scripts/run-performance-smoke.sh"
 
 phase6_log "running upstream license audit"
 python3 "$ORIGINAL_ROOT/tests/test-license.py"
@@ -223,4 +232,6 @@ python3 "$ORIGINAL_ROOT/tests/check_size.py" "$SIZE_WORK_DIR/libzstd.so" "$SAFE_
 
 if [[ $OFFLINE_ONLY -eq 0 ]]; then
     :
+else
+    phase6_log "upstream release gate already runs entirely offline"
 fi

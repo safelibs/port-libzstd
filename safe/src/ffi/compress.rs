@@ -22,9 +22,7 @@ use core::{
     ffi::{c_int, c_void},
     mem::size_of,
 };
-use oxiarc_zstd::{
-    LevelConfig as OxiarcLevelConfig, MatchFinder as OxiarcMatchFinder, ZstdEncoder,
-};
+use oxiarc_zstd::{LevelConfig as OxiarcLevelConfig, MatchFinder as OxiarcMatchFinder};
 use std::{borrow::Cow, vec::Vec};
 use structured_zstd::decoding::Dictionary as StructuredDictionary;
 use structured_zstd::encoding::{
@@ -80,11 +78,21 @@ pub(crate) struct EncoderDictionary {
     pub(crate) compression_level: c_int,
     pub(crate) cparams: ZSTD_compressionParameters,
     pub(crate) enable_long_distance_matching: bool,
+    pub(crate) enable_dedicated_dict_search: bool,
+    pub(crate) ldm_hash_log: c_int,
+    pub(crate) ldm_min_match: c_int,
+    pub(crate) ldm_bucket_size_log: c_int,
+    pub(crate) ldm_hash_rate_log: c_int,
     pub(crate) nb_workers: c_int,
     pub(crate) job_size: c_int,
     pub(crate) overlap_log: c_int,
+    pub(crate) rsyncable: c_int,
+    pub(crate) literal_compression_mode: c_int,
+    pub(crate) target_cblock_size: c_int,
+    pub(crate) src_size_hint: c_int,
     pub(crate) block_delimiters: ZSTD_sequenceFormat_e,
     pub(crate) validate_sequences: bool,
+    pub(crate) use_row_match_finder: c_int,
     pub(crate) enable_seq_producer_fallback: bool,
     pub(crate) dict_content_type: ZSTD_dictContentType_e,
 }
@@ -96,11 +104,21 @@ impl EncoderDictionary {
         compression_level: c_int,
         cparams: ZSTD_compressionParameters,
         enable_long_distance_matching: bool,
+        enable_dedicated_dict_search: bool,
+        ldm_hash_log: c_int,
+        ldm_min_match: c_int,
+        ldm_bucket_size_log: c_int,
+        ldm_hash_rate_log: c_int,
         nb_workers: c_int,
         job_size: c_int,
         overlap_log: c_int,
+        rsyncable: c_int,
+        literal_compression_mode: c_int,
+        target_cblock_size: c_int,
+        src_size_hint: c_int,
         block_delimiters: ZSTD_sequenceFormat_e,
         validate_sequences: bool,
+        use_row_match_finder: c_int,
         enable_seq_producer_fallback: bool,
         dict_content_type: ZSTD_dictContentType_e,
         static_workspace_size: usize,
@@ -126,11 +144,21 @@ impl EncoderDictionary {
             compression_level,
             cparams: normalize_cparams(cparams),
             enable_long_distance_matching,
+            enable_dedicated_dict_search,
+            ldm_hash_log,
+            ldm_min_match,
+            ldm_bucket_size_log,
+            ldm_hash_rate_log,
             nb_workers,
             job_size,
             overlap_log,
+            rsyncable,
+            literal_compression_mode,
+            target_cblock_size,
+            src_size_hint,
             block_delimiters,
             validate_sequences,
+            use_row_match_finder,
             enable_seq_producer_fallback,
             dict_content_type,
         })
@@ -143,11 +171,21 @@ impl EncoderDictionary {
             compression_level,
             cparams,
             false,
+            false,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
             0,
             0,
             0,
             ZSTD_sequenceFormat_e::ZSTD_sf_noBlockDelimiters,
             false,
+            0,
             false,
             ZSTD_dictLoadMethod_e::ZSTD_dlm_byCopy,
             ZSTD_dictContentType_e::ZSTD_dct_auto,
@@ -159,11 +197,21 @@ impl EncoderDictionary {
         compression_level: c_int,
         cparams: ZSTD_compressionParameters,
         enable_long_distance_matching: bool,
+        enable_dedicated_dict_search: bool,
+        ldm_hash_log: c_int,
+        ldm_min_match: c_int,
+        ldm_bucket_size_log: c_int,
+        ldm_hash_rate_log: c_int,
         nb_workers: c_int,
         job_size: c_int,
         overlap_log: c_int,
+        rsyncable: c_int,
+        literal_compression_mode: c_int,
+        target_cblock_size: c_int,
+        src_size_hint: c_int,
         block_delimiters: ZSTD_sequenceFormat_e,
         validate_sequences: bool,
+        use_row_match_finder: c_int,
         enable_seq_producer_fallback: bool,
         dict_load_method: ZSTD_dictLoadMethod_e,
         dict_content_type: ZSTD_dictContentType_e,
@@ -174,11 +222,21 @@ impl EncoderDictionary {
             compression_level,
             cparams,
             enable_long_distance_matching,
+            enable_dedicated_dict_search,
+            ldm_hash_log,
+            ldm_min_match,
+            ldm_bucket_size_log,
+            ldm_hash_rate_log,
             nb_workers,
             job_size,
             overlap_log,
+            rsyncable,
+            literal_compression_mode,
+            target_cblock_size,
+            src_size_hint,
             block_delimiters,
             validate_sequences,
+            use_row_match_finder,
             enable_seq_producer_fallback,
             dict_content_type,
             0,
@@ -357,7 +415,17 @@ pub(crate) struct EncoderContext {
     pub overlap_log: c_int,
     pub block_delimiters: ZSTD_sequenceFormat_e,
     pub enable_long_distance_matching: bool,
+    pub enable_dedicated_dict_search: bool,
+    pub ldm_hash_log: c_int,
+    pub ldm_min_match: c_int,
+    pub ldm_bucket_size_log: c_int,
+    pub ldm_hash_rate_log: c_int,
     pub validate_sequences: bool,
+    pub rsyncable: c_int,
+    pub literal_compression_mode: c_int,
+    pub target_cblock_size: c_int,
+    pub src_size_hint: c_int,
+    pub use_row_match_finder: c_int,
     pub enable_seq_producer_fallback: bool,
     pub sequence_producer_state: *mut c_void,
     pub sequence_producer: Option<ZSTD_sequenceProducer_F>,
@@ -385,7 +453,17 @@ impl Default for EncoderContext {
             overlap_log: 0,
             block_delimiters: ZSTD_sequenceFormat_e::ZSTD_sf_noBlockDelimiters,
             enable_long_distance_matching: false,
+            enable_dedicated_dict_search: false,
+            ldm_hash_log: 0,
+            ldm_min_match: 0,
+            ldm_bucket_size_log: 0,
+            ldm_hash_rate_log: 0,
             validate_sequences: false,
+            rsyncable: 0,
+            literal_compression_mode: 0,
+            target_cblock_size: 0,
+            src_size_hint: 0,
+            use_row_match_finder: 0,
             enable_seq_producer_fallback: false,
             sequence_producer_state: core::ptr::null_mut(),
             sequence_producer: None,
@@ -437,7 +515,17 @@ impl EncoderContext {
         self.overlap_log = 0;
         self.block_delimiters = ZSTD_sequenceFormat_e::ZSTD_sf_noBlockDelimiters;
         self.enable_long_distance_matching = false;
+        self.enable_dedicated_dict_search = false;
+        self.ldm_hash_log = 0;
+        self.ldm_min_match = 0;
+        self.ldm_bucket_size_log = 0;
+        self.ldm_hash_rate_log = 0;
         self.validate_sequences = false;
+        self.rsyncable = 0;
+        self.literal_compression_mode = 0;
+        self.target_cblock_size = 0;
+        self.src_size_hint = 0;
+        self.use_row_match_finder = 0;
         self.enable_seq_producer_fallback = false;
         self.sequence_producer_state = core::ptr::null_mut();
         self.sequence_producer = None;
@@ -446,7 +534,13 @@ impl EncoderContext {
 
     pub(crate) fn reset(&mut self, reset: ZSTD_ResetDirective) {
         match reset {
-            ZSTD_ResetDirective::ZSTD_reset_session_only => self.clear_session(),
+            ZSTD_ResetDirective::ZSTD_reset_session_only => {
+                let stream_mode = self.stream_mode;
+                let legacy_mode = self.legacy_mode;
+                self.clear_session();
+                self.stream_mode = stream_mode;
+                self.legacy_mode = legacy_mode;
+            }
             ZSTD_ResetDirective::ZSTD_reset_parameters => self.clear_parameters(),
             ZSTD_ResetDirective::ZSTD_reset_session_and_parameters => {
                 self.clear_session();
@@ -469,7 +563,17 @@ impl EncoderContext {
         self.overlap_log = dict.overlap_log;
         self.block_delimiters = dict.block_delimiters;
         self.enable_long_distance_matching = dict.enable_long_distance_matching;
+        self.enable_dedicated_dict_search = dict.enable_dedicated_dict_search;
+        self.ldm_hash_log = dict.ldm_hash_log;
+        self.ldm_min_match = dict.ldm_min_match;
+        self.ldm_bucket_size_log = dict.ldm_bucket_size_log;
+        self.ldm_hash_rate_log = dict.ldm_hash_rate_log;
         self.validate_sequences = dict.validate_sequences;
+        self.rsyncable = dict.rsyncable;
+        self.literal_compression_mode = dict.literal_compression_mode;
+        self.target_cblock_size = dict.target_cblock_size;
+        self.src_size_hint = dict.src_size_hint;
+        self.use_row_match_finder = dict.use_row_match_finder;
         self.enable_seq_producer_fallback = dict.enable_seq_producer_fallback;
         self.set_dict(Some(dict));
     }
@@ -540,33 +644,156 @@ pub(crate) fn null_cdict() -> *mut ZSTD_CDict {
 }
 
 pub(crate) fn default_cparams() -> ZSTD_compressionParameters {
-    ZSTD_compressionParameters {
-        windowLog: 19,
-        chainLog: 18,
-        hashLog: 18,
-        searchLog: 1,
-        minMatch: 4,
-        targetLength: 0,
-        strategy: ZSTD_strategy::ZSTD_fast,
+    DEFAULT_CPARAMS_TABLE[0][ZSTD_CLEVEL_DEFAULT as usize]
+}
+
+macro_rules! cparams {
+    ($w:expr, $c:expr, $h:expr, $s:expr, $l:expr, $t:expr, $strategy:ident) => {
+        ZSTD_compressionParameters {
+            windowLog: $w,
+            chainLog: $c,
+            hashLog: $h,
+            searchLog: $s,
+            minMatch: $l,
+            targetLength: $t,
+            strategy: ZSTD_strategy::$strategy,
+        }
+    };
+}
+
+const KB: u64 = 1 << 10;
+
+const DEFAULT_CPARAMS_TABLE: [[ZSTD_compressionParameters; 23]; 4] = [
+    [
+        cparams!(19, 12, 13, 1, 6, 1, ZSTD_fast),
+        cparams!(19, 13, 14, 1, 7, 0, ZSTD_fast),
+        cparams!(20, 15, 16, 1, 6, 0, ZSTD_fast),
+        cparams!(21, 16, 17, 1, 5, 0, ZSTD_dfast),
+        cparams!(21, 18, 18, 1, 5, 0, ZSTD_dfast),
+        cparams!(21, 18, 19, 3, 5, 2, ZSTD_greedy),
+        cparams!(21, 18, 19, 3, 5, 4, ZSTD_lazy),
+        cparams!(21, 19, 20, 4, 5, 8, ZSTD_lazy),
+        cparams!(21, 19, 20, 4, 5, 16, ZSTD_lazy2),
+        cparams!(22, 20, 21, 4, 5, 16, ZSTD_lazy2),
+        cparams!(22, 21, 22, 5, 5, 16, ZSTD_lazy2),
+        cparams!(22, 21, 22, 6, 5, 16, ZSTD_lazy2),
+        cparams!(22, 22, 23, 6, 5, 32, ZSTD_lazy2),
+        cparams!(22, 22, 22, 4, 5, 32, ZSTD_btlazy2),
+        cparams!(22, 22, 23, 5, 5, 32, ZSTD_btlazy2),
+        cparams!(22, 23, 23, 6, 5, 32, ZSTD_btlazy2),
+        cparams!(22, 22, 22, 5, 5, 48, ZSTD_btopt),
+        cparams!(23, 23, 22, 5, 4, 64, ZSTD_btopt),
+        cparams!(23, 23, 22, 6, 3, 64, ZSTD_btultra),
+        cparams!(23, 24, 22, 7, 3, 256, ZSTD_btultra2),
+        cparams!(25, 25, 23, 7, 3, 256, ZSTD_btultra2),
+        cparams!(26, 26, 24, 7, 3, 512, ZSTD_btultra2),
+        cparams!(27, 27, 25, 9, 3, 999, ZSTD_btultra2),
+    ],
+    [
+        cparams!(18, 12, 13, 1, 5, 1, ZSTD_fast),
+        cparams!(18, 13, 14, 1, 6, 0, ZSTD_fast),
+        cparams!(18, 14, 14, 1, 5, 0, ZSTD_dfast),
+        cparams!(18, 16, 16, 1, 4, 0, ZSTD_dfast),
+        cparams!(18, 16, 17, 3, 5, 2, ZSTD_greedy),
+        cparams!(18, 17, 18, 5, 5, 2, ZSTD_greedy),
+        cparams!(18, 18, 19, 3, 5, 4, ZSTD_lazy),
+        cparams!(18, 18, 19, 4, 4, 4, ZSTD_lazy),
+        cparams!(18, 18, 19, 4, 4, 8, ZSTD_lazy2),
+        cparams!(18, 18, 19, 5, 4, 8, ZSTD_lazy2),
+        cparams!(18, 18, 19, 6, 4, 8, ZSTD_lazy2),
+        cparams!(18, 18, 19, 5, 4, 12, ZSTD_btlazy2),
+        cparams!(18, 19, 19, 7, 4, 12, ZSTD_btlazy2),
+        cparams!(18, 18, 19, 4, 4, 16, ZSTD_btopt),
+        cparams!(18, 18, 19, 4, 3, 32, ZSTD_btopt),
+        cparams!(18, 18, 19, 6, 3, 128, ZSTD_btopt),
+        cparams!(18, 19, 19, 6, 3, 128, ZSTD_btultra),
+        cparams!(18, 19, 19, 8, 3, 256, ZSTD_btultra),
+        cparams!(18, 19, 19, 6, 3, 128, ZSTD_btultra2),
+        cparams!(18, 19, 19, 8, 3, 256, ZSTD_btultra2),
+        cparams!(18, 19, 19, 10, 3, 512, ZSTD_btultra2),
+        cparams!(18, 19, 19, 12, 3, 512, ZSTD_btultra2),
+        cparams!(18, 19, 19, 13, 3, 999, ZSTD_btultra2),
+    ],
+    [
+        cparams!(17, 12, 12, 1, 5, 1, ZSTD_fast),
+        cparams!(17, 12, 13, 1, 6, 0, ZSTD_fast),
+        cparams!(17, 13, 15, 1, 5, 0, ZSTD_fast),
+        cparams!(17, 15, 16, 2, 5, 0, ZSTD_dfast),
+        cparams!(17, 17, 17, 2, 4, 0, ZSTD_dfast),
+        cparams!(17, 16, 17, 3, 4, 2, ZSTD_greedy),
+        cparams!(17, 16, 17, 3, 4, 4, ZSTD_lazy),
+        cparams!(17, 16, 17, 3, 4, 8, ZSTD_lazy2),
+        cparams!(17, 16, 17, 4, 4, 8, ZSTD_lazy2),
+        cparams!(17, 16, 17, 5, 4, 8, ZSTD_lazy2),
+        cparams!(17, 16, 17, 6, 4, 8, ZSTD_lazy2),
+        cparams!(17, 17, 17, 5, 4, 8, ZSTD_btlazy2),
+        cparams!(17, 18, 17, 7, 4, 12, ZSTD_btlazy2),
+        cparams!(17, 18, 17, 3, 4, 12, ZSTD_btopt),
+        cparams!(17, 18, 17, 4, 3, 32, ZSTD_btopt),
+        cparams!(17, 18, 17, 6, 3, 256, ZSTD_btopt),
+        cparams!(17, 18, 17, 6, 3, 128, ZSTD_btultra),
+        cparams!(17, 18, 17, 8, 3, 256, ZSTD_btultra),
+        cparams!(17, 18, 17, 10, 3, 512, ZSTD_btultra),
+        cparams!(17, 18, 17, 5, 3, 256, ZSTD_btultra2),
+        cparams!(17, 18, 17, 7, 3, 512, ZSTD_btultra2),
+        cparams!(17, 18, 17, 9, 3, 512, ZSTD_btultra2),
+        cparams!(17, 18, 17, 11, 3, 999, ZSTD_btultra2),
+    ],
+    [
+        cparams!(14, 12, 13, 1, 5, 1, ZSTD_fast),
+        cparams!(14, 14, 15, 1, 5, 0, ZSTD_fast),
+        cparams!(14, 14, 15, 1, 4, 0, ZSTD_fast),
+        cparams!(14, 14, 15, 2, 4, 0, ZSTD_dfast),
+        cparams!(14, 14, 14, 4, 4, 2, ZSTD_greedy),
+        cparams!(14, 14, 14, 3, 4, 4, ZSTD_lazy),
+        cparams!(14, 14, 14, 4, 4, 8, ZSTD_lazy2),
+        cparams!(14, 14, 14, 6, 4, 8, ZSTD_lazy2),
+        cparams!(14, 14, 14, 8, 4, 8, ZSTD_lazy2),
+        cparams!(14, 15, 14, 5, 4, 8, ZSTD_btlazy2),
+        cparams!(14, 15, 14, 9, 4, 8, ZSTD_btlazy2),
+        cparams!(14, 15, 14, 3, 4, 12, ZSTD_btopt),
+        cparams!(14, 15, 14, 4, 3, 24, ZSTD_btopt),
+        cparams!(14, 15, 14, 5, 3, 32, ZSTD_btultra),
+        cparams!(14, 15, 15, 6, 3, 64, ZSTD_btultra),
+        cparams!(14, 15, 15, 7, 3, 256, ZSTD_btultra),
+        cparams!(14, 15, 15, 5, 3, 48, ZSTD_btultra2),
+        cparams!(14, 15, 15, 6, 3, 128, ZSTD_btultra2),
+        cparams!(14, 15, 15, 7, 3, 256, ZSTD_btultra2),
+        cparams!(14, 15, 15, 8, 3, 256, ZSTD_btultra2),
+        cparams!(14, 15, 15, 8, 3, 512, ZSTD_btultra2),
+        cparams!(14, 15, 15, 9, 3, 512, ZSTD_btultra2),
+        cparams!(14, 15, 15, 10, 3, 999, ZSTD_btultra2),
+    ],
+];
+
+fn cparam_row_size(src_size_hint: u64, dict_size: usize) -> u64 {
+    let src_size_hint = normalize_src_size_hint(src_size_hint);
+    let unknown = src_size_hint == ZSTD_CONTENTSIZE_UNKNOWN;
+    let added_size = if unknown && dict_size > 0 { 500 } else { 0 };
+    if unknown && dict_size == 0 {
+        ZSTD_CONTENTSIZE_UNKNOWN
+    } else {
+        src_size_hint
+            .wrapping_add(dict_size as u64)
+            .wrapping_add(added_size)
     }
 }
 
-fn negative_level_cparams(src_size_hint: u64, target_length: u32) -> ZSTD_compressionParameters {
-    let window_log = if src_size_hint == ZSTD_CONTENTSIZE_UNKNOWN {
-        19
-    } else {
-        let needed = 64 - src_size_hint.max(1).leading_zeros();
-        needed.clamp(10, 27)
-    };
-    ZSTD_compressionParameters {
-        windowLog: window_log,
-        chainLog: window_log.saturating_sub(7),
-        hashLog: window_log.saturating_sub(6),
-        searchLog: 1,
-        minMatch: 6,
-        targetLength: target_length,
-        strategy: ZSTD_strategy::ZSTD_fast,
-    }
+fn cparams_table_index(row_size: u64) -> usize {
+    usize::from(row_size <= 256 * KB)
+        + usize::from(row_size <= 128 * KB)
+        + usize::from(row_size <= 16 * KB)
+}
+
+fn negative_level_cparams(
+    src_size_hint: u64,
+    dict_size: usize,
+    target_length: u32,
+) -> ZSTD_compressionParameters {
+    let mut params =
+        DEFAULT_CPARAMS_TABLE[cparams_table_index(cparam_row_size(src_size_hint, dict_size))][0];
+    params.targetLength = target_length.max(1);
+    params
 }
 
 pub(crate) fn min_clevel() -> c_int {
@@ -726,11 +953,21 @@ pub(crate) fn create_cdict_with_settings(
     compression_level: c_int,
     cparams: ZSTD_compressionParameters,
     enable_long_distance_matching: bool,
+    enable_dedicated_dict_search: bool,
+    ldm_hash_log: c_int,
+    ldm_min_match: c_int,
+    ldm_bucket_size_log: c_int,
+    ldm_hash_rate_log: c_int,
     nb_workers: c_int,
     job_size: c_int,
     overlap_log: c_int,
+    rsyncable: c_int,
+    literal_compression_mode: c_int,
+    target_cblock_size: c_int,
+    src_size_hint: c_int,
     block_delimiters: ZSTD_sequenceFormat_e,
     validate_sequences: bool,
+    use_row_match_finder: c_int,
     enable_seq_producer_fallback: bool,
     dict_load_method: ZSTD_dictLoadMethod_e,
     dict_content_type: ZSTD_dictContentType_e,
@@ -740,11 +977,21 @@ pub(crate) fn create_cdict_with_settings(
         compression_level,
         cparams,
         enable_long_distance_matching,
+        enable_dedicated_dict_search,
+        ldm_hash_log,
+        ldm_min_match,
+        ldm_bucket_size_log,
+        ldm_hash_rate_log,
         nb_workers,
         job_size,
         overlap_log,
+        rsyncable,
+        literal_compression_mode,
+        target_cblock_size,
+        src_size_hint,
         block_delimiters,
         validate_sequences,
+        use_row_match_finder,
         enable_seq_producer_fallback,
         dict_load_method,
         dict_content_type,
@@ -761,11 +1008,21 @@ pub(crate) fn init_static_cdict(
     compression_level: c_int,
     cparams: ZSTD_compressionParameters,
     enable_long_distance_matching: bool,
+    enable_dedicated_dict_search: bool,
+    ldm_hash_log: c_int,
+    ldm_min_match: c_int,
+    ldm_bucket_size_log: c_int,
+    ldm_hash_rate_log: c_int,
     nb_workers: c_int,
     job_size: c_int,
     overlap_log: c_int,
+    rsyncable: c_int,
+    literal_compression_mode: c_int,
+    target_cblock_size: c_int,
+    src_size_hint: c_int,
     block_delimiters: ZSTD_sequenceFormat_e,
     validate_sequences: bool,
+    use_row_match_finder: c_int,
     enable_seq_producer_fallback: bool,
     dict_load_method: ZSTD_dictLoadMethod_e,
     dict_content_type: ZSTD_dictContentType_e,
@@ -796,11 +1053,21 @@ pub(crate) fn init_static_cdict(
         compression_level,
         cparams,
         enable_long_distance_matching,
+        enable_dedicated_dict_search,
+        ldm_hash_log,
+        ldm_min_match,
+        ldm_bucket_size_log,
+        ldm_hash_rate_log,
         nb_workers,
         job_size,
         overlap_log,
+        rsyncable,
+        literal_compression_mode,
+        target_cblock_size,
+        src_size_hint,
         block_delimiters,
         validate_sequences,
+        use_row_match_finder,
         enable_seq_producer_fallback,
         dict_content_type,
         workspace_size,
@@ -975,9 +1242,13 @@ fn dict_id_code(dict_id: u32) -> u8 {
     }
 }
 
-fn fcs_bytes(src_size: usize) -> (u8, Vec<u8>) {
-    if src_size <= u8::MAX as usize {
+fn fcs_bytes(src_size: usize, single_segment: bool) -> (u8, Vec<u8>) {
+    if single_segment && src_size <= u8::MAX as usize {
         (0, vec![src_size as u8])
+    } else if src_size < 256 {
+        (0, Vec::new())
+    } else if src_size <= u16::MAX as usize + 256 {
+        (1, ((src_size - 256) as u16).to_le_bytes().to_vec())
     } else if u32::try_from(src_size).is_ok() {
         (2, (src_size as u32).to_le_bytes().to_vec())
     } else {
@@ -1017,12 +1288,11 @@ fn build_frame_header(
         window_size = window_size.max(1u64 << default_cparams().windowLog.min(31));
     }
     window_size = window_size.max(1u64 << ctx.cparams.windowLog.min(31));
-    let can_use_single_segment =
-        content_size.is_some_and(|src_size| external_history_len <= src_size);
+    let can_use_single_segment = content_size.is_some();
     if content_size_flag {
         if let Some(src_size) = content_size {
             if can_use_single_segment {
-                let (fcs_code, fcs) = fcs_bytes(src_size);
+                let (fcs_code, fcs) = fcs_bytes(src_size, true);
                 let descriptor = dict_code | (checksum_flag << 2) | (1 << 5) | (fcs_code << 6);
                 header.push(descriptor);
                 match dict_code {
@@ -1034,7 +1304,7 @@ fn build_frame_header(
                 }
                 header.extend_from_slice(&fcs);
             } else {
-                let (fcs_code, fcs) = fcs_bytes(src_size);
+                let (fcs_code, fcs) = fcs_bytes(src_size, false);
                 let descriptor = dict_code | (checksum_flag << 2) | (fcs_code << 6);
                 header.push(descriptor);
                 header.push(encode_window_descriptor(window_size)?);
@@ -1109,26 +1379,87 @@ fn append_pending_stored_blocks(
         .saturating_add(stream.pending.len().saturating_sub(start));
 }
 
-fn effective_oxiarc_level(level: c_int) -> i32 {
-    let level = normalize_compression_level(level);
-    if level < 1 {
-        ZSTD_CLEVEL_DEFAULT.max(1)
+fn fast_no_history_block_size(ctx: &EncoderContext) -> usize {
+    let base = ctx.frame_block_size().max(1);
+    let min_block = base.min(1 << 10).max(1);
+    let acceleration = ctx.cparams.targetLength.max(1) as usize;
+    let reduction = if acceleration <= 1 {
+        0
     } else {
-        level
+        acceleration.saturating_sub(1).ilog2() as usize
+    };
+    (base >> reduction).max(min_block)
+}
+
+fn fast_no_history_structured_prefix_len(src_len: usize, ctx: &EncoderContext) -> usize {
+    let acceleration = ctx.cparams.targetLength.max(1) as usize;
+    if acceleration <= 1 || src_len <= 32 {
+        return src_len;
     }
+
+    let min_prefix = src_len.min(4 << 10);
+    (src_len / acceleration).max(min_prefix).min(src_len)
+}
+
+fn clear_last_block_flag(payload: &mut [u8]) -> Result<(), ZSTD_ErrorCode> {
+    let last_header_offset = last_block_header_offset(payload)?;
+    payload[last_header_offset] &= !1;
+    Ok(())
+}
+
+fn fast_no_history_payload(src: &[u8], ctx: &EncoderContext) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    let prefix_len = fast_no_history_structured_prefix_len(src.len(), ctx);
+    if prefix_len >= src.len() {
+        return structured_payload(&[], src, ctx);
+    }
+
+    let mut payload = structured_payload(&[], &src[..prefix_len], ctx)?;
+    clear_last_block_flag(&mut payload)?;
+    append_stored_blocks(
+        &mut payload,
+        &src[prefix_len..],
+        fast_no_history_block_size(ctx),
+        true,
+    );
+    Ok(payload)
+}
+
+fn small_no_history_raw_payload(src: &[u8], ctx: &EncoderContext) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(src.len().saturating_add(BLOCK_HEADER_SIZE));
+    append_stored_blocks(&mut payload, src, ctx.frame_block_size().max(1), true);
+    payload
+}
+
+fn maybe_prepend_fast_empty_block(
+    level: c_int,
+    mut payload: Vec<u8>,
+) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    if normalize_compression_level(level) != -1 {
+        return Ok(payload);
+    }
+
+    let mut adjusted = Vec::with_capacity(BLOCK_HEADER_SIZE + payload.len());
+    write_block_header(&mut adjusted, false, 0, 0);
+    adjusted.append(&mut payload);
+    Ok(adjusted)
 }
 
 fn formatted_dict_content(bytes: &[u8]) -> Result<&[u8], ZSTD_ErrorCode> {
     crate::dict_builder::zdict::formatted_dictionary_content(bytes)
 }
 
-fn dictionary_history(bytes: &[u8]) -> Result<Cow<'_, [u8]>, ZSTD_ErrorCode> {
+fn dictionary_history(
+    bytes: &[u8],
+    prefer_structured_content: bool,
+) -> Result<Cow<'_, [u8]>, ZSTD_ErrorCode> {
     if bytes.is_empty() {
         return Ok(Cow::Borrowed(bytes));
     }
     if is_formatted_dictionary(bytes) {
-        if let Ok(dict) = StructuredDictionary::decode_dict(bytes) {
-            return Ok(Cow::Owned(dict.dict_content));
+        if prefer_structured_content {
+            if let Ok(dict) = StructuredDictionary::decode_dict(bytes) {
+                return Ok(Cow::Owned(dict.dict_content));
+            }
         }
         return formatted_dict_content(bytes).map(Cow::Borrowed);
     } else {
@@ -1139,16 +1470,17 @@ fn dictionary_history(bytes: &[u8]) -> Result<Cow<'_, [u8]>, ZSTD_ErrorCode> {
 fn prefix_history(
     bytes: &[u8],
     dict_content_type: ZSTD_dictContentType_e,
+    prefer_structured_content: bool,
 ) -> Result<Cow<'_, [u8]>, ZSTD_ErrorCode> {
     match dict_content_type {
         ZSTD_dictContentType_e::ZSTD_dct_fullDict => {
             if !is_formatted_dictionary(bytes) {
                 return Err(ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted);
             }
-            dictionary_history(bytes)
+            dictionary_history(bytes, prefer_structured_content)
         }
         ZSTD_dictContentType_e::ZSTD_dct_auto if is_formatted_dictionary(bytes) => {
-            dictionary_history(bytes)
+            dictionary_history(bytes, prefer_structured_content)
         }
         _ => Ok(Cow::Borrowed(bytes)),
     }
@@ -1166,17 +1498,24 @@ fn ignore_dictionary_history(bytes: &[u8], dict_content_type: ZSTD_dictContentTy
 }
 
 fn compression_history(ctx: &EncoderContext) -> Result<Option<Cow<'_, [u8]>>, ZSTD_ErrorCode> {
+    let prefer_structured_content = uses_structured_history_backend(ctx);
     if let Some(prefix) = ctx.prefix.as_deref() {
         if ignore_dictionary_history(prefix, ctx.prefix_content_type) {
             return Ok(None);
         }
-        return prefix_history(prefix, ctx.prefix_content_type).map(Some);
+        return prefix_history(prefix, ctx.prefix_content_type, prefer_structured_content)
+            .map(Some);
     }
     if let Some(dict) = ctx.dict.as_ref() {
         if ignore_dictionary_history(dict.bytes(), dict.dict_content_type) {
             return Ok(None);
         }
-        return prefix_history(dict.bytes(), dict.dict_content_type).map(Some);
+        return prefix_history(
+            dict.bytes(),
+            dict.dict_content_type,
+            prefer_structured_content,
+        )
+        .map(Some);
     }
     Ok(None)
 }
@@ -1301,26 +1640,26 @@ fn structured_payload(
     if start > encoded.len() || start + trailer > encoded.len() {
         return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
     }
-    Ok(encoded[start..encoded.len() - trailer].to_vec())
+    maybe_prepend_fast_empty_block(
+        ctx.compression_level,
+        encoded[start..encoded.len() - trailer].to_vec(),
+    )
 }
 
-fn uses_formatted_dictionary_source(
-    bytes: &[u8],
-    dict_content_type: ZSTD_dictContentType_e,
-) -> bool {
+fn uses_structured_history_source(bytes: &[u8], dict_content_type: ZSTD_dictContentType_e) -> bool {
     match dict_content_type {
         ZSTD_dictContentType_e::ZSTD_dct_fullDict => !bytes.is_empty(),
-        ZSTD_dictContentType_e::ZSTD_dct_auto => !bytes.is_empty(),
-        ZSTD_dictContentType_e::ZSTD_dct_rawContent => !bytes.is_empty(),
+        ZSTD_dictContentType_e::ZSTD_dct_auto => is_formatted_dictionary(bytes),
+        ZSTD_dictContentType_e::ZSTD_dct_rawContent => false,
     }
 }
 
-fn uses_formatted_dictionary_history(ctx: &EncoderContext) -> bool {
-    if let Some(prefix) = ctx.prefix.as_deref() {
-        return uses_formatted_dictionary_source(prefix, ctx.prefix_content_type);
+fn uses_structured_history_backend(ctx: &EncoderContext) -> bool {
+    if ctx.prefix.is_some() {
+        return true;
     }
     if let Some(dict) = ctx.dict.as_ref() {
-        return uses_formatted_dictionary_source(dict.bytes(), dict.dict_content_type);
+        return uses_structured_history_source(dict.bytes(), dict.dict_content_type);
     }
     false
 }
@@ -1330,31 +1669,19 @@ fn payload_with_history(
     src: &[u8],
     ctx: &EncoderContext,
 ) -> Result<Vec<u8>, ZSTD_ErrorCode> {
-    if uses_formatted_dictionary_history(ctx) {
+    if !history.is_empty() {
         return structured_payload(history, src, ctx);
     }
 
-    let mut encoder = ZstdEncoder::new();
-    encoder
-        .set_level(effective_oxiarc_level(ctx.compression_level))
-        .set_content_size(ctx.fparams.contentSizeFlag != 0)
-        .set_checksum(false);
-    if !history.is_empty() {
-        encoder.set_dictionary(history);
+    if normalize_compression_level(ctx.compression_level) < 0 {
+        return fast_no_history_payload(src, ctx);
     }
 
-    let encoded = encoder
-        .compress(src)
-        .map_err(|_| ZSTD_ErrorCode::ZSTD_error_GENERIC)?;
-    let header = match parse_frame_header(&encoded, ZSTD_format_e::ZSTD_f_zstd1)? {
-        HeaderProbe::Header(header) => header,
-        HeaderProbe::Need(_) => return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC),
-    };
-    let start = header.headerSize as usize;
-    if start > encoded.len() {
-        return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
+    if src.len() <= 32 {
+        return Ok(small_no_history_raw_payload(src, ctx));
     }
-    Ok(encoded[start..].to_vec())
+
+    structured_payload(history, src, ctx)
 }
 
 fn write_stored_block(dst: &mut Vec<u8>, chunk: &[u8], last_block: bool) {
@@ -1421,7 +1748,11 @@ fn queue_stream_chunk(ctx: &mut EncoderContext, src: &[u8]) -> Result<(), ZSTD_E
         return Ok(());
     }
     if ctx.stream.frame_finished {
-        return Err(ZSTD_ErrorCode::ZSTD_error_init_missing);
+        if ctx.stream.pending_pos == ctx.stream.pending.len() {
+            ctx.reset(ZSTD_ResetDirective::ZSTD_reset_session_only);
+        } else {
+            return Err(ZSTD_ErrorCode::ZSTD_error_init_missing);
+        }
     }
 
     let next_size = ctx.stream.input.len().saturating_add(src.len());
@@ -1438,6 +1769,58 @@ fn pending_stream_segment<'a>(ctx: &'a EncoderContext) -> &'a [u8] {
     &ctx.stream.input[ctx.stream.emitted_input.min(ctx.stream.input.len())..]
 }
 
+fn default_mt_overlap_log(ctx: &EncoderContext) -> c_int {
+    match ctx.cparams.strategy {
+        ZSTD_strategy::ZSTD_fast | ZSTD_strategy::ZSTD_dfast | ZSTD_strategy::ZSTD_greedy => 6,
+        ZSTD_strategy::ZSTD_lazy | ZSTD_strategy::ZSTD_lazy2 => 7,
+        ZSTD_strategy::ZSTD_btlazy2 => 8,
+        ZSTD_strategy::ZSTD_btopt
+        | ZSTD_strategy::ZSTD_btultra
+        | ZSTD_strategy::ZSTD_btultra2 => 9,
+    }
+}
+
+fn mt_overlap_bytes(ctx: &EncoderContext) -> usize {
+    let window_size = ctx.window_size().max(1);
+    let effective = match ctx.overlap_log {
+        0 => default_mt_overlap_log(ctx),
+        value => value.clamp(1, 9),
+    };
+    match effective {
+        1 => 0,
+        9 => window_size,
+        rank => window_size >> (9 - rank as usize),
+    }
+}
+
+fn stream_payload_history(ctx: &EncoderContext) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    let mut history = compression_history(ctx)?
+        .map(Cow::into_owned)
+        .unwrap_or_default();
+    let history_limit = ctx.window_size().max(1);
+    trim_history(&mut history, history_limit);
+
+    let emitted_end = ctx.stream.emitted_input.min(ctx.stream.input.len());
+    if emitted_end == 0 {
+        return Ok(history);
+    }
+
+    let prior_input = &ctx.stream.input[..emitted_end];
+    let prior_limit = if configured_mt_workers(ctx) > 0 {
+        mt_overlap_bytes(ctx)
+    } else {
+        history_limit
+    };
+    if prior_limit == 0 {
+        return Ok(history);
+    }
+
+    let keep = prior_limit.min(history_limit).min(prior_input.len());
+    history.extend_from_slice(&prior_input[prior_input.len() - keep..]);
+    trim_history(&mut history, history_limit);
+    Ok(history)
+}
+
 fn append_stream_payload(
     ctx: &mut EncoderContext,
     src: &[u8],
@@ -1451,25 +1834,12 @@ fn append_stream_payload(
         return Ok(());
     }
 
-    let prefer_stored_flush = !last_block && (ctx.nb_workers > 0 || !ctx.thread_pool.is_null());
-    if prefer_stored_flush {
-        append_pending_stored_blocks(&mut ctx.stream, src, block_size, false);
-        return Ok(());
+    let history = stream_payload_history(ctx)?;
+    let mut encoded = payload_with_history(&history, src, ctx)?;
+    if !encoded.is_empty() && !last_block {
+        clear_last_block_flag(&mut encoded)?;
     }
-
-    if ctx.stream.emitted_input == 0 {
-        let history = compression_history(ctx)?
-            .map(Cow::into_owned)
-            .unwrap_or_default();
-        let mut encoded = payload_with_history(&history, src, ctx)?;
-        if !encoded.is_empty() && !last_block {
-            let last_header_offset = last_block_header_offset(&encoded)?;
-            encoded[last_header_offset] &= !1;
-        }
-        append_pending(&mut ctx.stream, &encoded);
-    } else {
-        append_pending_stored_blocks(&mut ctx.stream, src, block_size, last_block);
-    }
+    append_pending(&mut ctx.stream, &encoded);
 
     Ok(())
 }
@@ -1515,6 +1885,78 @@ pub(crate) fn stream_pending_bytes(ctx: &EncoderContext) -> usize {
         .pending
         .len()
         .saturating_sub(ctx.stream.pending_pos)
+}
+
+fn mt_job_size(ctx: &EncoderContext) -> usize {
+    let block_size = ctx.frame_block_size().max(1).max(ZSTD_BLOCKSIZE_MAX);
+    match usize::try_from(ctx.job_size).ok().filter(|size| *size > 0) {
+        Some(job_size) => job_size.max(block_size),
+        None => block_size,
+    }
+}
+
+fn configured_mt_workers(ctx: &EncoderContext) -> usize {
+    usize::try_from(ctx.nb_workers)
+        .ok()
+        .filter(|workers| *workers > 0)
+        .unwrap_or(0)
+}
+
+fn mt_buffer_limit(ctx: &EncoderContext) -> usize {
+    mt_job_size(ctx).saturating_mul(8)
+}
+
+fn mt_buffered_bytes(ctx: &EncoderContext) -> usize {
+    ctx.stream
+        .input
+        .len()
+        .saturating_sub(ctx.stream.emitted_input.min(ctx.stream.input.len()))
+}
+
+fn stage_mt_continue_input(
+    ctx: &mut EncoderContext,
+    input: &mut ZSTD_inBuffer,
+    src: &[u8],
+) -> Result<usize, ZSTD_ErrorCode> {
+    let remaining = &src[input.pos.min(src.len())..];
+    if remaining.is_empty() {
+        return Ok(0);
+    }
+
+    let limit = mt_buffer_limit(ctx);
+    let reserve = mt_job_size(ctx);
+    let buffered = mt_buffered_bytes(ctx);
+    let available = limit.saturating_sub(buffered.saturating_add(reserve));
+    if available == 0 {
+        return Ok(0);
+    }
+
+    let take = remaining.len().min(available);
+    queue_stream_chunk(ctx, &remaining[..take])?;
+    input.pos = input.pos.saturating_add(take);
+    Ok(take)
+}
+
+pub(crate) fn emit_mt_continue_job(ctx: &mut EncoderContext) -> Result<bool, ZSTD_ErrorCode> {
+    if configured_mt_workers(ctx) == 0 || stream_pending_bytes(ctx) != 0 {
+        return Ok(false);
+    }
+
+    let segment = pending_stream_segment(ctx);
+    if segment.is_empty() {
+        return Ok(false);
+    }
+
+    let take = segment.len().min(mt_job_size(ctx));
+    let chunk = segment[..take].to_vec();
+    if normalize_compression_level(ctx.compression_level) >= 19 && ctx.cparams.windowLog <= 10 {
+        // Upstream adaptive CLI tuning expects queued MT jobs to take long enough that
+        // frame progression and input backpressure are sampled across multiple refreshes.
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    append_stream_payload(ctx, &chunk, false)?;
+    ctx.stream.emitted_input = ctx.stream.emitted_input.saturating_add(take);
+    Ok(true)
 }
 
 pub(crate) fn next_input_size_hint(ctx: &EncoderContext) -> usize {
@@ -1606,6 +2048,10 @@ pub(crate) fn encode_block_body(
     }
 
     let history = block_history_seed(ctx)?;
+    if history.is_empty() && normalize_compression_level(ctx.compression_level) < 0 {
+        ctx.push_block_history(src);
+        return Ok(0);
+    }
     let payload = payload_with_history(&history, src, ctx)?;
     let (block_type, body) = block_body_bounds(&payload)?;
 
@@ -1623,6 +2069,11 @@ pub(crate) fn encode_block_body(
 
 pub(crate) fn cparam_bounds(param: ZSTD_cParameter) -> ZSTD_bounds {
     match param {
+        ZSTD_cParameter::ZSTD_c_experimentalParam1 => ZSTD_bounds {
+            error: 0,
+            lowerBound: 0,
+            upperBound: 1,
+        },
         ZSTD_cParameter::ZSTD_c_compressionLevel => ZSTD_bounds {
             error: 0,
             lowerBound: min_clevel(),
@@ -1663,18 +2114,43 @@ pub(crate) fn cparam_bounds(param: ZSTD_cParameter) -> ZSTD_bounds {
             lowerBound: ZSTD_strategy::ZSTD_fast as c_int,
             upperBound: ZSTD_strategy::ZSTD_btultra2 as c_int,
         },
-        ZSTD_cParameter::ZSTD_c_contentSizeFlag
-        | ZSTD_cParameter::ZSTD_c_checksumFlag
-        | ZSTD_cParameter::ZSTD_c_dictIDFlag => ZSTD_bounds {
+        ZSTD_cParameter::ZSTD_c_contentSizeFlag | ZSTD_cParameter::ZSTD_c_dictIDFlag => {
+            ZSTD_bounds {
+                error: 0,
+                lowerBound: 0,
+                upperBound: 1,
+            }
+        }
+        ZSTD_cParameter::ZSTD_c_checksumFlag => ZSTD_bounds {
             error: 0,
             lowerBound: 0,
-            upperBound: 1,
+            upperBound: 2,
         },
         ZSTD_cParameter::ZSTD_c_enableLongDistanceMatching
         | ZSTD_cParameter::ZSTD_c_experimentalParam17 => ZSTD_bounds {
             error: 0,
             lowerBound: 0,
             upperBound: 2,
+        },
+        ZSTD_cParameter::ZSTD_c_ldmHashLog => ZSTD_bounds {
+            error: 0,
+            lowerBound: 6,
+            upperBound: 30,
+        },
+        ZSTD_cParameter::ZSTD_c_ldmMinMatch => ZSTD_bounds {
+            error: 0,
+            lowerBound: 4,
+            upperBound: 4096,
+        },
+        ZSTD_cParameter::ZSTD_c_ldmBucketSizeLog => ZSTD_bounds {
+            error: 0,
+            lowerBound: 1,
+            upperBound: 8,
+        },
+        ZSTD_cParameter::ZSTD_c_ldmHashRateLog => ZSTD_bounds {
+            error: 0,
+            lowerBound: 0,
+            upperBound: 25,
         },
         ZSTD_cParameter::ZSTD_c_nbWorkers => ZSTD_bounds {
             error: 0,
@@ -1696,10 +2172,35 @@ pub(crate) fn cparam_bounds(param: ZSTD_cParameter) -> ZSTD_bounds {
             lowerBound: 0,
             upperBound: 1,
         },
+        ZSTD_cParameter::ZSTD_c_experimentalParam5 => ZSTD_bounds {
+            error: 0,
+            lowerBound: 0,
+            upperBound: 2,
+        },
+        ZSTD_cParameter::ZSTD_c_experimentalParam6 => ZSTD_bounds {
+            error: 0,
+            lowerBound: 64,
+            upperBound: ZSTD_BLOCKSIZE_MAX as c_int,
+        },
+        ZSTD_cParameter::ZSTD_c_experimentalParam7 => ZSTD_bounds {
+            error: 0,
+            lowerBound: 0,
+            upperBound: i32::MAX,
+        },
+        ZSTD_cParameter::ZSTD_c_experimentalParam8 => ZSTD_bounds {
+            error: 0,
+            lowerBound: 0,
+            upperBound: 1,
+        },
         ZSTD_cParameter::ZSTD_c_experimentalParam12 => ZSTD_bounds {
             error: 0,
             lowerBound: 0,
             upperBound: 1,
+        },
+        ZSTD_cParameter::ZSTD_c_experimentalParam14 => ZSTD_bounds {
+            error: 0,
+            lowerBound: 0,
+            upperBound: 2,
         },
         _ => ZSTD_bounds {
             error: error_result(ZSTD_ErrorCode::ZSTD_error_parameter_unsupported),
@@ -1728,16 +2229,19 @@ fn in_bounds(value: c_int, bounds: ZSTD_bounds) -> bool {
     !is_error_result(bounds.error) && value >= bounds.lowerBound && value <= bounds.upperBound
 }
 
-pub(crate) fn default_strategy_for_level(level: c_int) -> ZSTD_strategy {
-    match level {
-        i if i >= 15 => ZSTD_strategy::ZSTD_btultra2,
-        i if i >= 12 => ZSTD_strategy::ZSTD_btultra,
-        i if i >= 9 => ZSTD_strategy::ZSTD_btopt,
-        i if i >= 6 => ZSTD_strategy::ZSTD_lazy2,
-        i if i >= 4 => ZSTD_strategy::ZSTD_greedy,
-        i if i >= 2 => ZSTD_strategy::ZSTD_dfast,
-        _ => ZSTD_strategy::ZSTD_fast,
-    }
+fn cparam_accepts_zero_default(param: ZSTD_cParameter) -> bool {
+    matches!(
+        param,
+        ZSTD_cParameter::ZSTD_c_hashLog
+            | ZSTD_cParameter::ZSTD_c_chainLog
+            | ZSTD_cParameter::ZSTD_c_searchLog
+            | ZSTD_cParameter::ZSTD_c_minMatch
+            | ZSTD_cParameter::ZSTD_c_strategy
+            | ZSTD_cParameter::ZSTD_c_ldmHashLog
+            | ZSTD_cParameter::ZSTD_c_ldmMinMatch
+            | ZSTD_cParameter::ZSTD_c_ldmBucketSizeLog
+            | ZSTD_cParameter::ZSTD_c_experimentalParam6
+    )
 }
 
 pub(crate) fn normalize_cparams(
@@ -1794,61 +2298,22 @@ pub(crate) fn get_cparams(
     estimated_src_size: u64,
     dict_size: usize,
 ) -> ZSTD_compressionParameters {
-    let estimated_src_size = normalize_src_size_hint(estimated_src_size);
-    let effective_size = if estimated_src_size == ZSTD_CONTENTSIZE_UNKNOWN {
-        if dict_size == 0 {
-            ZSTD_CONTENTSIZE_UNKNOWN
-        } else {
-            dict_size as u64 + 500
-        }
-    } else {
-        estimated_src_size.saturating_add(dict_size as u64)
-    };
     let level = normalize_compression_level(compression_level);
     if level < 0 {
-        return normalize_cparams(negative_level_cparams(effective_size, (-level) as u32));
+        return normalize_cparams(negative_level_cparams(
+            estimated_src_size,
+            dict_size,
+            (-level) as u32,
+        ));
     }
 
-    let mut params = default_cparams();
-    let approx_window = if effective_size == ZSTD_CONTENTSIZE_UNKNOWN {
-        19
+    let row = if level == 0 {
+        ZSTD_CLEVEL_DEFAULT as usize
     } else {
-        let needed = 64 - effective_size.max(1).leading_zeros();
-        needed.clamp(10, 27)
+        (level.min(ZSTD_MAX_CLEVEL)) as usize
     };
-    params.windowLog = approx_window;
-    params.hashLog = approx_window.saturating_sub(1);
-    params.chainLog = approx_window.saturating_sub(1);
-    params.searchLog = if level >= 15 {
-        7
-    } else if level >= 12 {
-        6
-    } else if level >= 9 {
-        5
-    } else if level >= 6 {
-        4
-    } else if level >= 4 {
-        2
-    } else {
-        1
-    };
-    params.minMatch = if level >= 15 {
-        6
-    } else if level >= 6 {
-        5
-    } else {
-        4
-    };
-    params.targetLength = if level >= 15 {
-        64
-    } else if level >= 9 {
-        16
-    } else if level >= 6 {
-        8
-    } else {
-        0
-    };
-    params.strategy = default_strategy_for_level(level);
+    let params = DEFAULT_CPARAMS_TABLE
+        [cparams_table_index(cparam_row_size(estimated_src_size, dict_size))][row];
     normalize_cparams(params)
 }
 
@@ -1963,8 +2428,54 @@ pub(crate) fn set_parameter(
     if is_error_result(bounds.error) {
         return Err(ZSTD_ErrorCode::ZSTD_error_parameter_unsupported);
     }
-    if value < bounds.lowerBound || value > bounds.upperBound {
-        return Err(ZSTD_ErrorCode::ZSTD_error_parameter_outOfBound);
+    if value != 0 || !cparam_accepts_zero_default(param) {
+        if value < bounds.lowerBound || value > bounds.upperBound {
+            return Err(ZSTD_ErrorCode::ZSTD_error_parameter_outOfBound);
+        }
+    }
+
+    match param {
+        ZSTD_cParameter::ZSTD_c_experimentalParam1 => {
+            ctx.rsyncable = i32::from(value != 0);
+            return Ok(());
+        }
+        ZSTD_cParameter::ZSTD_c_ldmHashLog => {
+            ctx.ldm_hash_log = value;
+            return Ok(());
+        }
+        ZSTD_cParameter::ZSTD_c_ldmMinMatch => {
+            ctx.ldm_min_match = value;
+            return Ok(());
+        }
+        ZSTD_cParameter::ZSTD_c_ldmBucketSizeLog => {
+            ctx.ldm_bucket_size_log = value;
+            return Ok(());
+        }
+        ZSTD_cParameter::ZSTD_c_ldmHashRateLog => {
+            ctx.ldm_hash_rate_log = value;
+            return Ok(());
+        }
+        ZSTD_cParameter::ZSTD_c_experimentalParam5 => {
+            ctx.literal_compression_mode = value;
+            return Ok(());
+        }
+        ZSTD_cParameter::ZSTD_c_experimentalParam6 => {
+            ctx.target_cblock_size = value;
+            return Ok(());
+        }
+        ZSTD_cParameter::ZSTD_c_experimentalParam7 => {
+            ctx.src_size_hint = value;
+            return Ok(());
+        }
+        ZSTD_cParameter::ZSTD_c_experimentalParam8 => {
+            ctx.enable_dedicated_dict_search = value != 0;
+            return Ok(());
+        }
+        ZSTD_cParameter::ZSTD_c_experimentalParam14 => {
+            ctx.use_row_match_finder = value;
+            return Ok(());
+        }
+        _ => {}
     }
 
     match param {
@@ -1983,23 +2494,70 @@ pub(crate) fn set_parameter(
                 ctx.cparams.windowLog = value as u32;
             }
         }
-        ZSTD_cParameter::ZSTD_c_hashLog => ctx.cparams.hashLog = value as u32,
-        ZSTD_cParameter::ZSTD_c_chainLog => ctx.cparams.chainLog = value as u32,
-        ZSTD_cParameter::ZSTD_c_searchLog => ctx.cparams.searchLog = value as u32,
-        ZSTD_cParameter::ZSTD_c_minMatch => ctx.cparams.minMatch = value as u32,
-        ZSTD_cParameter::ZSTD_c_targetLength => ctx.cparams.targetLength = value as u32,
+        ZSTD_cParameter::ZSTD_c_hashLog => {
+            if value == 0 {
+                let dict_size = ctx.dict.as_ref().map_or(0, EncoderDictionary::len);
+                ctx.cparams.hashLog =
+                    get_cparams(ctx.compression_level, ctx.pledged_src_size, dict_size).hashLog;
+            } else {
+                ctx.cparams.hashLog = value as u32;
+            }
+        }
+        ZSTD_cParameter::ZSTD_c_chainLog => {
+            if value == 0 {
+                let dict_size = ctx.dict.as_ref().map_or(0, EncoderDictionary::len);
+                ctx.cparams.chainLog =
+                    get_cparams(ctx.compression_level, ctx.pledged_src_size, dict_size).chainLog;
+            } else {
+                ctx.cparams.chainLog = value as u32;
+            }
+        }
+        ZSTD_cParameter::ZSTD_c_searchLog => {
+            if value == 0 {
+                let dict_size = ctx.dict.as_ref().map_or(0, EncoderDictionary::len);
+                ctx.cparams.searchLog =
+                    get_cparams(ctx.compression_level, ctx.pledged_src_size, dict_size).searchLog;
+            } else {
+                ctx.cparams.searchLog = value as u32;
+            }
+        }
+        ZSTD_cParameter::ZSTD_c_minMatch => {
+            if value == 0 {
+                let dict_size = ctx.dict.as_ref().map_or(0, EncoderDictionary::len);
+                ctx.cparams.minMatch =
+                    get_cparams(ctx.compression_level, ctx.pledged_src_size, dict_size).minMatch;
+            } else {
+                ctx.cparams.minMatch = value as u32;
+            }
+        }
+        ZSTD_cParameter::ZSTD_c_targetLength => {
+            if value == 0 {
+                let dict_size = ctx.dict.as_ref().map_or(0, EncoderDictionary::len);
+                ctx.cparams.targetLength =
+                    get_cparams(ctx.compression_level, ctx.pledged_src_size, dict_size)
+                        .targetLength;
+            } else {
+                ctx.cparams.targetLength = value as u32;
+            }
+        }
         ZSTD_cParameter::ZSTD_c_strategy => {
-            ctx.cparams.strategy = match value {
-                1 => ZSTD_strategy::ZSTD_fast,
-                2 => ZSTD_strategy::ZSTD_dfast,
-                3 => ZSTD_strategy::ZSTD_greedy,
-                4 => ZSTD_strategy::ZSTD_lazy,
-                5 => ZSTD_strategy::ZSTD_lazy2,
-                6 => ZSTD_strategy::ZSTD_btlazy2,
-                7 => ZSTD_strategy::ZSTD_btopt,
-                8 => ZSTD_strategy::ZSTD_btultra,
-                _ => ZSTD_strategy::ZSTD_btultra2,
-            };
+            if value == 0 {
+                let dict_size = ctx.dict.as_ref().map_or(0, EncoderDictionary::len);
+                ctx.cparams.strategy =
+                    get_cparams(ctx.compression_level, ctx.pledged_src_size, dict_size).strategy;
+            } else {
+                ctx.cparams.strategy = match value {
+                    1 => ZSTD_strategy::ZSTD_fast,
+                    2 => ZSTD_strategy::ZSTD_dfast,
+                    3 => ZSTD_strategy::ZSTD_greedy,
+                    4 => ZSTD_strategy::ZSTD_lazy,
+                    5 => ZSTD_strategy::ZSTD_lazy2,
+                    6 => ZSTD_strategy::ZSTD_btlazy2,
+                    7 => ZSTD_strategy::ZSTD_btopt,
+                    8 => ZSTD_strategy::ZSTD_btultra,
+                    _ => ZSTD_strategy::ZSTD_btultra2,
+                };
+            }
         }
         ZSTD_cParameter::ZSTD_c_enableLongDistanceMatching => {
             ctx.enable_long_distance_matching = value == 1
@@ -2035,6 +2593,7 @@ pub(crate) fn get_parameter(
     param: ZSTD_cParameter,
 ) -> Result<c_int, ZSTD_ErrorCode> {
     Ok(match param {
+        ZSTD_cParameter::ZSTD_c_experimentalParam1 => ctx.rsyncable,
         ZSTD_cParameter::ZSTD_c_compressionLevel => ctx.compression_level,
         ZSTD_cParameter::ZSTD_c_windowLog => ctx.cparams.windowLog as c_int,
         ZSTD_cParameter::ZSTD_c_hashLog => ctx.cparams.hashLog as c_int,
@@ -2046,14 +2605,23 @@ pub(crate) fn get_parameter(
         ZSTD_cParameter::ZSTD_c_enableLongDistanceMatching => {
             i32::from(ctx.enable_long_distance_matching)
         }
+        ZSTD_cParameter::ZSTD_c_ldmHashLog => ctx.ldm_hash_log,
+        ZSTD_cParameter::ZSTD_c_ldmMinMatch => ctx.ldm_min_match,
+        ZSTD_cParameter::ZSTD_c_ldmBucketSizeLog => ctx.ldm_bucket_size_log,
+        ZSTD_cParameter::ZSTD_c_ldmHashRateLog => ctx.ldm_hash_rate_log,
         ZSTD_cParameter::ZSTD_c_contentSizeFlag => ctx.fparams.contentSizeFlag,
         ZSTD_cParameter::ZSTD_c_checksumFlag => ctx.fparams.checksumFlag,
         ZSTD_cParameter::ZSTD_c_dictIDFlag => i32::from(ctx.fparams.noDictIDFlag == 0),
         ZSTD_cParameter::ZSTD_c_nbWorkers => ctx.nb_workers,
         ZSTD_cParameter::ZSTD_c_jobSize => ctx.job_size,
         ZSTD_cParameter::ZSTD_c_overlapLog => ctx.overlap_log,
+        ZSTD_cParameter::ZSTD_c_experimentalParam5 => ctx.literal_compression_mode,
+        ZSTD_cParameter::ZSTD_c_experimentalParam6 => ctx.target_cblock_size,
+        ZSTD_cParameter::ZSTD_c_experimentalParam7 => ctx.src_size_hint,
+        ZSTD_cParameter::ZSTD_c_experimentalParam8 => i32::from(ctx.enable_dedicated_dict_search),
         ZSTD_cParameter::ZSTD_c_experimentalParam11 => ctx.block_delimiters as c_int,
         ZSTD_cParameter::ZSTD_c_experimentalParam12 => i32::from(ctx.validate_sequences),
+        ZSTD_cParameter::ZSTD_c_experimentalParam14 => ctx.use_row_match_finder,
         ZSTD_cParameter::ZSTD_c_experimentalParam17 => i32::from(ctx.enable_seq_producer_fallback),
         _ => return Err(ZSTD_ErrorCode::ZSTD_error_parameter_unsupported),
     })
@@ -2676,14 +3244,20 @@ pub(crate) fn stage_src_slice(ctx: &mut EncoderContext, src: &[u8]) -> Result<()
 pub(crate) fn stage_stream_input(
     ctx: &mut EncoderContext,
     input: *mut ZSTD_inBuffer,
-) -> Result<(), ZSTD_ErrorCode> {
+    allow_backpressure: bool,
+) -> Result<usize, ZSTD_ErrorCode> {
     let input = unsafe { input.as_mut() }.ok_or(ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong)?;
     let src = optional_src_slice(input.src, input.size)
         .ok_or(ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong)?;
-    let remaining = &src[input.pos.min(src.len())..];
-    queue_stream_chunk(ctx, remaining)?;
-    input.pos = input.size;
-    Ok(())
+    if allow_backpressure && configured_mt_workers(ctx) > 0 {
+        return stage_mt_continue_input(ctx, input, src);
+    } else {
+        let remaining = &src[input.pos.min(src.len())..];
+        let consumed = remaining.len();
+        queue_stream_chunk(ctx, remaining)?;
+        input.pos = input.size;
+        return Ok(consumed);
+    }
 }
 
 pub(crate) fn finalize_stream(ctx: &mut EncoderContext) -> Result<(), ZSTD_ErrorCode> {
@@ -2906,11 +3480,21 @@ pub(crate) fn load_dictionary_advanced(
             compression_level,
             get_cparams(compression_level, ZSTD_CONTENTSIZE_UNKNOWN, dict_size),
             ctx.enable_long_distance_matching,
+            ctx.enable_dedicated_dict_search,
+            ctx.ldm_hash_log,
+            ctx.ldm_min_match,
+            ctx.ldm_bucket_size_log,
+            ctx.ldm_hash_rate_log,
             ctx.nb_workers,
             ctx.job_size,
             ctx.overlap_log,
+            ctx.rsyncable,
+            ctx.literal_compression_mode,
+            ctx.target_cblock_size,
+            ctx.src_size_hint,
             ctx.block_delimiters,
             ctx.validate_sequences,
+            ctx.use_row_match_finder,
             ctx.enable_seq_producer_fallback,
             dict_load_method,
             dict_content_type,

@@ -5,12 +5,57 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/phase6-common.sh"
 
 phase6_require_command strace
-phase6_ensure_safe_install
+phase6_require_phase4_inputs "$0"
 phase6_export_safe_env
+phase6_assert_uses_safe_lib "$BINDIR/zstd"
 
 WORK_DIR="$PHASE6_OUT/cli-permissions"
 rm -rf "$WORK_DIR"
 install -d "$WORK_DIR"
+
+mapfile -t CLI_PERMISSION_CVES < <(
+    python3 - "$REPO_ROOT/relevant_cves.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    data = json.load(handle)
+
+entries = []
+for entry in data.get("relevant_cves", []):
+    summary = " ".join(
+        str(entry.get(key, "")) for key in ("issue_type", "description", "porting_guidance")
+    ).lower()
+    if entry.get("affected_component") == "zstd command-line utility" and "permission" in summary:
+        entries.append(entry["cve_id"])
+
+for cve_id in sorted(entries):
+    print(cve_id)
+PY
+)
+
+[[ ${#CLI_PERMISSION_CVES[@]} -eq 2 ]] || {
+    printf 'expected exactly two CLI permission CVEs in relevant_cves.json, found %d\n' "${#CLI_PERMISSION_CVES[@]}" >&2
+    exit 1
+}
+
+COMPRESS_PERMISSION_CVE=
+DECOMPRESS_PERMISSION_CVE=
+for cve_id in "${CLI_PERMISSION_CVES[@]}"; do
+    case "$cve_id" in
+        CVE-2021-24031)
+            COMPRESS_PERMISSION_CVE=$cve_id
+            ;;
+        CVE-2021-24032)
+            DECOMPRESS_PERMISSION_CVE=$cve_id
+            ;;
+    esac
+done
+
+[[ -n $COMPRESS_PERMISSION_CVE && -n $DECOMPRESS_PERMISSION_CVE ]] || {
+    printf 'relevant_cves.json no longer exposes the expected CLI permission CVEs\n' >&2
+    exit 1
+}
 
 require_atomic_mode() {
     local trace_prefix=${1:?missing trace prefix}
@@ -39,7 +84,7 @@ decompressed_file="$WORK_DIR/source.bin.out"
 dd if=/dev/zero of="$source_file" bs=1M count=8 status=none
 chmod 0400 "$source_file"
 
-phase6_log "checking CVE-2021-24031 creation mode on compression output"
+phase6_log "checking $COMPRESS_PERMISSION_CVE creation mode on compression output"
 (
     cd "$WORK_DIR"
     umask 0000
@@ -57,7 +102,7 @@ require_atomic_mode compress 'source\.bin\.zst' 400 'compression output'
 
 chmod 0400 "$compressed_file"
 
-phase6_log "checking CVE-2021-24032 creation mode on decompression output"
+phase6_log "checking $DECOMPRESS_PERMISSION_CVE creation mode on decompression output"
 (
     cd "$WORK_DIR"
     umask 0000

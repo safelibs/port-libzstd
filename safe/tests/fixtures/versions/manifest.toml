@@ -1,5 +1,11 @@
 schema_version = 3
 
+[phase4_release_gate]
+install_root = "../../../out/install/release-default"
+helper_root = "../../../out/original-cli/lib"
+metadata = "../../../out/deb/default/metadata.env"
+policy = "Phase 6 consumes the prebuilt Phase 4 install tree, helper root, and staged package metadata; these fixtures stay checked in and offline."
+
 [roundtrip]
 hello_plain = "hello"
 hello_frame = "hello.zst"

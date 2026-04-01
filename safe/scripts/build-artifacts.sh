@@ -36,6 +36,7 @@ paths = [
     safe_root / "Cargo.toml",
     safe_root / "build.rs",
     safe_root / "src",
+    safe_root / "third_party",
     safe_root / "include",
     safe_root / "pkgconfig",
     safe_root / "cmake",

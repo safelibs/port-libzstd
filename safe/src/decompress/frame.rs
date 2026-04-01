@@ -8,10 +8,10 @@ use crate::{
     ffi::types::{ZSTD_ErrorCode, ZSTD_format_e, ZSTD_frameHeader, ZSTD_frameType_e},
 };
 use oxiarc_core::error::OxiArcError;
+use std::sync::{Mutex, OnceLock};
 use structured_zstd::decoding::{
     BlockDecodingStrategy, Dictionary as StructuredDictionary, FrameDecoder,
 };
-use std::sync::{Mutex, OnceLock};
 
 pub(crate) const ZSTD_MAGICNUMBER: u32 = 0xFD2F_B528;
 pub(crate) const ZSTD_MAGIC_SKIPPABLE_START: u32 = 0x184D_2A50;
@@ -315,31 +315,16 @@ pub(crate) fn build_synthetic_block_frame(
         return Err(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong);
     }
 
-    let dict_id_code = if header.dictID == 0 {
-        0
-    } else if header.dictID <= u8::MAX as u32 {
-        1
-    } else if header.dictID <= u16::MAX as u32 {
-        2
+    let mut synthetic = frame_prefix[..header_size].to_vec();
+    let descriptor_index = if format == ZSTD_format_e::ZSTD_f_zstd1 {
+        ZSTD_FRAMEIDSIZE
     } else {
-        3
+        0
     };
-
-    let mut synthetic =
-        Vec::with_capacity(frame_prefix.len() + block_body.len() + ZSTD_FRAMEIDSIZE + 2);
-    if format == ZSTD_format_e::ZSTD_f_zstd1 {
-        synthetic.extend_from_slice(&ZSTD_MAGICNUMBER.to_le_bytes());
+    if descriptor_index >= synthetic.len() {
+        return Err(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong);
     }
-    synthetic.push(dict_id_code as u8);
-    synthetic.push(encode_window_descriptor(header.windowSize)?);
-    match dict_id_code {
-        0 => {}
-        1 => synthetic.push(header.dictID as u8),
-        2 => synthetic.extend_from_slice(&(header.dictID as u16).to_le_bytes()),
-        3 => synthetic.extend_from_slice(&header.dictID.to_le_bytes()),
-        _ => unreachable!(),
-    }
-
+    synthetic[descriptor_index] &= !0x04;
     let mut block_prefix = frame_prefix[header_size..].to_vec();
     let last_header = block_prefix
         .len()
@@ -452,15 +437,13 @@ fn frame_checksum(frame: &[u8], header: ZSTD_frameHeader) -> Option<u32> {
         return None;
     }
     Some(u32::from_le_bytes(
-        frame[frame.len() - 4..].try_into().expect("slice length checked"),
+        frame[frame.len() - 4..]
+            .try_into()
+            .expect("slice length checked"),
     ))
 }
 
-fn decoded_matches_frame(
-    decoded: &[u8],
-    frame: &[u8],
-    header: ZSTD_frameHeader,
-) -> bool {
+fn decoded_matches_frame(decoded: &[u8], frame: &[u8], header: ZSTD_frameHeader) -> bool {
     if header.frameContentSize != ZSTD_CONTENTSIZE_UNKNOWN
         && decoded.len() as u64 != header.frameContentSize
     {
@@ -477,6 +460,7 @@ fn decode_with_structured_dict(
     header: ZSTD_frameHeader,
     format: ZSTD_format_e,
     dict: StructuredDictionary,
+    validate_decoded_frame: bool,
 ) -> Result<Vec<u8>, ZSTD_ErrorCode> {
     let input = build_modern_frame_bytes(frame, format);
     let mut remaining = input.as_slice();
@@ -490,10 +474,37 @@ fn decode_with_structured_dict(
     }
 
     let decoded = collect_structured_output(&mut decoder, &mut remaining)?;
-    if decoded_matches_frame(&decoded, frame, header) {
+    if !validate_decoded_frame || decoded_matches_frame(&decoded, frame, header) {
         Ok(decoded)
     } else {
         Err(ZSTD_ErrorCode::ZSTD_error_checksum_wrong)
+    }
+}
+
+fn decode_with_oxiarc_dict(
+    frame: &[u8],
+    format: ZSTD_format_e,
+    dict: &[u8],
+) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    let input = build_modern_frame_bytes(frame, format);
+    static OXIARC_PANIC_HOOK_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    let hook_guard = OXIARC_PANIC_HOOK_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("panic hook mutex poisoned");
+    let panic_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let oxiarc_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut decoder = oxiarc_zstd::ZstdDecoder::new();
+        decoder.set_dictionary(dict);
+        decoder.decode_frame(&input).map_err(map_oxiarc_error)
+    }));
+    std::panic::set_hook(panic_hook);
+    drop(hook_guard);
+    match oxiarc_result {
+        Ok(Ok(decoded)) => Ok(decoded),
+        Ok(Err(code)) => Err(code),
+        Err(_) => Err(ZSTD_ErrorCode::ZSTD_error_GENERIC),
     }
 }
 
@@ -502,21 +513,65 @@ fn decode_with_formatted_dict(
     header: ZSTD_frameHeader,
     format: ZSTD_format_e,
     dict: &[u8],
+    validate_decoded_frame: bool,
 ) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    let raw_content = crate::dict_builder::zdict::formatted_dictionary_content(dict)?;
+    let dict_id = formatted_dict_id(dict);
     match StructuredDictionary::decode_dict(dict) {
-        Ok(dict) => decode_with_structured_dict(frame, header, format, dict),
+        Ok(dict) => {
+            decode_with_structured_dict(frame, header, format, dict, validate_decoded_frame)
+                .or_else(|_| {
+                    decode_with_raw_dict_id(
+                        frame,
+                        header,
+                        format,
+                        raw_content,
+                        dict_id,
+                        validate_decoded_frame,
+                    )
+                })
+                .or_else(|_| decode_with_oxiarc_dict(frame, format, raw_content))
+        }
         Err(_) => {
-            let raw_content = crate::dict_builder::zdict::formatted_dictionary_content(dict)?;
             let synthetic = crate::dict_builder::zdict::synthesize_formatted_dictionary(
                 raw_content,
                 dict,
-                formatted_dict_id(dict),
+                dict_id,
             )?;
-            let dict = StructuredDictionary::decode_dict(&synthetic)
-                .map_err(|_| ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted)?;
-            decode_with_structured_dict(frame, header, format, dict)
+            match StructuredDictionary::decode_dict(&synthetic) {
+                Ok(dict) => {
+                    decode_with_structured_dict(frame, header, format, dict, validate_decoded_frame)
+                        .or_else(|_| {
+                            decode_with_raw_dict_id(
+                                frame,
+                                header,
+                                format,
+                                raw_content,
+                                dict_id,
+                                validate_decoded_frame,
+                            )
+                        })
+                        .or_else(|_| decode_with_oxiarc_dict(frame, format, raw_content))
+                }
+                Err(_) => decode_with_oxiarc_dict(frame, format, raw_content),
+            }
         }
     }
+}
+
+fn decode_with_raw_dict_id(
+    frame: &[u8],
+    header: ZSTD_frameHeader,
+    format: ZSTD_format_e,
+    dict: &[u8],
+    dict_id: u32,
+    validate_decoded_frame: bool,
+) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    let synthetic =
+        crate::dict_builder::zdict::synthesize_formatted_dictionary(dict, dict, dict_id)?;
+    let dict = StructuredDictionary::decode_dict(&synthetic)
+        .map_err(|_| ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted)?;
+    decode_with_structured_dict(frame, header, format, dict, validate_decoded_frame)
 }
 
 fn decode_with_raw_dict(
@@ -524,18 +579,12 @@ fn decode_with_raw_dict(
     header: ZSTD_frameHeader,
     format: ZSTD_format_e,
     dict: &[u8],
+    validate_decoded_frame: bool,
 ) -> Result<Vec<u8>, ZSTD_ErrorCode> {
-    let synthetic =
-        crate::dict_builder::zdict::synthesize_formatted_dictionary(dict, dict, 1)?;
-    let dict = StructuredDictionary::decode_dict(&synthetic)
-        .map_err(|_| ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted)?;
-    decode_with_structured_dict(frame, header, format, dict)
+    decode_with_raw_dict_id(frame, header, format, dict, 1, validate_decoded_frame)
 }
 
-fn decode_without_dict(
-    frame: &[u8],
-    format: ZSTD_format_e,
-) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+fn decode_without_dict(frame: &[u8], format: ZSTD_format_e) -> Result<Vec<u8>, ZSTD_ErrorCode> {
     let input = build_modern_frame_bytes(frame, format);
     static OXIARC_PANIC_HOOK_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     let hook_guard = OXIARC_PANIC_HOOK_LOCK
@@ -561,12 +610,13 @@ fn decode_without_dict(
     collect_structured_output(&mut decoder, &mut remaining)
 }
 
-fn decode_single_modern_frame(
+fn decode_single_modern_frame_impl(
     frame: &[u8],
     header: ZSTD_frameHeader,
     dict: DictionaryRef<'_>,
     format: ZSTD_format_e,
     max_window_size: usize,
+    validate_decoded_frame: bool,
 ) -> Result<Vec<u8>, ZSTD_ErrorCode> {
     if header.windowSize as usize > max_window_size {
         return Err(ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge);
@@ -576,10 +626,10 @@ fn decode_single_modern_frame(
 
     match dict {
         DictionaryRef::Raw(bytes) if !bytes.is_empty() => {
-            return decode_with_raw_dict(frame, header, format, bytes)
+            return decode_with_raw_dict(frame, header, format, bytes, validate_decoded_frame)
         }
         DictionaryRef::Formatted(bytes) if !bytes.is_empty() => {
-            return decode_with_formatted_dict(frame, header, format, bytes)
+            return decode_with_formatted_dict(frame, header, format, bytes, validate_decoded_frame)
         }
         _ => {}
     }
@@ -693,11 +743,12 @@ pub(crate) fn archive_is_complete(
     Ok(true)
 }
 
-pub(crate) fn decode_all_frames(
+fn decode_all_frames_impl(
     src: &[u8],
     dict: DictionaryRef<'_>,
     format: ZSTD_format_e,
     max_window_size: usize,
+    validate_decoded_frame: bool,
 ) -> Result<Vec<u8>, ZSTD_ErrorCode> {
     let mut remaining = src;
     let mut output = Vec::new();
@@ -738,18 +789,37 @@ pub(crate) fn decode_all_frames(
             HeaderProbe::Header(header) => header,
         };
         let info = find_frame_size_info(remaining, format)?;
-        let decoded = decode_single_modern_frame(
+        let decoded = decode_single_modern_frame_impl(
             &remaining[..info.compressed_size],
             header,
             dict,
             format,
             max_window_size,
+            validate_decoded_frame,
         )?;
         output.extend_from_slice(&decoded);
         remaining = &remaining[info.compressed_size..];
     }
 
     Ok(output)
+}
+
+pub(crate) fn decode_all_frames(
+    src: &[u8],
+    dict: DictionaryRef<'_>,
+    format: ZSTD_format_e,
+    max_window_size: usize,
+) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    decode_all_frames_impl(src, dict, format, max_window_size, true)
+}
+
+pub(crate) fn decode_all_frames_relaxed(
+    src: &[u8],
+    dict: DictionaryRef<'_>,
+    format: ZSTD_format_e,
+    max_window_size: usize,
+) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    decode_all_frames_impl(src, dict, format, max_window_size, false)
 }
 
 #[allow(dead_code)]

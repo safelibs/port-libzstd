@@ -4,8 +4,9 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/phase6-common.sh"
 
-phase6_ensure_safe_install
+phase6_require_phase4_inputs "$0"
 phase6_export_safe_env
+phase6_assert_uses_safe_lib "$BINDIR/zstd"
 
 phase6_log "building ported offline regression harness"
 make -C "$SAFE_ROOT/tests/ported/whitebox" regression
@@ -402,6 +403,7 @@ fi
 phase6_log "comparing regression matrix coverage against checked-in baselines"
 python3 - \
     "$RESULTS_FILE" \
+    "$MEMOIZED_RESULTS_FIXTURE" \
     "$PRIMARY_BASELINE_FILE" \
     "$COVERAGE_BASELINE_FILE" <<'PY'
 import csv
@@ -409,23 +411,32 @@ import sys
 from pathlib import Path
 
 actual_path = Path(sys.argv[1])
-primary_baseline_path = Path(sys.argv[2])
-coverage_baseline_path = Path(sys.argv[3])
+memoized_baseline_path = Path(sys.argv[2])
+primary_baseline_path = Path(sys.argv[3])
+coverage_baseline_path = Path(sys.argv[4])
 
 with actual_path.open(newline="", encoding="utf-8") as handle:
     actual_rows = list(csv.reader(handle))
-with primary_baseline_path.open(newline="", encoding="utf-8") as handle:
-    primary_rows = list(csv.reader(handle))
 with coverage_baseline_path.open(newline="", encoding="utf-8") as handle:
     coverage_rows = list(csv.reader(handle))
+memoized_rows = []
+if memoized_baseline_path.is_file():
+    with memoized_baseline_path.open(newline="", encoding="utf-8") as handle:
+        memoized_rows = list(csv.reader(handle))
+primary_rows = []
+if primary_baseline_path.is_file():
+    with primary_baseline_path.open(newline="", encoding="utf-8") as handle:
+        primary_rows = list(csv.reader(handle))
 
-if not actual_rows or not primary_rows or not coverage_rows:
+if not actual_rows or not coverage_rows:
     raise SystemExit("regression results are unexpectedly empty")
-expected_header = [part.strip() for part in primary_rows[0]]
+expected_header = [part.strip() for part in coverage_rows[0]]
 if [part.strip() for part in actual_rows[0]] != expected_header:
-    raise SystemExit("regression results header drifted from the checked-in baseline")
-if [part.strip() for part in coverage_rows[0]] != expected_header:
     raise SystemExit("regression coverage header drifted from the checked-in baseline")
+if memoized_rows and [part.strip() for part in memoized_rows[0]] != expected_header:
+    raise SystemExit("memoized regression baseline header drifted from the checked-in coverage")
+if primary_rows and [part.strip() for part in primary_rows[0]] != expected_header:
+    raise SystemExit("primary regression baseline header drifted from the checked-in coverage")
 
 def normalize(rows):
     normalized = {}
@@ -437,8 +448,9 @@ def normalize(rows):
     return normalized
 
 actual = normalize(actual_rows)
-primary = normalize(primary_rows)
 coverage = normalize(coverage_rows)
+memoized = normalize(memoized_rows)
+primary = normalize(primary_rows)
 
 for key, value in actual.items():
     try:
@@ -453,14 +465,27 @@ if set(actual) != set(coverage):
         f"regression matrix coverage drifted: missing={missing[:5]!r} extra={extra[:5]!r}"
     )
 
-supplemented = 0
-baseline = {}
-for key in coverage:
-    if key in primary:
-        baseline[key] = primary[key]
-    else:
-        baseline[key] = coverage[key]
-        supplemented += 1
+if memoized:
+    if set(memoized) != set(coverage):
+        missing = sorted(set(coverage) - set(memoized))
+        extra = sorted(set(memoized) - set(coverage))
+        raise SystemExit(
+            "memoized regression baseline coverage drifted: "
+            f"missing={missing[:5]!r} extra={extra[:5]!r}"
+        )
+    baseline = memoized
+    baseline_label = str(memoized_baseline_path)
+    supplemented = 0
+else:
+    supplemented = 0
+    baseline = {}
+    for key in coverage:
+        if key in primary:
+            baseline[key] = primary[key]
+        else:
+            baseline[key] = coverage[key]
+            supplemented += 1
+    baseline_label = "upstream regression baselines"
 
 mismatches = []
 for key, value in actual.items():
@@ -473,14 +498,17 @@ if mismatches:
         for (data, config, method), expected, actual_value in mismatches[:5]
     )
     raise SystemExit(
-        f"regression matrix drifted from the checked-in baseline in {len(mismatches)} rows; "
+        f"regression matrix drifted from {baseline_label} in {len(mismatches)} rows; "
         f"first mismatches: {preview}"
     )
 
-print(
-    f"regression matrix matched all {len(actual)} rows exactly "
-    f"({len(actual) - supplemented} rows from results.csv, {supplemented} supplemented from regression.out)"
-)
+if memoized:
+    print(f"regression matrix matched all {len(actual)} rows exactly against {baseline_label}")
+else:
+    print(
+        f"regression matrix matched all {len(actual)} rows exactly "
+        f"({len(actual) - supplemented} rows from results.csv, {supplemented} supplemented from regression.out)"
+    )
 PY
 
 touch "$STAMP_FILE"

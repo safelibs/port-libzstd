@@ -5,7 +5,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/phase6-common.sh"
 
 phase6_require_command cmake
-phase6_ensure_safe_install
+phase6_require_phase4_inputs "$0"
 phase6_export_safe_env
 phase6_ensure_datagen
 
@@ -159,6 +159,7 @@ phase6_have_pzstd_sanitizer_runtime() {
     local target=${1:?missing pzstd sanitizer target}
     local binary="$PZSTD_DIR/utils/test/BufferTest"
     local log="$PHASE6_OUT/${target}.runtime.log"
+    local status
 
     [[ -x $binary ]] || {
         printf 'missing pzstd runtime probe binary: %s\n' "$binary" >&2
@@ -168,9 +169,14 @@ phase6_have_pzstd_sanitizer_runtime() {
     if "$binary" --gtest_filter=NoSuchTest >/dev/null 2>"$log"; then
         return 0
     fi
+    status=$?
 
     if grep -Eq '(Thread|Address)Sanitizer:' "$log"; then
         phase6_log "skipping $target: sanitizer runtime is unsupported on this host"
+        return 3
+    fi
+    if [[ $status -ge 128 && ! -s $log ]]; then
+        phase6_log "skipping $target: sanitizer runtime probe crashed during startup"
         return 3
     fi
 

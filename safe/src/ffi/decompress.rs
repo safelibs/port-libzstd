@@ -209,6 +209,7 @@ struct StreamState {
     decoded: Vec<u8>,
     output_pos: usize,
     deferred_input_advance: usize,
+    finished_returned: bool,
     legacy_context: *mut c_void,
     legacy_version: u32,
 }
@@ -219,6 +220,7 @@ impl StreamState {
         self.decoded.clear();
         self.output_pos = 0;
         self.deferred_input_advance = 0;
+        self.finished_returned = false;
         self.legacy_context = core::ptr::null_mut();
         self.legacy_version = 0;
     }
@@ -690,7 +692,10 @@ pub(crate) fn create_dctx() -> *mut ZSTD_DCtx {
 }
 
 pub(crate) fn init_static_dctx(workspace: *mut c_void, workspace_size: usize) -> *mut ZSTD_DCtx {
-    if workspace.is_null() || workspace_size < size_of::<DecoderContext>() || (workspace as usize & 7) != 0 {
+    if workspace.is_null()
+        || workspace_size < size_of::<DecoderContext>()
+        || (workspace as usize & 7) != 0
+    {
         return core::ptr::null_mut();
     }
     let ptr = workspace.cast::<DecoderContext>();
@@ -789,7 +794,10 @@ pub(crate) fn sizeof_dctx(ptr: *const ZSTD_DCtx) -> usize {
 
 pub(crate) fn sizeof_ddict(ptr: *const ZSTD_DDict) -> usize {
     ddict_ref(ptr.cast()).map_or(0, |ddict| {
-        ddict.workspace_size().max(alloc::base_size::<DecoderDictionary>()) + ddict.heap_size()
+        ddict
+            .workspace_size()
+            .max(alloc::base_size::<DecoderDictionary>())
+            + ddict.heap_size()
     })
 }
 
@@ -1017,7 +1025,7 @@ fn decode_bufferless_prefix(dctx: &DecoderContext, src: &[u8]) -> Result<Vec<u8>
         .ok_or(ZSTD_ErrorCode::ZSTD_error_corruption_detected)?;
     let synthetic =
         frame::build_synthetic_block_frame(&dctx.bufferless.frame_bytes, header, dctx.format, src)?;
-    frame::decode_all_frames(
+    frame::decode_all_frames_relaxed(
         &synthetic,
         dctx.resolved_dict()?,
         dctx.format,
@@ -1114,6 +1122,27 @@ fn output_ptr(output: &mut ZSTD_outBuffer) -> *mut c_void {
     }
     // SAFETY: `output.pos < output.size`, so the pointer arithmetic stays in-bounds.
     unsafe { (output.dst.cast::<u8>()).add(output.pos).cast() }
+}
+
+fn apply_deferred_input_advance(dctx: &mut DecoderContext, input: &mut ZSTD_inBuffer) {
+    if dctx.stream.deferred_input_advance == 0 {
+        return;
+    }
+
+    let remaining = input.size.saturating_sub(input.pos);
+    let advance = dctx.stream.deferred_input_advance.min(remaining);
+    input.pos = input.pos.saturating_add(advance);
+    dctx.stream.deferred_input_advance -= advance;
+}
+
+fn hide_visible_input_progress(
+    dctx: &mut DecoderContext,
+    input: &mut ZSTD_inBuffer,
+    visible_input_pos: usize,
+) {
+    let hidden = input.pos.saturating_sub(visible_input_pos);
+    dctx.stream.deferred_input_advance = dctx.stream.deferred_input_advance.saturating_add(hidden);
+    input.pos = visible_input_pos;
 }
 
 fn dictionary_bytes(dict: DictionaryRef<'_>) -> Option<&[u8]> {
@@ -1214,6 +1243,8 @@ pub(crate) fn stream_decompress(
     output: &mut crate::ffi::types::ZSTD_outBuffer,
     input: &mut crate::ffi::types::ZSTD_inBuffer,
 ) -> Result<usize, ZSTD_ErrorCode> {
+    let visible_input_pos = input.pos;
+
     if output_remaining(output) == 0 {
         if matches!(dctx.bufferless.stage, BufferlessStage::Finished)
             && dctx.stream.decoded.is_empty()
@@ -1227,17 +1258,24 @@ pub(crate) fn stream_decompress(
         }
     }
 
+    if dctx.stream.decoded.is_empty() {
+        apply_deferred_input_advance(dctx, input);
+    }
+
     if !dctx.stream.decoded.is_empty() {
         if output_remaining(output) == 0 {
             if matches!(dctx.bufferless.stage, BufferlessStage::Finished) {
                 return Ok(0);
             }
+            hide_visible_input_progress(dctx, input, visible_input_pos);
             return Ok(stream_hint(dctx).max(1));
         }
         output.pos += drain_staged_output(dctx, output_ptr(output), output_remaining(output))?;
         if !dctx.stream.decoded.is_empty() {
+            hide_visible_input_progress(dctx, input, visible_input_pos);
             return Ok(stream_hint(dctx).max(1));
         }
+        apply_deferred_input_advance(dctx, input);
         if matches!(dctx.bufferless.stage, BufferlessStage::Finished) {
             return Ok(0);
         }
@@ -1247,6 +1285,10 @@ pub(crate) fn stream_decompress(
     }
 
     if matches!(dctx.bufferless.stage, BufferlessStage::Finished) {
+        if !dctx.stream.finished_returned {
+            dctx.stream.finished_returned = true;
+            return Ok(0);
+        }
         if input.pos == input.size {
             return Ok(0);
         }
@@ -1280,7 +1322,7 @@ pub(crate) fn stream_decompress(
             dctx.stream
                 .compressed
                 .extend_from_slice(&src[input.pos..input.pos + to_take]);
-            input.pos += to_take;
+            input.pos = input.pos.saturating_add(to_take);
             if dctx.stream.compressed.len() < need {
                 if matches!(
                     dctx.bufferless.stage,
@@ -1291,6 +1333,7 @@ pub(crate) fn stream_decompress(
                 {
                     return Err(ZSTD_ErrorCode::ZSTD_error_prefix_unknown);
                 }
+                apply_deferred_input_advance(dctx, input);
                 return Ok(need - dctx.stream.compressed.len());
             }
         }
@@ -1311,12 +1354,19 @@ pub(crate) fn stream_decompress(
         output.pos += produced;
 
         if !dctx.stream.decoded.is_empty() {
+            hide_visible_input_progress(dctx, input, visible_input_pos);
             return Ok(stream_hint(dctx).max(1));
         }
+        apply_deferred_input_advance(dctx, input);
         if matches!(dctx.bufferless.stage, BufferlessStage::Finished) {
             return Ok(0);
         }
         if output_remaining(output) == 0 {
+            if matches!(dctx.bufferless.stage, BufferlessStage::NeedChecksum(_))
+                && input.pos < input.size
+            {
+                continue;
+            }
             return Ok(stream_hint(dctx).max(1));
         }
         if input.pos == input.size {

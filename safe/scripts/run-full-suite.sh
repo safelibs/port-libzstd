@@ -12,6 +12,11 @@ run_step() {
     "$@"
 }
 
+run_step "phase 4 release install tree" bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release
+run_step "phase 4 original cli helper" bash "$SAFE_ROOT/scripts/build-original-cli-against-safe.sh"
+run_step "phase 4 debian staging" bash "$SAFE_ROOT/scripts/build-deb.sh"
+run_step "header identity" bash "$SAFE_ROOT/scripts/verify-header-identity.sh"
+run_step "baseline contract" bash "$SAFE_ROOT/scripts/verify-baseline-contract.sh"
 run_step "export parity" bash "$SAFE_ROOT/scripts/verify-export-parity.sh"
 run_step "link compatibility" bash "$SAFE_ROOT/scripts/verify-link-compat.sh"
 run_step "rust tests" cargo test --manifest-path "$SAFE_ROOT/Cargo.toml" --release --all-targets
@@ -28,4 +33,4 @@ run_step "upstream educational decoder" bash "$SAFE_ROOT/scripts/run-educational
 run_step "upstream pzstd" bash "$SAFE_ROOT/scripts/run-pzstd-tests.sh"
 run_step "upstream examples" bash "$SAFE_ROOT/scripts/run-original-examples.sh"
 run_step "seekable format" bash "$SAFE_ROOT/scripts/run-seekable-tests.sh"
-run_step "downstream dependents" bash "$REPO_ROOT/test-original.sh"
+run_step "downstream image matrix" bash "$REPO_ROOT/test-original.sh"

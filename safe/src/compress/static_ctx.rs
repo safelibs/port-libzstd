@@ -1,16 +1,13 @@
-use crate::{
-    ffi::{
-        advanced::{null, null_mut},
-        compress::{
-            default_cparams, init_static_cctx, init_static_cdict, normalize_cparams,
-            optional_src_slice,
-        },
-        decompress::{init_static_dctx, init_static_ddict},
-        types::{
-            ZSTD_CCtx, ZSTD_CDict, ZSTD_CStream, ZSTD_CLEVEL_DEFAULT, ZSTD_DCtx, ZSTD_DDict,
-            ZSTD_DStream, ZSTD_compressionParameters, ZSTD_dictContentType_e,
-            ZSTD_dictLoadMethod_e, ZSTD_sequenceFormat_e,
-        },
+use crate::ffi::{
+    advanced::{null, null_mut},
+    compress::{
+        default_cparams, init_static_cctx, init_static_cdict, normalize_cparams, optional_src_slice,
+    },
+    decompress::{init_static_dctx, init_static_ddict},
+    types::{
+        ZSTD_CCtx, ZSTD_CDict, ZSTD_CStream, ZSTD_DCtx, ZSTD_DDict, ZSTD_DStream,
+        ZSTD_compressionParameters, ZSTD_dictContentType_e, ZSTD_dictLoadMethod_e,
+        ZSTD_sequenceFormat_e, ZSTD_CLEVEL_DEFAULT,
     },
 };
 use core::ffi::{c_int, c_void};
@@ -35,11 +32,12 @@ pub extern "C" fn ZSTD_estimateDDictSize(
     dictSize: usize,
     dictLoadMethod: ZSTD_dictLoadMethod_e,
 ) -> usize {
-    crate::common::alloc::base_size::<crate::ffi::decompress::DecoderDictionary>()
-        .saturating_add(match dictLoadMethod {
+    crate::common::alloc::base_size::<crate::ffi::decompress::DecoderDictionary>().saturating_add(
+        match dictLoadMethod {
             ZSTD_dictLoadMethod_e::ZSTD_dlm_byCopy => dictSize,
             ZSTD_dictLoadMethod_e::ZSTD_dlm_byRef => 0,
-        })
+        },
+    )
 }
 
 #[no_mangle]
@@ -110,11 +108,21 @@ pub extern "C" fn ZSTD_initStaticCDict(
         compression_level,
         cparams,
         false,
+        false,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
         0,
         0,
         0,
         ZSTD_sequenceFormat_e::ZSTD_sf_noBlockDelimiters,
         false,
+        0,
         false,
         dictLoadMethod,
         dictContentType,

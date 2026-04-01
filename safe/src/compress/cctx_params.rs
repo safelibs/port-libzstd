@@ -22,7 +22,17 @@ struct CCtxParamsState {
     overlap_log: c_int,
     block_delimiters: c_int,
     enable_long_distance_matching: bool,
+    enable_dedicated_dict_search: bool,
+    ldm_hash_log: c_int,
+    ldm_min_match: c_int,
+    ldm_bucket_size_log: c_int,
+    ldm_hash_rate_log: c_int,
     validate_sequences: bool,
+    rsyncable: c_int,
+    literal_compression_mode: c_int,
+    target_cblock_size: c_int,
+    src_size_hint: c_int,
+    use_row_match_finder: c_int,
     enable_seq_producer_fallback: bool,
 }
 
@@ -36,7 +46,17 @@ impl Default for CCtxParamsState {
             overlap_log: 0,
             block_delimiters: 0,
             enable_long_distance_matching: false,
+            enable_dedicated_dict_search: false,
+            ldm_hash_log: 0,
+            ldm_min_match: 0,
+            ldm_bucket_size_log: 0,
+            ldm_hash_rate_log: 0,
             validate_sequences: false,
+            rsyncable: 0,
+            literal_compression_mode: 0,
+            target_cblock_size: 0,
+            src_size_hint: 0,
+            use_row_match_finder: 0,
             enable_seq_producer_fallback: false,
         }
     }
@@ -55,7 +75,17 @@ impl CCtxParamsState {
             overlap_log: ctx.overlap_log,
             block_delimiters: ctx.block_delimiters as c_int,
             enable_long_distance_matching: ctx.enable_long_distance_matching,
+            enable_dedicated_dict_search: ctx.enable_dedicated_dict_search,
+            ldm_hash_log: ctx.ldm_hash_log,
+            ldm_min_match: ctx.ldm_min_match,
+            ldm_bucket_size_log: ctx.ldm_bucket_size_log,
+            ldm_hash_rate_log: ctx.ldm_hash_rate_log,
             validate_sequences: ctx.validate_sequences,
+            rsyncable: ctx.rsyncable,
+            literal_compression_mode: ctx.literal_compression_mode,
+            target_cblock_size: ctx.target_cblock_size,
+            src_size_hint: ctx.src_size_hint,
+            use_row_match_finder: ctx.use_row_match_finder,
             enable_seq_producer_fallback: ctx.enable_seq_producer_fallback,
         }
     }
@@ -74,7 +104,17 @@ impl CCtxParamsState {
             crate::ffi::types::ZSTD_sequenceFormat_e::ZSTD_sf_noBlockDelimiters
         };
         ctx.enable_long_distance_matching = self.enable_long_distance_matching;
+        ctx.enable_dedicated_dict_search = self.enable_dedicated_dict_search;
+        ctx.ldm_hash_log = self.ldm_hash_log;
+        ctx.ldm_min_match = self.ldm_min_match;
+        ctx.ldm_bucket_size_log = self.ldm_bucket_size_log;
+        ctx.ldm_hash_rate_log = self.ldm_hash_rate_log;
         ctx.validate_sequences = self.validate_sequences;
+        ctx.rsyncable = self.rsyncable;
+        ctx.literal_compression_mode = self.literal_compression_mode;
+        ctx.target_cblock_size = self.target_cblock_size;
+        ctx.src_size_hint = self.src_size_hint;
+        ctx.use_row_match_finder = self.use_row_match_finder;
         ctx.enable_seq_producer_fallback = self.enable_seq_producer_fallback;
         ctx
     }
@@ -91,7 +131,17 @@ impl CCtxParamsState {
             crate::ffi::types::ZSTD_sequenceFormat_e::ZSTD_sf_noBlockDelimiters
         };
         cctx.enable_long_distance_matching = self.enable_long_distance_matching;
+        cctx.enable_dedicated_dict_search = self.enable_dedicated_dict_search;
+        cctx.ldm_hash_log = self.ldm_hash_log;
+        cctx.ldm_min_match = self.ldm_min_match;
+        cctx.ldm_bucket_size_log = self.ldm_bucket_size_log;
+        cctx.ldm_hash_rate_log = self.ldm_hash_rate_log;
         cctx.validate_sequences = self.validate_sequences;
+        cctx.rsyncable = self.rsyncable;
+        cctx.literal_compression_mode = self.literal_compression_mode;
+        cctx.target_cblock_size = self.target_cblock_size;
+        cctx.src_size_hint = self.src_size_hint;
+        cctx.use_row_match_finder = self.use_row_match_finder;
         cctx.enable_seq_producer_fallback = self.enable_seq_producer_fallback;
     }
 }

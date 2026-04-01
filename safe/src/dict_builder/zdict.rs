@@ -9,10 +9,7 @@ use core::{
     ffi::{c_char, c_uint, c_void},
     mem::size_of,
 };
-use oxiarc_zstd::{
-    train_dictionary as train_raw_dictionary, LevelConfig as OxiarcLevelConfig,
-    MatchFinder as OxiarcMatchFinder,
-};
+use oxiarc_zstd::{LevelConfig as OxiarcLevelConfig, MatchFinder as OxiarcMatchFinder};
 use std::vec::Vec;
 
 const FALLBACK_ENTROPY_TABLES: [u8; 138] = [
@@ -30,6 +27,7 @@ const DEFAULT_REPCODES: [u32; 3] = [1, 4, 8];
 pub(crate) const TRAINED_DICT_HEADER_SIZE: usize = 8 + 256 + size_of::<[u32; 3]>();
 const MIN_DICT_CONTENT_SIZE: usize = 8;
 const MIN_TOTAL_SAMPLE_BYTES: usize = 64;
+const MIN_TRAINING_SAMPLES: usize = 8;
 const MAX_OFFCODE: usize = 30;
 const MAX_LITERAL_LENGTH_CODE: usize = 35;
 const MAX_MATCH_LENGTH_CODE: usize = 52;
@@ -781,7 +779,9 @@ fn collect_entropy_stats(samples: &[&[u8]], dict_content: &[u8]) -> EntropyStats
         let mut offset_history = DEFAULT_REPCODES;
         for chunk in sample.chunks(block_size) {
             let mut finder = OxiarcMatchFinder::new(&config);
-            let sequences = finder.find_sequences(chunk, history.as_slice()).unwrap_or_default();
+            let sequences = finder
+                .find_sequences(chunk, history.as_slice())
+                .unwrap_or_default();
             for sequence in sequences {
                 if sequence.match_length == 0 {
                     for byte in &sequence.literals {
@@ -906,6 +906,13 @@ fn assemble_training_content(
     Ok(content)
 }
 
+fn validate_training_samples(samples: &[&[u8]]) -> Result<(), ZSTD_ErrorCode> {
+    if samples.len() < MIN_TRAINING_SAMPLES {
+        return Err(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong);
+    }
+    Ok(())
+}
+
 fn write_formatted_dictionary(
     dst: &mut [u8],
     content: &[u8],
@@ -957,8 +964,12 @@ pub(crate) fn synthesize_formatted_dictionary(
     dict_id_source: &[u8],
     requested_dict_id: u32,
 ) -> Result<Vec<u8>, ZSTD_ErrorCode> {
-    let mut dst =
-        vec![0u8; TRAINED_DICT_HEADER_SIZE.saturating_add(content.len()).saturating_add(512)];
+    let mut dst = vec![
+        0u8;
+        TRAINED_DICT_HEADER_SIZE
+            .saturating_add(content.len())
+            .saturating_add(512)
+    ];
     let samples = [content];
     let size = build_formatted_dictionary(
         dst.as_mut_slice(),
@@ -984,6 +995,7 @@ fn trained_dictionary_size(
     let result = (|| {
         let dst = dst_slice_mut(dict_buffer, dict_buffer_capacity)?;
         let samples = parse_samples(samples_buffer, samples_sizes, nb_samples)?;
+        validate_training_samples(&samples)?;
         let mut target_size = dst
             .len()
             .saturating_sub(TRAINED_DICT_HEADER_SIZE)
@@ -991,10 +1003,10 @@ fn trained_dictionary_size(
         if shrink_dict && target_size > 512 {
             target_size = (target_size * 3 / 4).max(256);
         }
-        let content = match train_raw_dictionary(&samples, target_size) {
-            Ok(dict) if !dict.is_empty() => dict.into_data(),
-            _ => assemble_training_content(&samples, target_size, preferred_segment_size)?,
-        };
+        // Keep dictionary training deterministic and sensitive to the cover/fastcover
+        // segment sizing inputs. The oxiarc raw trainer ignores those knobs, which can
+        // make a dictID-only change perturb the optimized dictionary body.
+        let content = assemble_training_content(&samples, target_size, preferred_segment_size)?;
         build_formatted_dictionary(dst, &content, &content, &samples, params.dictID)
     })();
 

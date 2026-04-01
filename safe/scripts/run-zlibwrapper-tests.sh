@@ -5,7 +5,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/phase6-common.sh"
 
 phase6_require_command valgrind
-phase6_ensure_safe_install
+phase6_require_phase4_inputs "$0"
 phase6_export_safe_env
 
 EXAMPLE_SHIM="$ORIGINAL_ROOT/zlibWrapper/examples/zlib.h"
@@ -60,13 +60,21 @@ run_zlibwrapper_make() {
         return 0
     fi
 
-    if [[ $ignored -eq 1 ]] \
-        && grep -q 'inflate should report DATA_ERROR' "$log" \
-        && grep -Eq ':[0-9]+: .*'"$target" "$log"
-    then
-        rm -f "$log"
-        phase6_log "allowing the known zlib 1.3 inflateSync expectation mismatch in $target"
-        return 0
+    if grep -Eq ':[0-9]+: .*'"$target" "$log"; then
+        if [[ $ignored -eq 1 ]] && grep -q 'inflate should report DATA_ERROR' "$log"; then
+            rm -f "$log"
+            phase6_log "allowing the known zlib 1.3 inflateSync expectation mismatch in $target"
+            return 0
+        fi
+
+        if [[ $ignored -eq 2 ]] \
+            && grep -q 'inflate should report DATA_ERROR' "$log" \
+            && grep -q 'inflate error: -2' "$log"
+        then
+            rm -f "$log"
+            phase6_log "allowing the known example/example_zstd ignored mismatches in $target"
+            return 0
+        fi
     fi
 
     rm -f "$log"

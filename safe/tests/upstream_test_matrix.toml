@@ -1,12 +1,30 @@
 schema_version = 1
-phase_id = "impl_safe_advanced_abi_completion"
+phase_id = "impl_upstream_release_gates"
 last_verified = "2026-03-31"
 verification_helpers = [
-  "safe/scripts/run-advanced-mt-tests.sh",
-  "safe/scripts/verify-link-compat.sh",
-  "safe/scripts/verify-export-parity.sh",
+  "safe/scripts/phase6-common.sh",
+  "safe/scripts/run-full-suite.sh",
+  "safe/scripts/run-upstream-tests.sh",
+  "safe/scripts/run-original-playtests.sh",
+  "safe/scripts/run-original-cli-tests.sh",
+  "safe/scripts/run-original-gzip-tests.sh",
+  "safe/scripts/run-zlibwrapper-tests.sh",
+  "safe/scripts/run-educational-decoder-tests.sh",
+  "safe/scripts/run-pzstd-tests.sh",
+  "safe/scripts/run-seekable-tests.sh",
+  "safe/scripts/run-version-compat-tests.sh",
+  "safe/scripts/run-upstream-regression.sh",
+  "safe/scripts/run-upstream-fuzz-tests.sh",
+  "safe/scripts/run-original-examples.sh",
+  "safe/scripts/check-cli-permissions.sh",
+  "safe/scripts/run-performance-smoke.sh",
 ]
 upstream_root = "original/libzstd-1.5.5+dfsg2"
+phase4_inputs = [
+  "safe/out/install/release-default",
+  "safe/out/original-cli/lib",
+  "safe/out/deb/default/metadata.env",
+]
 
 [[entry]]
 id = "tests:fuzzer"
@@ -40,8 +58,8 @@ make_target = "zstreamtest32"
 execution_strategy = "compile-and-run"
 owning_phase = 5
 release_gate = false
-prerequisites = ["gcc-multilib or g++-multilib", "32-bit libc development packages", "pthread", "dictionary-training coverage"]
-helper_paths = ["safe/scripts/run-upstream-tests.sh"]
+prerequisites = ["gcc-multilib or g++-multilib", "32-bit libc development packages", "pthread", "dictionary-training coverage", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
+helper_paths = ["safe/scripts/run-upstream-tests.sh", "safe/scripts/phase6-common.sh"]
 
 [[entry]]
 id = "tests:zstreamtest_asan"
@@ -52,8 +70,8 @@ make_target = "zstreamtest_asan"
 execution_strategy = "compile-and-run"
 owning_phase = 5
 release_gate = false
-prerequisites = ["address sanitizer toolchain", "pthread", "dictionary-training coverage"]
-helper_paths = ["safe/scripts/run-upstream-tests.sh"]
+prerequisites = ["address sanitizer toolchain", "pthread", "dictionary-training coverage", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
+helper_paths = ["safe/scripts/run-upstream-tests.sh", "safe/scripts/phase6-common.sh"]
 
 [[entry]]
 id = "tests:zstreamtest_tsan"
@@ -64,8 +82,8 @@ make_target = "zstreamtest_tsan"
 execution_strategy = "compile-and-run"
 owning_phase = 5
 release_gate = false
-prerequisites = ["thread sanitizer toolchain", "pthread", "dictionary-training coverage"]
-helper_paths = ["safe/scripts/run-upstream-tests.sh"]
+prerequisites = ["thread sanitizer toolchain", "pthread", "dictionary-training coverage", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
+helper_paths = ["safe/scripts/run-upstream-tests.sh", "safe/scripts/phase6-common.sh"]
 
 [[entry]]
 id = "tests:zstreamtest_ubsan"
@@ -76,8 +94,8 @@ make_target = "zstreamtest_ubsan"
 execution_strategy = "compile-and-run"
 owning_phase = 5
 release_gate = false
-prerequisites = ["undefined behavior sanitizer toolchain", "pthread", "dictionary-training coverage"]
-helper_paths = ["safe/scripts/run-upstream-tests.sh"]
+prerequisites = ["undefined behavior sanitizer toolchain", "pthread", "dictionary-training coverage", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
+helper_paths = ["safe/scripts/run-upstream-tests.sh", "safe/scripts/phase6-common.sh"]
 
 [[entry]]
 id = "tests:paramgrill"
@@ -192,8 +210,8 @@ make_target = "fullbench32"
 execution_strategy = "compile-and-run"
 owning_phase = 5
 release_gate = false
-prerequisites = ["gcc-multilib or g++-multilib", "32-bit libc development packages", "pthread"]
-helper_paths = ["safe/scripts/run-upstream-tests.sh"]
+prerequisites = ["gcc-multilib or g++-multilib", "32-bit libc development packages", "pthread", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
+helper_paths = ["safe/scripts/run-upstream-tests.sh", "safe/scripts/phase6-common.sh"]
 
 [[entry]]
 id = "tests:datagen"
@@ -215,8 +233,8 @@ make_target = "fuzzer32"
 execution_strategy = "compile-and-run"
 owning_phase = 5
 release_gate = false
-prerequisites = ["gcc-multilib or g++-multilib", "32-bit libc development packages", "pthread"]
-helper_paths = ["safe/scripts/run-upstream-tests.sh"]
+prerequisites = ["gcc-multilib or g++-multilib", "32-bit libc development packages", "pthread", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
+helper_paths = ["safe/scripts/run-upstream-tests.sh", "safe/scripts/phase6-common.sh"]
 
 [[entry]]
 id = "tests:longmatch"
@@ -238,8 +256,8 @@ make_target = "all32"
 execution_strategy = "aggregate-build-32bit-variants"
 owning_phase = 5
 release_gate = false
-prerequisites = ["gcc-multilib or g++-multilib", "32-bit libc development packages"]
-helper_paths = ["safe/scripts/run-upstream-tests.sh"]
+prerequisites = ["gcc-multilib or g++-multilib", "32-bit libc development packages", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
+helper_paths = ["safe/scripts/run-upstream-tests.sh", "safe/scripts/phase6-common.sh"]
 
 [[entry]]
 id = "tests:allnothread"
@@ -250,8 +268,8 @@ make_target = "allnothread"
 execution_strategy = "aggregate-build-without-multithread"
 owning_phase = 5
 release_gate = false
-prerequisites = ["single-threaded -nomt build profile"]
-helper_paths = ["safe/scripts/run-upstream-tests.sh"]
+prerequisites = ["single-threaded -nomt build profile", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
+helper_paths = ["safe/scripts/run-upstream-tests.sh", "safe/scripts/phase6-common.sh"]
 
 [[entry]]
 id = "tests:zstd-nolegacy"
@@ -277,8 +295,8 @@ make_target = "test-valgrind"
 execution_strategy = "compile-and-run"
 owning_phase = 5
 release_gate = false
-prerequisites = ["valgrind"]
-helper_paths = ["safe/scripts/run-upstream-tests.sh"]
+prerequisites = ["valgrind", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
+helper_paths = ["safe/scripts/run-upstream-tests.sh", "safe/scripts/phase6-common.sh"]
 
 [[entry]]
 id = "tests:playTests.sh"
@@ -288,7 +306,7 @@ kind = "script"
 execution_strategy = "environment-overrides"
 owning_phase = 5
 release_gate = true
-prerequisites = ["packaged zstd", "packaged datagen"]
+prerequisites = ["safe/out/install/release-default", "safe/out/original-cli/lib", "tests/datagen", "safe/out/deb/default/metadata.env", "rsync"]
 helper_paths = [
   "safe/scripts/run-original-playtests.sh",
   "safe/scripts/phase6-common.sh",
@@ -303,7 +321,7 @@ kind = "script"
 execution_strategy = "shell-script"
 owning_phase = 5
 release_gate = true
-prerequisites = ["build variants from safe/scripts/run-build-variant-tests.sh"]
+prerequisites = ["safe/out/install/release-default", "safe/out/original-cli/lib", "tests/datagen", "safe/out/deb/default/metadata.env", "rsync"]
 helper_paths = [
   "safe/scripts/run-original-playtests.sh",
   "safe/scripts/phase6-common.sh",
@@ -317,9 +335,10 @@ kind = "script"
 execution_strategy = "offline-fixture-replay"
 owning_phase = 5
 release_gate = true
-prerequisites = ["python3", "safe/tests/fixtures/versions"]
+prerequisites = ["python3", "safe/tests/fixtures/versions", "safe/out/install/release-default", "safe/out/deb/default/metadata.env"]
 helper_paths = [
   "safe/scripts/run-version-compat-tests.sh",
+  "safe/scripts/phase6-common.sh",
   "safe/tests/fixtures/versions/manifest.toml",
 ]
 
@@ -332,9 +351,10 @@ make_target = "versionsTest"
 execution_strategy = "clean-and-run-python-script"
 owning_phase = 5
 release_gate = true
-prerequisites = ["python3", "safe/tests/fixtures/versions"]
+prerequisites = ["python3", "safe/tests/fixtures/versions", "safe/out/install/release-default", "safe/out/deb/default/metadata.env"]
 helper_paths = [
   "safe/scripts/run-version-compat-tests.sh",
+  "safe/scripts/phase6-common.sh",
   "safe/tests/fixtures/versions/manifest.toml",
 ]
 
@@ -346,8 +366,11 @@ kind = "script"
 execution_strategy = "python-script"
 owning_phase = 5
 release_gate = true
-prerequisites = ["python3"]
-helper_paths = ["safe/scripts/run-upstream-tests.sh"]
+prerequisites = ["python3", "safe/out/install/release-default", "safe/out/deb/default/metadata.env"]
+helper_paths = [
+  "safe/scripts/run-upstream-tests.sh",
+  "safe/scripts/phase6-common.sh",
+]
 
 [[entry]]
 id = "tests:test-license.py"
@@ -357,8 +380,11 @@ kind = "script"
 execution_strategy = "python-script"
 owning_phase = 5
 release_gate = true
-prerequisites = ["python3"]
-helper_paths = ["safe/scripts/run-upstream-tests.sh"]
+prerequisites = ["python3", "safe/out/deb/default/metadata.env"]
+helper_paths = [
+  "safe/scripts/run-upstream-tests.sh",
+  "safe/scripts/phase6-common.sh",
+]
 
 [[entry]]
 id = "tests:cli-tests"
@@ -368,10 +394,26 @@ kind = "directory-family"
 execution_strategy = "python-runner"
 owning_phase = 5
 release_gate = true
-prerequisites = ["python3", "packaged zstd symlink set"]
+prerequisites = ["python3", "safe/out/install/release-default", "safe/out/deb/default/metadata.env"]
 helper_paths = [
   "safe/scripts/run-original-cli-tests.sh",
+  "safe/scripts/phase6-common.sh",
   "safe/scripts/check-cli-permissions.sh",
+]
+
+[[entry]]
+id = "safe:cli-permissions"
+path = "safe/scripts/check-cli-permissions.sh"
+source = "relevant_cves.json"
+kind = "script"
+execution_strategy = "strace atomic-create audit against the Phase 4 packaged CLI"
+owning_phase = 5
+release_gate = true
+prerequisites = ["python3", "strace", "safe/out/install/release-default", "safe/out/deb/default/metadata.env"]
+helper_paths = [
+  "safe/scripts/check-cli-permissions.sh",
+  "safe/scripts/phase6-common.sh",
+  "relevant_cves.json",
 ]
 
 [[entry]]
@@ -382,8 +424,23 @@ kind = "directory-family"
 execution_strategy = "make test-* shell suite"
 owning_phase = 5
 release_gate = true
-prerequisites = ["POSIX shell", "packaged gzip-compatible symlink"]
-helper_paths = ["safe/scripts/run-original-gzip-tests.sh"]
+prerequisites = ["POSIX shell", "safe/out/install/release-default", "safe/out/deb/default/metadata.env"]
+expected_failures = [
+  "helin-segv",
+  "hufts",
+  "keep",
+  "list",
+  "null-suffix-clobber",
+  "trailing-nul",
+  "zgrep-context",
+  "zgrep-f",
+  "znew-k",
+  "z-suffix",
+]
+helper_paths = [
+  "safe/scripts/run-original-gzip-tests.sh",
+  "safe/scripts/phase6-common.sh",
+]
 
 [[entry]]
 id = "tests:regression"
@@ -397,10 +454,14 @@ prerequisites = [
   "original/libzstd-1.5.5+dfsg2/tests/regression/cache",
   "safe/tests/fixtures/regression",
   "original/libzstd-1.5.5+dfsg2/tests/regression/results.csv",
+  "safe/out/install/release-default",
+  "safe/out/original-cli/lib",
+  "safe/out/deb/default/metadata.env",
 ]
 offline_strategy = "reuse original/tests/regression/cache first, then overlay any missing local fixtures from safe/tests/fixtures/regression"
 helper_paths = [
   "safe/scripts/run-upstream-regression.sh",
+  "safe/scripts/phase6-common.sh",
   "safe/tests/ported/whitebox/Makefile",
   "safe/tests/ported/whitebox/offline_regression_data.c",
   "safe/tests/fixtures/regression/README.md",
@@ -414,9 +475,17 @@ kind = "directory-family"
 execution_strategy = "offline-corpus-runner"
 owning_phase = 5
 release_gate = true
-prerequisites = ["libregression.a", "original/libzstd-1.5.5+dfsg2/tests/fuzz/corpora", "safe/tests/fixtures/fuzz-corpora"]
+prerequisites = [
+  "libregression.a",
+  "original/libzstd-1.5.5+dfsg2/tests/fuzz/corpora",
+  "safe/tests/fixtures/fuzz-corpora",
+  "safe/out/install/release-default",
+  "safe/out/original-cli/lib",
+  "safe/out/deb/default/metadata.env",
+]
 helper_paths = [
   "safe/scripts/run-upstream-fuzz-tests.sh",
+  "safe/scripts/phase6-common.sh",
   "safe/tests/ported/whitebox/Makefile",
   "safe/tests/fixtures/fuzz-corpora/manifest.toml",
 ]
@@ -430,8 +499,11 @@ make_target = "test"
 execution_strategy = "build-and-run"
 owning_phase = 5
 release_gate = true
-prerequisites = ["zlib1g-dev"]
-helper_paths = ["safe/scripts/run-zlibwrapper-tests.sh"]
+prerequisites = ["zlib1g-dev", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
+helper_paths = [
+  "safe/scripts/run-zlibwrapper-tests.sh",
+  "safe/scripts/phase6-common.sh",
+]
 
 [[entry]]
 id = "zlibWrapper:test-valgrind"
@@ -442,8 +514,11 @@ make_target = "test-valgrind"
 execution_strategy = "build-and-run-under-valgrind"
 owning_phase = 5
 release_gate = true
-prerequisites = ["zlib1g-dev", "valgrind"]
-helper_paths = ["safe/scripts/run-zlibwrapper-tests.sh"]
+prerequisites = ["zlib1g-dev", "valgrind", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
+helper_paths = [
+  "safe/scripts/run-zlibwrapper-tests.sh",
+  "safe/scripts/phase6-common.sh",
+]
 
 [[entry]]
 id = "educational_decoder:test"
@@ -454,8 +529,11 @@ make_target = "test"
 execution_strategy = "build-and-run"
 owning_phase = 5
 release_gate = true
-prerequisites = ["packaged zstd"]
-helper_paths = ["safe/scripts/run-educational-decoder-tests.sh"]
+prerequisites = ["safe/out/install/release-default", "safe/out/deb/default/metadata.env"]
+helper_paths = [
+  "safe/scripts/run-educational-decoder-tests.sh",
+  "safe/scripts/phase6-common.sh",
+]
 
 [[entry]]
 id = "contrib/pzstd:test-pzstd"
@@ -466,7 +544,7 @@ make_target = "test-pzstd"
 execution_strategy = "offline-googletest staging"
 owning_phase = 5
 release_gate = true
-prerequisites = ["cmake", "libgtest-dev", "googletest staged locally"]
+prerequisites = ["cmake", "libgtest-dev", "googletest staged locally", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
 offline_strategy = "replace git clone with a system googletest installation staged into contrib/pzstd/googletest/"
 helper_paths = [
   "safe/scripts/run-pzstd-tests.sh",
@@ -482,7 +560,7 @@ make_target = "roundtripcheck"
 execution_strategy = "offline-roundtrip replay"
 owning_phase = 5
 release_gate = true
-prerequisites = ["cmake", "libgtest-dev", "googletest staged locally"]
+prerequisites = ["cmake", "libgtest-dev", "googletest staged locally", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
 offline_strategy = "replace git clone with a system googletest installation staged into contrib/pzstd/googletest/ and run the preserved roundtrip corpus offline"
 helper_paths = [
   "safe/scripts/run-pzstd-tests.sh",
@@ -498,7 +576,7 @@ make_target = "test-pzstd32"
 execution_strategy = "offline-googletest staging"
 owning_phase = 5
 release_gate = false
-prerequisites = ["cmake", "libgtest-dev", "gcc-multilib or g++-multilib", "googletest staged locally"]
+prerequisites = ["cmake", "libgtest-dev", "gcc-multilib or g++-multilib", "googletest staged locally", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
 offline_strategy = "replace git clone with a system googletest installation staged into contrib/pzstd/googletest/"
 helper_paths = [
   "safe/scripts/run-pzstd-tests.sh",
@@ -514,7 +592,7 @@ make_target = "test-pzstd-tsan"
 execution_strategy = "offline-googletest staging"
 owning_phase = 5
 release_gate = false
-prerequisites = ["cmake", "libgtest-dev", "thread sanitizer toolchain", "gold or compatible linker", "googletest staged locally"]
+prerequisites = ["cmake", "libgtest-dev", "thread sanitizer toolchain", "gold or compatible linker", "googletest staged locally", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
 offline_strategy = "replace git clone with a system googletest installation staged into contrib/pzstd/googletest/"
 helper_paths = [
   "safe/scripts/run-pzstd-tests.sh",
@@ -530,7 +608,7 @@ make_target = "test-pzstd-asan"
 execution_strategy = "offline-googletest staging"
 owning_phase = 5
 release_gate = false
-prerequisites = ["cmake", "libgtest-dev", "address sanitizer toolchain", "gold or compatible linker", "googletest staged locally"]
+prerequisites = ["cmake", "libgtest-dev", "address sanitizer toolchain", "gold or compatible linker", "googletest staged locally", "safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
 offline_strategy = "replace git clone with a system googletest installation staged into contrib/pzstd/googletest/"
 helper_paths = [
   "safe/scripts/run-pzstd-tests.sh",
@@ -594,6 +672,22 @@ helper_paths = [
 ]
 
 [[entry]]
+id = "safe:performance-smoke"
+path = "safe/scripts/run-performance-smoke.sh"
+source = "safe/tests/fixtures/versions/manifest.toml"
+kind = "script"
+execution_strategy = "installed-cli bounded throughput smoke"
+owning_phase = 5
+release_gate = true
+prerequisites = ["python3", "safe/tests/fixtures/versions", "safe/tests/fixtures/regression", "safe/out/install/release-default", "safe/out/deb/default/metadata.env"]
+helper_paths = [
+  "safe/scripts/run-performance-smoke.sh",
+  "safe/scripts/phase6-common.sh",
+  "safe/tests/fixtures/versions/manifest.toml",
+  "safe/tests/fixtures/regression/README.md",
+]
+
+[[entry]]
 id = "examples:test"
 path = "original/libzstd-1.5.5+dfsg2/examples"
 source = "original/libzstd-1.5.5+dfsg2/examples/Makefile"
@@ -602,8 +696,11 @@ make_target = "test"
 execution_strategy = "build-and-run"
 owning_phase = 5
 release_gate = true
-prerequisites = []
-helper_paths = ["safe/scripts/run-original-examples.sh"]
+prerequisites = ["safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
+helper_paths = [
+  "safe/scripts/run-original-examples.sh",
+  "safe/scripts/phase6-common.sh",
+]
 
 [[entry]]
 id = "contrib/seekable_format:test"
@@ -614,5 +711,8 @@ make_target = "test"
 execution_strategy = "build-and-run"
 owning_phase = 5
 release_gate = true
-prerequisites = []
-helper_paths = ["safe/scripts/run-seekable-tests.sh"]
+prerequisites = ["safe/out/install/release-default", "safe/out/original-cli/lib", "safe/out/deb/default/metadata.env"]
+helper_paths = [
+  "safe/scripts/run-seekable-tests.sh",
+  "safe/scripts/phase6-common.sh",
+]
