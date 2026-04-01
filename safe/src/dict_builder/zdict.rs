@@ -861,7 +861,7 @@ fn assemble_training_content(
         return Err(ZSTD_ErrorCode::ZSTD_error_dstSize_tooSmall);
     }
 
-    let segment_size = preferred_segment_size.clamp(16, target_size.max(16));
+    let segment_size = preferred_segment_size.clamp(8, target_size.max(8));
     let ranked = divsufsort::rank_segments(samples, segment_size);
     let mut content = Vec::with_capacity(target_size);
 
@@ -1201,7 +1201,7 @@ pub extern "C" fn ZDICT_trainFromBuffer(
         samplesBuffer,
         samplesSizes,
         nbSamples,
-        64,
+        8,
         ZDICT_params_t::default(),
         false,
     )

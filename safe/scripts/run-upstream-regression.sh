@@ -8,9 +8,6 @@ phase6_require_phase4_inputs "$0"
 phase6_export_safe_env
 phase6_assert_uses_safe_lib "$BINDIR/zstd"
 
-phase6_log "building ported offline regression harness"
-make -C "$SAFE_ROOT/tests/ported/whitebox" regression
-
 WORK_DIR="$PHASE6_OUT/regression"
 CACHE_DIR="$WORK_DIR/cache"
 FRAGMENTS_DIR="$WORK_DIR/fragments"
@@ -88,23 +85,19 @@ memoized_regression_fixture_is_compatible() {
 
 regression_results_are_fresh() {
     [[ -f $STAMP_FILE && -f $RESULTS_FILE ]] || return 1
-    local dep
-    for dep in \
+    phase6_stamp_is_fresh \
+        "$STAMP_FILE" \
         "$SCRIPT_DIR/run-upstream-regression.sh" \
+        "$SCRIPT_DIR/phase6-common.sh" \
         "$BINDIR/zstd" \
-        "$SAFE_ROOT/tests/ported/whitebox" \
-        "$ORIGINAL_ROOT/tests/regression" \
-        "$REGRESSION_FIXTURE_ROOT"
-    do
-        if [[ -d $dep ]]; then
-            if find "$dep" -type f -newer "$STAMP_FILE" -print -quit | grep -q .; then
-                return 1
-            fi
-        elif [[ -e $dep && $dep -nt $STAMP_FILE ]]; then
-            return 1
-        fi
-    done
-    return 0
+        "$REGRESSION_FIXTURE_ROOT" \
+        "$MEMOIZED_RESULTS_FIXTURE" \
+        "$MEMOIZED_RESULTS_DIGEST" \
+        && phase6_tracked_repo_paths_are_fresh \
+            "$STAMP_FILE" \
+            "$SAFE_ROOT/tests/ported/whitebox" \
+            "$ORIGINAL_ROOT/tests/regression" \
+            "$ORIGINAL_ROOT/programs"
 }
 
 stage_regression_cache() {
@@ -395,6 +388,8 @@ elif memoized_regression_fixture_is_compatible; then
     phase6_log "using memoized regression results fixture for the current source tree"
     cp "$MEMOIZED_RESULTS_FIXTURE" "$RESULTS_FILE"
 else
+    phase6_log "building ported offline regression harness"
+    make -C "$SAFE_ROOT/tests/ported/whitebox" regression
     stage_regression_cache
     phase6_log "running offline regression coverage rows against the safe harness with $PHASE6_REGRESSION_JOBS workers"
     compute_regression_results

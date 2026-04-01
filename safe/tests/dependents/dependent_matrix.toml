@@ -1,5 +1,20 @@
 schema_version = 1
+phase_id = "impl_final_release_burn_down"
+last_verified = "2026-03-31"
 source_inventory = "dependents.json"
+top_level_release_gate = "safe/scripts/run-full-suite.sh"
+verification_helpers = [
+  "safe/scripts/build-dependent-image.sh",
+  "safe/scripts/run-dependent-matrix.sh",
+  "safe/scripts/run-full-suite.sh",
+]
+artifact_roots = [
+  "safe/out/dependents/image-context",
+  "safe/out/dependents/compile-compat",
+  "safe/out/dependents/logs",
+]
+compile_contract = "run-dependent-matrix.sh --compile-only executes compile probes inside the built dependent image"
+runtime_contract = "run-dependent-matrix.sh --runtime-only reuses that image with --privileged plus writable /run and /run/lock tmpfs mounts"
 
 [[dependent]]
 source_package = "apt"

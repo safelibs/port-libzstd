@@ -229,6 +229,19 @@ impl Matcher for MatchGeneratorDriver {
             MatcherBackend::Dfast => self.dfast_matcher_mut().skip_matching(),
         }
     }
+
+    fn repeat_offsets(&self) -> Option<[u32; 3]> {
+        match self.active_backend {
+            MatcherBackend::Simple => None,
+            MatcherBackend::Dfast => Some(self.dfast_matcher().offset_hist),
+        }
+    }
+
+    fn restore_repeat_offsets(&mut self, offsets: [u32; 3]) {
+        if self.active_backend == MatcherBackend::Dfast {
+            self.dfast_matcher_mut().offset_hist = offsets;
+        }
+    }
 }
 
 /// This stores the index of a suffix of a string by hashing the first few bytes of that suffix

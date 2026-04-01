@@ -5,21 +5,63 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SAFE_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 REPO_ROOT=$(cd "$SAFE_ROOT/.." && pwd)
 UPSTREAM_SO="$REPO_ROOT/original/libzstd-1.5.5+dfsg2/lib/libzstd.so.1.5.5"
+DEFAULT_METADATA_FILE="$SAFE_ROOT/out/deb/default/metadata.env"
+NOUDEB_METADATA_FILE="$SAFE_ROOT/out/deb/noudeb/metadata.env"
+source "$SAFE_ROOT/scripts/phase6-common.sh"
 
-ensure_default_phase4_roots() {
-    bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release
-    bash "$SAFE_ROOT/scripts/build-original-cli-against-safe.sh"
-    bash "$SAFE_ROOT/scripts/build-deb.sh"
-}
+phase6_require_phase4_inputs "$0"
 
-ensure_default_phase4_roots
+DEFAULT_PACKAGE_DIR=
+DEFAULT_INSTALL_ROOT=
+NOUDEB_PACKAGE_DIR=
+DEFAULT_INSTALL_SO=
+if [[ -f $DEFAULT_METADATA_FILE ]]; then
+    # shellcheck disable=SC1090
+    source "$DEFAULT_METADATA_FILE"
+    DEFAULT_PACKAGE_DIR=$PACKAGE_DIR
+    DEFAULT_INSTALL_ROOT=$INSTALL_ROOT
+    if [[ -n ${MULTIARCH:-} ]]; then
+        DEFAULT_INSTALL_SO="$DEFAULT_INSTALL_ROOT/usr/lib/$MULTIARCH/libzstd.so.1.5.5"
+    else
+        DEFAULT_INSTALL_SO="$DEFAULT_INSTALL_ROOT/usr/lib/libzstd.so.1.5.5"
+    fi
+fi
+if [[ -f $NOUDEB_METADATA_FILE ]]; then
+    # shellcheck disable=SC1090
+    source "$NOUDEB_METADATA_FILE"
+    NOUDEB_PACKAGE_DIR=$PACKAGE_DIR
+fi
+STAMP_FILE=$(phase6_stamp_path verify-deb-profiles)
+if phase6_stamp_is_fresh \
+    "$STAMP_FILE" \
+    "$0" \
+    "$SCRIPT_DIR/phase6-common.sh" \
+    "$DEFAULT_METADATA_FILE" \
+    "$NOUDEB_METADATA_FILE" \
+    "$DEFAULT_PACKAGE_DIR" \
+    "$NOUDEB_PACKAGE_DIR" \
+    "$DEFAULT_INSTALL_SO" \
+    && phase6_tracked_repo_paths_are_fresh \
+        "$STAMP_FILE" \
+        "$SAFE_ROOT/Cargo.toml" \
+        "$SAFE_ROOT/include" \
+        "$SAFE_ROOT/src" \
+        "$SAFE_ROOT/scripts/build-deb.sh" \
+        "$REPO_ROOT/original/libzstd-1.5.5+dfsg2/debian"
+then
+    phase6_log "Debian profile verification already fresh; skipping rerun"
+    exit 0
+fi
+
 DEB_BUILD_PROFILES=noudeb bash "$SAFE_ROOT/scripts/build-deb.sh"
 
+# shellcheck disable=SC1090
 source "$SAFE_ROOT/out/deb/default/metadata.env"
 DEFAULT_PACKAGE_DIR=$PACKAGE_DIR
 DEFAULT_INSTALL_ROOT=$INSTALL_ROOT
 DEFAULT_CANONICAL_INSTALL_ROOT=$CANONICAL_INSTALL_ROOT
 DEFAULT_CANONICAL_HELPER_ROOT=$CANONICAL_HELPER_ROOT
+# shellcheck disable=SC1090
 source "$SAFE_ROOT/out/deb/noudeb/metadata.env"
 NOUDEB_PACKAGE_DIR=$PACKAGE_DIR
 
@@ -78,3 +120,5 @@ cmp -s "$UDEB_SO" "$DEFAULT_INSTALL_ROOT/usr/lib/$MULTIARCH/libzstd.so.1.5.5" ||
     printf 'libzstd1-udeb payload differs from the safe default build output\n' >&2
     exit 1
 }
+
+phase6_touch_stamp "$STAMP_FILE"

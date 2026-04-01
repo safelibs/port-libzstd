@@ -1,8 +1,20 @@
 schema_version = 1
-phase_id = "impl_upstream_release_gates"
+phase_id = "impl_final_release_burn_down"
 last_verified = "2026-03-31"
+top_level_release_gate = "safe/scripts/run-full-suite.sh"
 verification_helpers = [
   "safe/scripts/phase6-common.sh",
+  "safe/scripts/verify-header-identity.sh",
+  "safe/scripts/verify-baseline-contract.sh",
+  "safe/scripts/verify-export-parity.sh",
+  "safe/scripts/verify-link-compat.sh",
+  "safe/scripts/run-capi-decompression.sh",
+  "safe/scripts/run-capi-roundtrip.sh",
+  "safe/scripts/run-advanced-mt-tests.sh",
+  "safe/scripts/run-build-variant-tests.sh",
+  "safe/scripts/verify-install-layout.sh",
+  "safe/scripts/verify-deb-profiles.sh",
+  "safe/scripts/run-debian-autopkgtests.sh",
   "safe/scripts/run-full-suite.sh",
   "safe/scripts/run-upstream-tests.sh",
   "safe/scripts/run-original-playtests.sh",
@@ -18,12 +30,18 @@ verification_helpers = [
   "safe/scripts/run-original-examples.sh",
   "safe/scripts/check-cli-permissions.sh",
   "safe/scripts/run-performance-smoke.sh",
+  "safe/scripts/run-dependent-matrix.sh",
 ]
 upstream_root = "original/libzstd-1.5.5+dfsg2"
 phase4_inputs = [
   "safe/out/install/release-default",
   "safe/out/original-cli/lib",
   "safe/out/deb/default/metadata.env",
+]
+phase6_artifact_roots = [
+  "safe/out/dependents/image-context",
+  "safe/out/dependents/compile-compat",
+  "safe/out/dependents/logs",
 ]
 
 [[entry]]

@@ -39,6 +39,7 @@ PY
 
 compute_build_signature() {
     python3 - \
+        "$REPO_ROOT" \
         "$SOURCE_ROOT" \
         "$ARTIFACT_ROOT" \
         "$SCRIPT_DIR/build-original-cli-against-safe.sh" \
@@ -53,36 +54,38 @@ from __future__ import annotations
 
 import hashlib
 import pathlib
+import subprocess
 import sys
 
-source_root = pathlib.Path(sys.argv[1])
-artifact_root = pathlib.Path(sys.argv[2])
-script_path = pathlib.Path(sys.argv[3])
-params = sys.argv[4:]
+repo_root = pathlib.Path(sys.argv[1])
+source_root = pathlib.Path(sys.argv[2])
+artifact_root = pathlib.Path(sys.argv[3])
+script_path = pathlib.Path(sys.argv[4])
+params = sys.argv[5:]
 
 libdir = pathlib.Path(params[3].lstrip("/"))
 includedir = pathlib.Path(params[4].lstrip("/"))
 
+def iter_signature_entries(root: pathlib.Path, path: pathlib.Path) -> list[pathlib.Path]:
+    if not path.exists():
+        raise SystemExit(f"missing input for helper build signature: {path}")
+    if not path.is_dir():
+        return [path]
+    if root != source_root:
+        return sorted(entry for entry in path.rglob("*") if entry.is_file())
 
-def skip_generated(entry: pathlib.Path, root: pathlib.Path) -> bool:
-    rel = entry.relative_to(root)
-    if any(part in {"obj", ".deps", ".libs", "__pycache__"} for part in rel.parts):
-        return True
-    if entry.suffix in {".o", ".a", ".d", ".Td", ".P", ".gcda", ".gcno", ".gcov"}:
-        return True
-    if entry.name in {
-        "zstd",
-        "zstd-compress",
-        "zstd-decompress",
-        "zstd-dictBuilder",
-        "zstd-frugal",
-        "zstd-nolegacy",
-        "zstd-small",
-        "zstd-nomt",
-        "pzstd",
-    }:
-        return True
-    return False
+    rel = path.relative_to(repo_root)
+    output = subprocess.check_output(
+        ["git", "-C", str(repo_root), "ls-files", "-z", "--", rel.as_posix()]
+    )
+    entries = []
+    for item in output.split(b"\0"):
+        if not item:
+            continue
+        entry = repo_root / item.decode("utf-8")
+        if entry.is_file():
+            entries.append(entry)
+    return sorted(entries)
 
 h = hashlib.sha256()
 for value in params:
@@ -110,14 +113,8 @@ for rel in (
     paths.append((artifact_root, artifact_root / rel))
 
 for root, path in paths:
-    if not path.exists():
-        raise SystemExit(f"missing input for helper build signature: {path}")
-    entries = sorted(path.rglob("*")) if path.is_dir() else [path]
+    entries = iter_signature_entries(root, path)
     for entry in entries:
-        if entry.is_dir():
-            continue
-        if root == source_root and skip_generated(entry, root):
-            continue
         rel = entry.relative_to(root)
         h.update(str(rel).encode("utf-8"))
         h.update(b"\0")

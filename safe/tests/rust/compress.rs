@@ -4,6 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[cfg(libzstd_threading)]
+use zstd::threading::zstdmt;
 use zstd::{
     compress::{block as cblock, cctx, cctx_params, cdict, cstream, params, sequence_api},
     decompress::{dctx, ddict, dstream},
@@ -81,6 +83,90 @@ fn sample_bytes(size: usize) -> Vec<u8> {
     out
 }
 
+fn zstreamtest_sample(size: usize, seed: u32) -> Vec<u8> {
+    let fragments = [
+        b"{\"tenant\":\"alpha\",\"region\":\"west\",\"kind\":\"session\",\"payload\":\"".as_slice(),
+        b"{\"tenant\":\"beta\",\"region\":\"east\",\"kind\":\"session\",\"payload\":\"".as_slice(),
+        b"{\"tenant\":\"alpha\",\"region\":\"west\",\"kind\":\"metric\",\"payload\":\"".as_slice(),
+        b"{\"tenant\":\"gamma\",\"region\":\"north\",\"kind\":\"record\",\"payload\":\"".as_slice(),
+    ];
+    let alphabet = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+    let mut out = Vec::with_capacity(size);
+    let mut state = seed | 1;
+
+    while out.len() < size {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        let fragment = fragments[(state as usize) % fragments.len()];
+        for &byte in fragment {
+            if out.len() == size {
+                break;
+            }
+            out.push(byte);
+        }
+        for _ in 0..96 {
+            if out.len() == size {
+                break;
+            }
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            out.push(alphabet[(state as usize) % alphabet.len()]);
+        }
+        if out.len() < size {
+            out.push(b'"');
+        }
+        if out.len() < size {
+            out.push(b'}');
+        }
+        if out.len() < size {
+            out.push(b'\n');
+        }
+    }
+
+    out
+}
+
+fn pooltest_sample(size: usize, seed: u32) -> Vec<u8> {
+    let fragments = [
+        b"tenant=alpha;kind=session;payload=".as_slice(),
+        b"tenant=beta;kind=session;payload=".as_slice(),
+        b"tenant=gamma;kind=metric;payload=".as_slice(),
+        b"tenant=delta;kind=record;payload=".as_slice(),
+    ];
+    let alphabet = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+    let mut out = Vec::with_capacity(size);
+    let mut state = seed | 1;
+
+    while out.len() < size {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        let fragment = fragments[(state as usize) % fragments.len()];
+        for &byte in fragment {
+            if out.len() == size {
+                break;
+            }
+            out.push(byte);
+        }
+        for _ in 0..128 {
+            if out.len() == size {
+                break;
+            }
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            out.push(alphabet[(state as usize) % alphabet.len()]);
+        }
+        if out.len() < size {
+            out.push(b'\n');
+        }
+    }
+
+    out
+}
+
 fn compressible_sample(size: usize) -> Vec<u8> {
     let pattern = b"fn compressible_payload() { return \"alpha-beta-gamma-delta\"; }\n";
     let mut out = Vec::with_capacity(size);
@@ -120,6 +206,44 @@ fn dict_biased_sample(dict: &[u8], size: usize, seed: u32) -> Vec<u8> {
         cursor = (cursor + 97 + ((seed as usize) % 23)) % dict.len();
     }
     out
+}
+
+fn train_zstreamtest_dictionary(src: &[u8]) -> Vec<u8> {
+    let mut sample_size = 1024usize;
+    if src.len() < 64 * sample_size {
+        sample_size = 512;
+    }
+    let nb_samples = (src.len() / sample_size).min(64);
+    assert!(
+        nb_samples >= 16,
+        "not enough sample data to train a dictionary"
+    );
+
+    let sample_sizes = vec![sample_size; nb_samples];
+    let mut dict = vec![0u8; 4096];
+    let dict_size = zstd::dict_builder::zdict::ZDICT_trainFromBuffer(
+        dict.as_mut_ptr().cast(),
+        dict.len(),
+        src.as_ptr().cast(),
+        sample_sizes.as_ptr(),
+        nb_samples as u32,
+    );
+    assert_eq!(
+        zstd::dict_builder::zdict::ZDICT_isError(dict_size),
+        0,
+        "ZDICT_trainFromBuffer: {}",
+        unsafe {
+            CStr::from_ptr(zstd::dict_builder::zdict::ZDICT_getErrorName(dict_size))
+                .to_string_lossy()
+                .into_owned()
+        }
+    );
+    assert!(
+        dict_size > 0,
+        "dictionary trainer returned an empty dictionary"
+    );
+    dict.truncate(dict_size);
+    dict
 }
 
 fn check_result(code: usize, what: &str) {
@@ -178,6 +302,56 @@ fn decompress_with_prefix_exact(compressed: &[u8], prefix: &[u8], expected: &[u8
     check_result(decoded_size, "ZSTD_decompressDCtx(prefix)");
     assert_eq!(decoded_size, expected.len());
     assert_eq!(decoded, expected);
+    dctx::ZSTD_freeDCtx(dctx_ptr);
+}
+
+fn decompress_stream_prefix_with_dict_exact(compressed: &[u8], dict: &[u8], expected: &[u8]) {
+    let dctx_ptr = dctx::ZSTD_createDCtx();
+    let mut decoded = vec![0u8; expected.len() + 64];
+    let mut input = ZSTD_inBuffer {
+        src: compressed.as_ptr().cast(),
+        size: compressed.len(),
+        pos: 0,
+    };
+    let mut produced = 0usize;
+
+    assert!(
+        !dctx_ptr.is_null(),
+        "failed to create dctx for stream decode"
+    );
+    check_result(
+        dctx::ZSTD_DCtx_reset(
+            dctx_ptr,
+            ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+        ),
+        "ZSTD_DCtx_reset(stream prefix with dict)",
+    );
+    check_result(
+        ddict::ZSTD_DCtx_loadDictionary(dctx_ptr, dict.as_ptr().cast(), dict.len()),
+        "ZSTD_DCtx_loadDictionary(stream prefix with dict)",
+    );
+
+    while input.pos < input.size {
+        let mut out = ZSTD_outBuffer {
+            dst: decoded[produced..].as_mut_ptr().cast(),
+            size: decoded.len() - produced,
+            pos: 0,
+        };
+        let ret = dstream::ZSTD_decompressStream(dctx_ptr.cast(), &mut out, &mut input);
+        check_result(ret, "ZSTD_decompressStream(stream prefix with dict)");
+        produced += out.pos;
+        assert!(
+            produced <= expected.len(),
+            "stream prefix decode produced too much data"
+        );
+        assert!(
+            out.pos != 0 || input.pos == input.size,
+            "stream prefix decode stalled before consuming all input"
+        );
+    }
+
+    assert_eq!(produced, expected.len());
+    assert_eq!(&decoded[..produced], expected);
     dctx::ZSTD_freeDCtx(dctx_ptr);
 }
 
@@ -420,6 +594,37 @@ fn compress_stream2_continue_then_end(
     }
 
     (compressed, produced_before_end)
+}
+
+fn compress_stream2_end_only(cctx: *mut ZSTD_CCtx, src: &[u8]) -> Vec<u8> {
+    let mut compressed = Vec::new();
+    let mut input = ZSTD_inBuffer {
+        src: src.as_ptr().cast(),
+        size: src.len(),
+        pos: 0,
+    };
+
+    loop {
+        let mut out_buf = vec![0u8; (cctx::ZSTD_compressBound(src.len()) + 1024).max(1)];
+        let mut output = ZSTD_outBuffer {
+            dst: out_buf.as_mut_ptr().cast(),
+            size: out_buf.len(),
+            pos: 0,
+        };
+        let remaining = cstream::ZSTD_compressStream2(
+            cctx,
+            &mut output,
+            &mut input,
+            ZSTD_EndDirective::ZSTD_e_end,
+        );
+        check_result(remaining, "ZSTD_compressStream2(end only)");
+        compressed.extend_from_slice(&out_buf[..output.pos]);
+        if remaining == 0 {
+            break;
+        }
+    }
+
+    compressed
 }
 
 fn compress_stream_legacy_flush_then_end(
@@ -965,6 +1170,25 @@ fn compress_one_shot_context_and_block_api_roundtrip() {
     cctx::ZSTD_freeCCtx(clone);
     cctx::ZSTD_freeCCtx(copy_src);
     cctx::ZSTD_freeCCtx(cctx_ptr);
+}
+
+#[test]
+fn compress_small_literal_only_frame_prefers_raw_block() {
+    let src = b"some data\n";
+    let mut compressed = vec![0u8; cctx::ZSTD_compressBound(src.len())];
+
+    let size = cctx::ZSTD_compress(
+        compressed.as_mut_ptr().cast(),
+        compressed.len(),
+        src.as_ptr().cast(),
+        src.len(),
+        1,
+    );
+    check_result(size, "ZSTD_compress(small literal-only frame)");
+
+    compressed.truncate(size);
+    assert_eq!(frame_first_block_type(&compressed), 0);
+    decompress_exact(&compressed, src);
 }
 
 #[test]
@@ -1797,6 +2021,368 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     cctx_params::ZSTD_freeCCtxParams(cctx_params_ptr);
     cstream::ZSTD_freeCStream(zcs2);
     cstream::ZSTD_freeCStream(zcs);
+}
+
+#[test]
+fn compress_stream2_trained_dictionary_improves_size() {
+    let src = zstreamtest_sample(384 * 1024, 0x1234_ABCD);
+    let dict = train_zstreamtest_dictionary(&src);
+    let cctx_ptr = cctx::ZSTD_createCCtx();
+
+    assert!(!cctx_ptr.is_null());
+    check_result(
+        cctx::ZSTD_CCtx_reset(
+            cctx_ptr,
+            ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+        ),
+        "ZSTD_CCtx_reset(plain trained dict test)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_compressionLevel, 3),
+        "ZSTD_c_compressionLevel(plain trained dict test)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_checksumFlag, 1),
+        "ZSTD_c_checksumFlag(plain trained dict test)",
+    );
+    let plain = compress_stream2_end_only(cctx_ptr, &src);
+
+    check_result(
+        cctx::ZSTD_CCtx_reset(
+            cctx_ptr,
+            ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+        ),
+        "ZSTD_CCtx_reset(dict trained dict test)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_compressionLevel, 3),
+        "ZSTD_c_compressionLevel(dict trained dict test)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_checksumFlag, 1),
+        "ZSTD_c_checksumFlag(dict trained dict test)",
+    );
+    check_result(
+        cdict::ZSTD_CCtx_loadDictionary(cctx_ptr, dict.as_ptr().cast(), dict.len()),
+        "ZSTD_CCtx_loadDictionary(trained dict test)",
+    );
+    let dict_compressed = compress_stream2_end_only(cctx_ptr, &src);
+
+    assert_eq!(
+        zstd::common::frame::ZSTD_getDictID_fromFrame(
+            dict_compressed.as_ptr().cast(),
+            dict_compressed.len(),
+        ),
+        ddict::ZSTD_getDictID_fromDict(dict.as_ptr().cast(), dict.len())
+    );
+    assert!(
+        dict_compressed.len() < plain.len(),
+        "trained dictionary did not improve compression size: plain={} dict={}",
+        plain.len(),
+        dict_compressed.len()
+    );
+    decompress_using_dict_exact(&dict_compressed, &dict, &src);
+
+    cctx::ZSTD_freeCCtx(cctx_ptr);
+}
+
+#[test]
+fn compress_stream2_flush_prefix_with_raw_dictionary_roundtrips() {
+    let dict_size = 64 * 1024;
+    let segment_size = 192 * 1024 + 37;
+    let segment_count = 3usize;
+    let src = pooltest_sample(dict_size + segment_count * segment_size, 118);
+    let (dict, payload) = src.split_at(dict_size);
+    let cctx_ptr = cctx::ZSTD_createCCtx();
+    let mut compressed = Vec::new();
+
+    assert!(!cctx_ptr.is_null());
+    check_result(
+        cctx::ZSTD_CCtx_reset(
+            cctx_ptr,
+            ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+        ),
+        "ZSTD_CCtx_reset(pool flush dict)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_compressionLevel, 4),
+        "ZSTD_c_compressionLevel(pool flush dict)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_checksumFlag, 1),
+        "ZSTD_c_checksumFlag(pool flush dict)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_contentSizeFlag, 1),
+        "ZSTD_c_contentSizeFlag(pool flush dict)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_nbWorkers, 3),
+        "ZSTD_c_nbWorkers(pool flush dict)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_jobSize, 128 * 1024),
+        "ZSTD_c_jobSize(pool flush dict)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_overlapLog, 4),
+        "ZSTD_c_overlapLog(pool flush dict)",
+    );
+    check_result(
+        cdict::ZSTD_CCtx_loadDictionary(cctx_ptr, dict.as_ptr().cast(), dict.len()),
+        "ZSTD_CCtx_loadDictionary(pool flush dict)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setPledgedSrcSize(cctx_ptr, payload.len() as u64),
+        "ZSTD_CCtx_setPledgedSrcSize(pool flush dict)",
+    );
+
+    for segment in 0..segment_count {
+        let chunk = &payload[segment * segment_size..(segment + 1) * segment_size];
+        let mut input = ZSTD_inBuffer {
+            src: chunk.as_ptr().cast(),
+            size: chunk.len(),
+            pos: 0,
+        };
+        while input.pos < input.size {
+            let mut out_buf = [0u8; 257];
+            let mut output = ZSTD_outBuffer {
+                dst: out_buf.as_mut_ptr().cast(),
+                size: out_buf.len(),
+                pos: 0,
+            };
+            let remaining = cstream::ZSTD_compressStream2(
+                cctx_ptr,
+                &mut output,
+                &mut input,
+                ZSTD_EndDirective::ZSTD_e_continue,
+            );
+            check_result(remaining, "ZSTD_compressStream2(pool continue)");
+            compressed.extend_from_slice(&out_buf[..output.pos]);
+            assert!(
+                output.pos != 0 || input.pos != 0,
+                "stream compression made no forward progress"
+            );
+        }
+
+        let mut flush_input = ZSTD_inBuffer {
+            src: core::ptr::null(),
+            size: 0,
+            pos: 0,
+        };
+        loop {
+            let mut out_buf = [0u8; 257];
+            let mut output = ZSTD_outBuffer {
+                dst: out_buf.as_mut_ptr().cast(),
+                size: out_buf.len(),
+                pos: 0,
+            };
+            let remaining = cstream::ZSTD_compressStream2(
+                cctx_ptr,
+                &mut output,
+                &mut flush_input,
+                ZSTD_EndDirective::ZSTD_e_flush,
+            );
+            check_result(remaining, "ZSTD_compressStream2(pool flush)");
+            compressed.extend_from_slice(&out_buf[..output.pos]);
+            if remaining == 0 {
+                break;
+            }
+            assert!(
+                output.pos != 0,
+                "drain operation stalled with pending output"
+            );
+        }
+
+        decompress_stream_prefix_with_dict_exact(
+            &compressed,
+            dict,
+            &payload[..(segment + 1) * segment_size],
+        );
+    }
+
+    cctx::ZSTD_freeCCtx(cctx_ptr);
+}
+
+#[test]
+fn compress_stream2_mt_overlap_log_changes_job_boundary_output() {
+    fn overlap_probe_sample() -> Vec<u8> {
+        let first = pooltest_sample(1024 * 1024, 0x1BAD_5EED);
+        let repeated_tail = first[first.len() - (256 * 1024)..].to_vec();
+        let mut src = first;
+        src.extend_from_slice(&repeated_tail);
+        src.extend_from_slice(&pooltest_sample(
+            1024 * 1024 - repeated_tail.len(),
+            0xC001_D00D,
+        ));
+        src
+    }
+
+    fn compress_with_overlap(src: &[u8], overlap_log: c_int) -> Vec<u8> {
+        let cctx_ptr = cctx::ZSTD_createCCtx();
+
+        assert!(!cctx_ptr.is_null());
+        check_result(
+            cctx::ZSTD_CCtx_reset(
+                cctx_ptr,
+                ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+            ),
+            "ZSTD_CCtx_reset(mt overlap probe)",
+        );
+        check_result(
+            cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_compressionLevel, 6),
+            "ZSTD_c_compressionLevel(mt overlap probe)",
+        );
+        check_result(
+            cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_windowLog, 18),
+            "ZSTD_c_windowLog(mt overlap probe)",
+        );
+        check_result(
+            cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_nbWorkers, 1),
+            "ZSTD_c_nbWorkers(mt overlap probe)",
+        );
+        check_result(
+            cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_overlapLog, overlap_log),
+            "ZSTD_c_overlapLog(mt overlap probe)",
+        );
+        let (compressed, _produced_before_end) =
+            compress_stream2_continue_then_end(cctx_ptr, src, 4096);
+        cctx::ZSTD_freeCCtx(cctx_ptr);
+        compressed
+    }
+
+    let src = overlap_probe_sample();
+    let reference = compress_with_overlap(&src, 0);
+    let overlap_9 = compress_with_overlap(&src, 9);
+    let overlap_1 = compress_with_overlap(&src, 1);
+
+    decompress_exact(&reference, &src);
+    decompress_exact(&overlap_9, &src);
+    decompress_exact(&overlap_1, &src);
+
+    assert_ne!(
+        reference.len(),
+        overlap_9.len(),
+        "default overlap should differ from full overlap on MT job boundaries"
+    );
+    assert_ne!(
+        reference.len(),
+        overlap_1.len(),
+        "default overlap should differ from no-overlap on MT job boundaries"
+    );
+    assert!(
+        overlap_9.len() < overlap_1.len(),
+        "full overlap should compress smaller than no overlap across MT jobs"
+    );
+}
+
+#[cfg(libzstd_threading)]
+#[test]
+fn compress_stream2_mt_frame_progression_tracks_started_jobs() {
+    let cctx_ptr = cctx::ZSTD_createCCtx();
+    let src = noise_bytes(5 * 1024 * 1024, 0xBAD5_EED);
+    let chunk_size = 128 * 1024;
+    let mut offset = 0usize;
+
+    assert!(
+        !cctx_ptr.is_null(),
+        "failed to create cctx for MT progression"
+    );
+    check_result(
+        cctx::ZSTD_CCtx_reset(
+            cctx_ptr,
+            ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+        ),
+        "ZSTD_CCtx_reset(mt progression)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_compressionLevel, 19),
+        "ZSTD_c_compressionLevel(mt progression)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_windowLog, 10),
+        "ZSTD_c_windowLog(mt progression)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_nbWorkers, 1),
+        "ZSTD_c_nbWorkers(mt progression)",
+    );
+
+    for _ in 0..7 {
+        let mut input = ZSTD_inBuffer {
+            src: src[offset..offset + chunk_size].as_ptr().cast(),
+            size: chunk_size,
+            pos: 0,
+        };
+        let mut out_buf = vec![0u8; cctx::ZSTD_compressBound(chunk_size) + 1024];
+        let mut output = ZSTD_outBuffer {
+            dst: out_buf.as_mut_ptr().cast(),
+            size: out_buf.len(),
+            pos: 0,
+        };
+        let remaining = cstream::ZSTD_compressStream2(
+            cctx_ptr,
+            &mut output,
+            &mut input,
+            ZSTD_EndDirective::ZSTD_e_continue,
+        );
+        check_result(remaining, "ZSTD_compressStream2(mt progression warmup)");
+        assert_eq!(
+            input.pos, chunk_size,
+            "MT warmup should accept each sub-job chunk before the first started job"
+        );
+        offset += input.pos;
+    }
+
+    let warmup = zstdmt::ZSTD_getFrameProgression(cctx_ptr);
+    assert_eq!(
+        warmup.currentJobID, 0,
+        "frame progression must not advance currentJobID before an MT job starts"
+    );
+
+    let mut saw_started_job = false;
+    while offset < src.len() {
+        let take = chunk_size.min(src.len() - offset);
+        let mut input = ZSTD_inBuffer {
+            src: src[offset..offset + take].as_ptr().cast(),
+            size: take,
+            pos: 0,
+        };
+        let mut out_buf = vec![0u8; cctx::ZSTD_compressBound(chunk_size) + 1024];
+        let mut output = ZSTD_outBuffer {
+            dst: out_buf.as_mut_ptr().cast(),
+            size: out_buf.len(),
+            pos: 0,
+        };
+        let remaining = cstream::ZSTD_compressStream2(
+            cctx_ptr,
+            &mut output,
+            &mut input,
+            ZSTD_EndDirective::ZSTD_e_continue,
+        );
+        check_result(remaining, "ZSTD_compressStream2(mt progression)");
+        offset += input.pos;
+
+        let progression = zstdmt::ZSTD_getFrameProgression(cctx_ptr);
+        if progression.currentJobID > 0 {
+            saw_started_job = true;
+            assert_eq!(
+                progression.currentJobID, 1,
+                "the first reported MT job should stay aligned with the first started job"
+            );
+            assert!(
+                progression.consumed < progression.ingested,
+                "the active MT job should leave queued input visible in frame progression"
+            );
+            break;
+        }
+    }
+
+    assert!(
+        saw_started_job,
+        "expected MT progression to report a started job after sustained streaming input"
+    );
+    cctx::ZSTD_freeCCtx(cctx_ptr);
 }
 
 #[test]

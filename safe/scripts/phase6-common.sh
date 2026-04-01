@@ -34,6 +34,73 @@ phase6_log() {
     printf '[phase6] %s\n' "$*" >&2
 }
 
+phase6_stamp_path() {
+    local name=${1:?missing stamp name}
+    local stamp_root="$PHASE6_OUT/verification-stamps"
+
+    install -d "$stamp_root"
+    printf '%s/%s.stamp\n' "$stamp_root" "$name"
+}
+
+phase6_stamp_is_fresh() {
+    local stamp_file=${1:?missing stamp file}
+    shift
+
+    [[ -f $stamp_file ]] || return 1
+
+    local dep
+    for dep in "$@"; do
+        [[ -e $dep ]] || return 1
+        if [[ -d $dep ]]; then
+            if find "$dep" -type f -newer "$stamp_file" -print -quit | grep -q .; then
+                return 1
+            fi
+        elif [[ $dep -nt $stamp_file ]]; then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+phase6_tracked_repo_paths_are_fresh() {
+    local stamp_file=${1:?missing stamp file}
+    shift
+
+    [[ -f $stamp_file ]] || return 1
+    [[ $# -gt 0 ]] || return 0
+
+    local -a pathspecs=()
+    local path
+    local rel
+    local saw_tracked=0
+
+    for path in "$@"; do
+        if [[ $path == "$REPO_ROOT" ]]; then
+            pathspecs+=(.)
+        elif [[ $path == "$REPO_ROOT/"* ]]; then
+            pathspecs+=("${path#"$REPO_ROOT/"}")
+        else
+            pathspecs+=("$path")
+        fi
+    done
+
+    while IFS= read -r -d '' rel; do
+        saw_tracked=1
+        if [[ ! -e $REPO_ROOT/$rel || $REPO_ROOT/$rel -nt $stamp_file ]]; then
+            return 1
+        fi
+    done < <(git -C "$REPO_ROOT" ls-files -z -- "${pathspecs[@]}")
+
+    [[ $saw_tracked -eq 1 ]]
+}
+
+phase6_touch_stamp() {
+    local stamp_file=${1:?missing stamp file}
+    install -d "$(dirname "$stamp_file")"
+    touch "$stamp_file"
+}
+
 phase6_abspath() {
     local path=${1:?missing path}
 

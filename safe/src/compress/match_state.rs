@@ -256,11 +256,7 @@ pub(crate) unsafe fn analyze_block_with_profile(
         [1, 4, 8]
     } else {
         let repcodes = unsafe { core::slice::from_raw_parts(repcodes, 3) };
-        [
-            repcodes[0].max(1),
-            repcodes[1].max(1),
-            repcodes[2].max(1),
-        ]
+        [repcodes[0].max(1), repcodes[1].max(1), repcodes[2].max(1)]
     };
     let mut pos = 0usize;
     let mut sequences = 0usize;

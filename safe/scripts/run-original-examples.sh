@@ -8,6 +8,21 @@ phase6_require_phase4_inputs "$0"
 phase6_export_safe_env
 
 EXAMPLES_DIR="$ORIGINAL_ROOT/examples"
+STAMP_FILE=$(phase6_stamp_path run-original-examples)
+
+if phase6_stamp_is_fresh \
+    "$STAMP_FILE" \
+    "$0" \
+    "$SCRIPT_DIR/phase6-common.sh" \
+    "$HELPER_LIB_ROOT/libzstd.a" \
+    "$HELPER_LIB_ROOT/libzstd.so.1.5.5" \
+    && phase6_tracked_repo_paths_are_fresh \
+        "$STAMP_FILE" \
+        "$EXAMPLES_DIR"
+then
+    phase6_log "upstream example coverage already fresh; skipping rerun"
+    exit 0
+fi
 
 phase6_log "building compression-focused upstream examples against the safe helper lib root"
 make -C "$EXAMPLES_DIR" clean LIBDIR="$HELPER_LIB_ROOT"
@@ -35,3 +50,4 @@ phase6_log "running compression-focused upstream examples against the safe helpe
 )
 
 make -C "$EXAMPLES_DIR" clean LIBDIR="$HELPER_LIB_ROOT"
+phase6_touch_stamp "$STAMP_FILE"

@@ -1,0 +1,3 @@
+# Generated build outputs. Keep plain `rg ... safe` focused on source artifacts.
+out/
+target/

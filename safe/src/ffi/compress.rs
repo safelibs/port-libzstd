@@ -27,7 +27,7 @@ use std::{borrow::Cow, vec::Vec};
 use structured_zstd::decoding::Dictionary as StructuredDictionary;
 use structured_zstd::encoding::{
     CompressionLevel as StructuredCompressionLevel, FrameCompressor, Matcher,
-    Sequence as StructuredSequence,
+    Sequence as StructuredSequence, StreamingBlockCompressor,
 };
 
 const ZSTD_MAGICNUMBER: u32 = 0xFD2F_B528;
@@ -40,6 +40,15 @@ const XXH64_PRIME_2: u64 = 0xC2B2_AE3D_27D4_EB4F;
 const XXH64_PRIME_3: u64 = 0x1656_67B1_9E37_79F9;
 const XXH64_PRIME_4: u64 = 0x85EB_CA77_C2B2_AE63;
 const XXH64_PRIME_5: u64 = 0x27D4_EB2F_1656_67C5;
+const ZSTDMT_JOBSIZE_MIN: usize = 512 * 1024;
+#[cfg(target_pointer_width = "32")]
+const ZSTDMT_JOBLOG_MAX: u32 = 29;
+#[cfg(not(target_pointer_width = "32"))]
+const ZSTDMT_JOBLOG_MAX: u32 = 30;
+#[cfg(target_pointer_width = "32")]
+const ZSTDMT_JOBSIZE_MAX: usize = 512 * 1024 * 1024;
+#[cfg(not(target_pointer_width = "32"))]
+const ZSTDMT_JOBSIZE_MAX: usize = 1024 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
 enum EncoderDictionaryStorage {
@@ -260,7 +269,6 @@ impl EncoderDictionary {
     }
 }
 
-#[derive(Clone, Debug, Default)]
 pub(crate) struct StreamState {
     pub(crate) input: Vec<u8>,
     pub(crate) pending: Vec<u8>,
@@ -268,9 +276,113 @@ pub(crate) struct StreamState {
     pub(crate) emitted_input: usize,
     pub(crate) produced_total: usize,
     pub(crate) flushed_total: usize,
+    pub(crate) mt_handoff_pending: bool,
     pub(crate) frame_started: bool,
     pub(crate) frame_finished: bool,
     pub(crate) deferred_header: bool,
+    structured_encoder: Option<StreamStructuredEncoder>,
+}
+
+struct StreamStructuredEncoder {
+    encoder: StreamingBlockCompressor<DictionaryMatcher>,
+    inter_job_overlap: Option<usize>,
+    emitted_jobs: usize,
+}
+
+impl StreamStructuredEncoder {
+    fn new(ctx: &EncoderContext) -> Result<Self, ZSTD_ErrorCode> {
+        let slice_size = ctx.frame_block_size().max(1);
+        let history_limit = ctx.window_size().max(1);
+        let mut history = compression_history(ctx)?
+            .map(Cow::into_owned)
+            .unwrap_or_default();
+        trim_history(&mut history, history_limit);
+        let matcher = DictionaryMatcher::new(
+            history,
+            slice_size,
+            ctx.window_size().max(slice_size),
+            normalize_compression_level(ctx.compression_level).max(1),
+        );
+        let mut encoder = StreamingBlockCompressor::new_with_matcher(
+            matcher,
+            structured_level(ctx.compression_level),
+        );
+        if let Some(dict_bytes) = structured_entropy_dictionary(ctx) {
+            let _ = encoder.seed_dictionary(dict_bytes);
+        }
+        Ok(Self {
+            encoder,
+            inter_job_overlap: (configured_mt_workers(ctx) > 0).then(|| mt_overlap_bytes(ctx)),
+            emitted_jobs: 0,
+        })
+    }
+
+    fn encode_blocks(&mut self, src: &[u8], last_block: bool) -> Vec<u8> {
+        if !src.is_empty() && self.emitted_jobs > 0 {
+            if let Some(overlap) = self.inter_job_overlap {
+                self.encoder.trim_recent_history(overlap);
+            }
+        }
+        let encoded = self.encoder.encode_blocks(src, last_block);
+        if !src.is_empty() {
+            self.emitted_jobs = self.emitted_jobs.saturating_add(1);
+        }
+        encoded
+    }
+}
+
+impl Default for StreamState {
+    fn default() -> Self {
+        Self {
+            input: Vec::new(),
+            pending: Vec::new(),
+            pending_pos: 0,
+            emitted_input: 0,
+            produced_total: 0,
+            flushed_total: 0,
+            mt_handoff_pending: false,
+            frame_started: false,
+            frame_finished: false,
+            deferred_header: false,
+            structured_encoder: None,
+        }
+    }
+}
+
+impl Clone for StreamState {
+    fn clone(&self) -> Self {
+        Self {
+            input: self.input.clone(),
+            pending: self.pending.clone(),
+            pending_pos: self.pending_pos,
+            emitted_input: self.emitted_input,
+            produced_total: self.produced_total,
+            flushed_total: self.flushed_total,
+            mt_handoff_pending: self.mt_handoff_pending,
+            frame_started: self.frame_started,
+            frame_finished: self.frame_finished,
+            deferred_header: self.deferred_header,
+            structured_encoder: None,
+        }
+    }
+}
+
+impl core::fmt::Debug for StreamState {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("StreamState")
+            .field("input_len", &self.input.len())
+            .field("pending_len", &self.pending.len())
+            .field("pending_pos", &self.pending_pos)
+            .field("emitted_input", &self.emitted_input)
+            .field("produced_total", &self.produced_total)
+            .field("flushed_total", &self.flushed_total)
+            .field("mt_handoff_pending", &self.mt_handoff_pending)
+            .field("frame_started", &self.frame_started)
+            .field("frame_finished", &self.frame_finished)
+            .field("deferred_header", &self.deferred_header)
+            .field("has_structured_encoder", &self.structured_encoder.is_some())
+            .finish()
+    }
 }
 
 impl StreamState {
@@ -281,9 +393,11 @@ impl StreamState {
         self.emitted_input = 0;
         self.produced_total = 0;
         self.flushed_total = 0;
+        self.mt_handoff_pending = false;
         self.frame_started = false;
         self.frame_finished = false;
         self.deferred_header = false;
+        self.structured_encoder = None;
     }
 
     pub(crate) fn size_of(&self) -> usize {
@@ -393,6 +507,16 @@ impl Matcher for DictionaryMatcher {
 
     fn reset(&mut self, _level: StructuredCompressionLevel) {
         self.reset_state();
+    }
+
+    fn trim_recent_history(&mut self, limit: usize) {
+        if limit == 0 {
+            self.history.clear();
+        } else if self.history.len() > limit {
+            let trim = self.history.len() - limit;
+            self.history.drain(..trim);
+        }
+        self.finder.reset();
     }
 
     fn window_size(&self) -> u64 {
@@ -1626,6 +1750,9 @@ fn structured_payload(
     );
     let mut compressor =
         FrameCompressor::new_with_matcher(matcher, structured_level(ctx.compression_level));
+    if let Some(dict_bytes) = structured_entropy_dictionary(ctx) {
+        compressor.seed_dictionary(dict_bytes);
+    }
     let mut encoded = Vec::with_capacity(src.len().saturating_add(32));
     compressor.set_source(src);
     compressor.set_drain(&mut encoded);
@@ -1662,6 +1789,12 @@ fn uses_structured_history_backend(ctx: &EncoderContext) -> bool {
         return uses_structured_history_source(dict.bytes(), dict.dict_content_type);
     }
     false
+}
+
+fn structured_entropy_dictionary<'a>(ctx: &'a EncoderContext) -> Option<&'a [u8]> {
+    ctx.dict.as_ref().and_then(|dict| {
+        uses_structured_history_source(dict.bytes(), dict.dict_content_type).then_some(dict.bytes())
+    })
 }
 
 fn payload_with_history(
@@ -1774,9 +1907,7 @@ fn default_mt_overlap_log(ctx: &EncoderContext) -> c_int {
         ZSTD_strategy::ZSTD_fast | ZSTD_strategy::ZSTD_dfast | ZSTD_strategy::ZSTD_greedy => 6,
         ZSTD_strategy::ZSTD_lazy | ZSTD_strategy::ZSTD_lazy2 => 7,
         ZSTD_strategy::ZSTD_btlazy2 => 8,
-        ZSTD_strategy::ZSTD_btopt
-        | ZSTD_strategy::ZSTD_btultra
-        | ZSTD_strategy::ZSTD_btultra2 => 9,
+        ZSTD_strategy::ZSTD_btopt | ZSTD_strategy::ZSTD_btultra | ZSTD_strategy::ZSTD_btultra2 => 9,
     }
 }
 
@@ -1834,6 +1965,37 @@ fn append_stream_payload(
         return Ok(());
     }
 
+    if stream_uses_stateful_structured_encoder(ctx) {
+        let mt_workers = configured_mt_workers(ctx);
+        let job_size = (mt_workers > 0).then(|| mt_job_size(ctx));
+        let encoded = {
+            if ctx.stream.structured_encoder.is_none() {
+                ctx.stream.structured_encoder = Some(StreamStructuredEncoder::new(ctx)?);
+            }
+            let encoder = ctx
+                .stream
+                .structured_encoder
+                .as_mut()
+                .expect("stream structured encoder initialized");
+            if mt_workers == 0 {
+                encoder.encode_blocks(src, last_block)
+            } else {
+                let mut encoded = Vec::with_capacity(src.len().saturating_add(32));
+                let mut offset = 0usize;
+                while offset < src.len() {
+                    let end = (offset + job_size.expect("mt job size available")).min(src.len());
+                    encoded.extend_from_slice(
+                        &encoder.encode_blocks(&src[offset..end], last_block && end == src.len()),
+                    );
+                    offset = end;
+                }
+                encoded
+            }
+        };
+        append_pending(&mut ctx.stream, &encoded);
+        return Ok(());
+    }
+
     let history = stream_payload_history(ctx)?;
     let mut encoded = payload_with_history(&history, src, ctx)?;
     if !encoded.is_empty() && !last_block {
@@ -1842,6 +2004,11 @@ fn append_stream_payload(
     append_pending(&mut ctx.stream, &encoded);
 
     Ok(())
+}
+
+fn stream_uses_stateful_structured_encoder(ctx: &EncoderContext) -> bool {
+    normalize_compression_level(ctx.compression_level) >= 0
+        && (ctx.dict.is_some() || ctx.prefix.is_some() || configured_mt_workers(ctx) > 0)
 }
 
 pub(crate) fn flush_stream_data(ctx: &mut EncoderContext) -> Result<(), ZSTD_ErrorCode> {
@@ -1887,12 +2054,37 @@ pub(crate) fn stream_pending_bytes(ctx: &EncoderContext) -> usize {
         .saturating_sub(ctx.stream.pending_pos)
 }
 
-fn mt_job_size(ctx: &EncoderContext) -> usize {
-    let block_size = ctx.frame_block_size().max(1).max(ZSTD_BLOCKSIZE_MAX);
-    match usize::try_from(ctx.job_size).ok().filter(|size| *size > 0) {
-        Some(job_size) => job_size.max(block_size),
-        None => block_size,
+pub(crate) fn mt_job_size(ctx: &EncoderContext) -> usize {
+    fn default_mt_job_size(ctx: &EncoderContext) -> usize {
+        let job_log = if ctx.enable_long_distance_matching {
+            let bt_scale = u32::from(
+                ctx.cparams.strategy == ZSTD_strategy::ZSTD_btlazy2
+                    || ctx.cparams.strategy == ZSTD_strategy::ZSTD_btopt
+                    || ctx.cparams.strategy == ZSTD_strategy::ZSTD_btultra
+                    || ctx.cparams.strategy == ZSTD_strategy::ZSTD_btultra2,
+            );
+            21u32.max(
+                ctx.cparams
+                    .chainLog
+                    .saturating_sub(bt_scale)
+                    .saturating_add(3),
+            )
+        } else {
+            20u32.max(ctx.cparams.windowLog.saturating_add(2))
+        }
+        .min(ZSTDMT_JOBLOG_MAX);
+        1usize << job_log.min(usize::BITS.saturating_sub(1))
     }
+
+    let block_size = ctx.frame_block_size().max(1);
+    let min_job_size = ZSTDMT_JOBSIZE_MIN
+        .max(block_size)
+        .max(mt_overlap_bytes(ctx));
+    let configured = usize::try_from(ctx.job_size)
+        .ok()
+        .filter(|size| *size > 0)
+        .unwrap_or_else(|| default_mt_job_size(ctx));
+    configured.clamp(min_job_size, ZSTDMT_JOBSIZE_MAX)
 }
 
 fn configured_mt_workers(ctx: &EncoderContext) -> usize {
@@ -1903,7 +2095,19 @@ fn configured_mt_workers(ctx: &EncoderContext) -> usize {
 }
 
 fn mt_buffer_limit(ctx: &EncoderContext) -> usize {
-    mt_job_size(ctx).saturating_mul(8)
+    let job_size = mt_job_size(ctx);
+    let slack_buffers = 2usize.saturating_add(usize::from(mt_overlap_bytes(ctx) > 0));
+    let slack_size = job_size.saturating_mul(slack_buffers);
+    let sections_size = job_size.saturating_mul(configured_mt_workers(ctx).max(1));
+    let window_log = usize::try_from(ctx.cparams.windowLog)
+        .unwrap_or(0)
+        .min((usize::BITS - 1) as usize);
+    let window_size = if ctx.enable_long_distance_matching {
+        1usize << window_log
+    } else {
+        0
+    };
+    window_size.max(sections_size).saturating_add(slack_size)
 }
 
 fn mt_buffered_bytes(ctx: &EncoderContext) -> usize {
@@ -1923,10 +2127,14 @@ fn stage_mt_continue_input(
         return Ok(0);
     }
 
+    if ctx.stream.mt_handoff_pending {
+        ctx.stream.mt_handoff_pending = false;
+        return Ok(0);
+    }
+
     let limit = mt_buffer_limit(ctx);
-    let reserve = mt_job_size(ctx);
     let buffered = mt_buffered_bytes(ctx);
-    let available = limit.saturating_sub(buffered.saturating_add(reserve));
+    let available = limit.saturating_sub(buffered);
     if available == 0 {
         return Ok(0);
     }
@@ -1956,6 +2164,7 @@ pub(crate) fn emit_mt_continue_job(ctx: &mut EncoderContext) -> Result<bool, ZST
     }
     append_stream_payload(ctx, &chunk, false)?;
     ctx.stream.emitted_input = ctx.stream.emitted_input.saturating_add(take);
+    ctx.stream.mt_handoff_pending = true;
     Ok(true)
 }
 
@@ -2033,6 +2242,14 @@ pub(crate) fn encode_block_body(
     dst_capacity: usize,
     src: &[u8],
 ) -> Result<usize, ZSTD_ErrorCode> {
+    fn finish_incompressible_block(
+        ctx: &mut EncoderContext,
+        src: &[u8],
+    ) -> Result<usize, ZSTD_ErrorCode> {
+        ctx.push_block_history(src);
+        Ok(0)
+    }
+
     let dst_slice = optional_src_slice_mut(dst, dst_capacity)
         .ok_or(ZSTD_ErrorCode::ZSTD_error_dstBuffer_wrong)?;
     if src.is_empty() {
@@ -2052,14 +2269,24 @@ pub(crate) fn encode_block_body(
         ctx.push_block_history(src);
         return Ok(0);
     }
-    let payload = payload_with_history(&history, src, ctx)?;
-    let (block_type, body) = block_body_bounds(&payload)?;
+    let payload = match payload_with_history(&history, src, ctx) {
+        Ok(payload) => payload,
+        Err(ZSTD_ErrorCode::ZSTD_error_GENERIC) => return finish_incompressible_block(ctx, src),
+        Err(err) => return Err(err),
+    };
+    let (block_type, body) = match block_body_bounds(&payload) {
+        Ok(bounds) => bounds,
+        Err(ZSTD_ErrorCode::ZSTD_error_GENERIC) => return finish_incompressible_block(ctx, src),
+        Err(err) => return Err(err),
+    };
 
     if block_type == 0 {
-        ctx.push_block_history(src);
-        return Ok(0);
+        return finish_incompressible_block(ctx, src);
     }
     if body.len() > dst_slice.len() {
+        if body.len() >= src.len() {
+            return finish_incompressible_block(ctx, src);
+        }
         return Err(ZSTD_ErrorCode::ZSTD_error_dstSize_tooSmall);
     }
     dst_slice[..body.len()].copy_from_slice(body);
@@ -3108,6 +3335,9 @@ fn explicit_sequence_payload(
     let matcher = ExternalSequenceMatcher::new(blocks.to_vec(), ctx.window_size().max(1));
     let mut compressor =
         FrameCompressor::new_with_matcher(matcher, structured_level(ctx.compression_level));
+    if let Some(dict_bytes) = structured_entropy_dictionary(ctx) {
+        compressor.seed_dictionary(dict_bytes);
+    }
     let mut encoded = Vec::with_capacity(src.len().saturating_add(32));
     compressor.set_source(src);
     compressor.set_drain(&mut encoded);

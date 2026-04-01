@@ -3,10 +3,13 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SAFE_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
+REPO_ROOT=$(cd "$SAFE_ROOT/.." && pwd)
+source "$SAFE_ROOT/scripts/phase6-common.sh"
 DEPENDENT_ROOT="$SAFE_ROOT/out/dependents"
 IMAGE_METADATA_FILE="$DEPENDENT_ROOT/image-context/metadata.env"
 LOG_ROOT="$DEPENDENT_ROOT/logs"
 COMPILE_ROOT="$DEPENDENT_ROOT/compile-compat"
+STAMP_ROOT="$DEPENDENT_ROOT/stamps"
 
 usage() {
   cat <<'EOF'
@@ -80,13 +83,37 @@ docker image inspect "$DEPENDENT_IMAGE" >/dev/null 2>&1 || {
 }
 
 install -d "$LOG_ROOT" "$COMPILE_ROOT"
+install -d "$STAMP_ROOT"
 
 log_suffix=$mode
 if [[ -n $apps_csv ]]; then
   log_suffix+="-${apps_csv//,/-}"
 fi
 log_file="$LOG_ROOT/$log_suffix.log"
-rm -f "$log_file"
+temp_log_file="$LOG_ROOT/$log_suffix.log.tmp.$$"
+stamp_file="$STAMP_ROOT/$log_suffix.stamp"
+
+if phase6_stamp_is_fresh \
+  "$stamp_file" \
+  "$0" \
+  "$SAFE_ROOT/abi/export_map.toml" \
+  "$SAFE_ROOT/Cargo.toml" \
+  "$SAFE_ROOT/out/deb/default/metadata.env" \
+  "$IMAGE_METADATA_FILE" \
+  "$REPO_ROOT/dependents.json" \
+  && phase6_tracked_repo_paths_are_fresh \
+    "$stamp_file" \
+    "$SAFE_ROOT/tests/dependents" \
+    "$SAFE_ROOT/docker/dependents" \
+    "$SAFE_ROOT/include" \
+    "$SAFE_ROOT/src"
+then
+  echo "dependent matrix mode '$mode' already fresh; skipping rerun" >&2
+  exit 0
+fi
+
+rm -f "$temp_log_file"
+trap 'rm -f "$temp_log_file"' EXIT
 
 if [[ $mode == compile || $mode == all ]]; then
   find "$COMPILE_ROOT" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
@@ -98,7 +125,7 @@ docker_args=(
   -e "HOST_GID=$(id -g)"
   -e DEPENDENT_LOG_DIR=/out/logs
   -e DEPENDENT_BUILD_DIR=/out/compile-compat
-  -e "DEPENDENT_LOG_FILE=/out/logs/$(basename "$log_file")"
+  -e "DEPENDENT_LOG_FILE=/out/logs/$(basename "$temp_log_file")"
   -v "$LOG_ROOT:/out/logs"
   -v "$COMPILE_ROOT:/out/compile-compat"
 )
@@ -125,3 +152,6 @@ if [[ -n $apps_csv ]]; then
 fi
 
 "${docker_args[@]}"
+mv -f "$temp_log_file" "$log_file"
+trap - EXIT
+touch "$stamp_file"

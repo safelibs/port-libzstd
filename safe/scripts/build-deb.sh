@@ -31,54 +31,37 @@ INSTALL_ROOT="$BUILD_ROOT/stage-root"
 METADATA_FILE="$BUILD_ROOT/metadata.env"
 
 compute_build_signature() {
-    python3 - "$SAFE_ROOT" "$UPSTREAM_ROOT" "$BUILD_TAG" "$SAFE_ENABLE_UDEB" "$MULTIARCH" "$VERSION" <<'PY'
+    python3 - "$REPO_ROOT" "$SAFE_ROOT" "$UPSTREAM_ROOT" "$BUILD_TAG" "$SAFE_ENABLE_UDEB" "$MULTIARCH" "$VERSION" <<'PY'
 from __future__ import annotations
 
 import hashlib
 import pathlib
+import subprocess
 import sys
 
-safe_root = pathlib.Path(sys.argv[1])
-upstream_root = pathlib.Path(sys.argv[2])
-params = sys.argv[3:]
+repo_root = pathlib.Path(sys.argv[1])
+safe_root = pathlib.Path(sys.argv[2])
+upstream_root = pathlib.Path(sys.argv[3])
+params = sys.argv[4:]
 
+def iter_signature_entries(root: pathlib.Path, path: pathlib.Path) -> list[pathlib.Path]:
+    if not path.exists():
+        raise SystemExit(f"missing input for deb build signature: {path}")
+    if not path.is_dir():
+        return [path]
 
-def skip_generated(entry: pathlib.Path, root: pathlib.Path) -> bool:
-    rel = entry.relative_to(root)
-    if any(part in {"obj", ".deps", ".libs", "__pycache__"} for part in rel.parts):
-        return True
-    if entry.suffix in {
-        ".o",
-        ".a",
-        ".d",
-        ".Td",
-        ".P",
-        ".so",
-        ".deb",
-        ".ddeb",
-        ".udeb",
-        ".changes",
-        ".buildinfo",
-        ".gcda",
-        ".gcno",
-        ".gcov",
-    }:
-        return True
-    if any(suffix in entry.name for suffix in (".so.",)):
-        return True
-    if entry.name in {
-        "zstd",
-        "zstd-compress",
-        "zstd-decompress",
-        "zstd-dictBuilder",
-        "zstd-frugal",
-        "zstd-nolegacy",
-        "zstd-small",
-        "zstd-nomt",
-        "pzstd",
-    }:
-        return True
-    return False
+    rel = path.relative_to(repo_root)
+    output = subprocess.check_output(
+        ["git", "-C", str(repo_root), "ls-files", "-z", "--", rel.as_posix()]
+    )
+    entries = []
+    for item in output.split(b"\0"):
+        if not item:
+            continue
+        entry = repo_root / item.decode("utf-8")
+        if entry.is_file():
+            entries.append(entry)
+    return sorted(entries)
 
 h = hashlib.sha256()
 for value in params:
@@ -118,14 +101,8 @@ for optional in (
         paths.append(optional)
 
 for path in paths:
-    if path.is_dir():
-        files = sorted(entry for entry in path.rglob("*") if entry.is_file())
-    else:
-        files = [path]
     root = safe_root if safe_root in path.parents or path == safe_root else upstream_root
-    for entry in files:
-        if root == upstream_root and skip_generated(entry, root):
-            continue
+    for entry in iter_signature_entries(root, path):
         rel = entry.relative_to(root)
         h.update(root.name.encode("utf-8"))
         h.update(b":")
@@ -242,6 +219,10 @@ fi
 
 rm -rf "$STAGE_PARENT" "$BUILD_ROOT"
 install -d "$STAGE_ROOT" "$PACKAGE_DIR" "$INSTALL_ROOT"
+DPKG_WRAPPER_DIR="$BUILD_ROOT/dpkg-bin"
+install -d "$DPKG_WRAPPER_DIR"
+ln -sfn /usr/bin/dpkg-genbuildinfo "$DPKG_WRAPPER_DIR/dpkg-genbuildinfo"
+ln -sfn /usr/bin/dpkg-genchanges "$DPKG_WRAPPER_DIR/dpkg-genchanges"
 
 rsync_tree "$SAFE_ROOT/include/" "$STAGE_ROOT/include/"
 rsync_tree "$SAFE_ROOT/src/" "$STAGE_ROOT/src/"
@@ -316,7 +297,7 @@ done
 
 (
     cd "$STAGE_ROOT"
-    dpkg-buildpackage -d -b -us -uc
+    PATH="$DPKG_WRAPPER_DIR:$PATH" dpkg-buildpackage -d -b -us -uc
 )
 
 if [[ $SAFE_ENABLE_UDEB -eq 1 ]]; then

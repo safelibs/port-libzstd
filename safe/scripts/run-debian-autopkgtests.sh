@@ -6,23 +6,37 @@ SAFE_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 REPO_ROOT=$(cd "$SAFE_ROOT/.." && pwd)
 METADATA_FILE="$SAFE_ROOT/out/deb/default/metadata.env"
 UPSTREAM_CONTROL="$REPO_ROOT/original/libzstd-1.5.5+dfsg2/debian/tests/control"
+LEGACY_AUTOPKGTEST_VENV="$SAFE_ROOT/out/deb/default/autopkgtest-venv"
+source "$SAFE_ROOT/scripts/phase6-common.sh"
 
-ensure_default_phase4_roots() {
-    bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release
-    bash "$SAFE_ROOT/scripts/build-original-cli-against-safe.sh"
-    bash "$SAFE_ROOT/scripts/build-deb.sh"
-}
+rm -rf "$LEGACY_AUTOPKGTEST_VENV"
+phase6_require_phase4_inputs "$0"
 
-ensure_default_phase4_roots
+DEB_STAGE_ROOT=$PHASE6_DEB_STAGE_ROOT
+DEB_INSTALL_ROOT=$PHASE6_DEB_INSTALL_ROOT
+DEB_MULTIARCH=$MULTIARCH
 
-source "$METADATA_FILE"
+STAMP_FILE=$(phase6_stamp_path run-debian-autopkgtests)
+if phase6_stamp_is_fresh \
+    "$STAMP_FILE" \
+    "$0" \
+    "$SCRIPT_DIR/phase6-common.sh" \
+    "$METADATA_FILE" \
+    "$UPSTREAM_CONTROL" \
+    "$DEB_STAGE_ROOT/debian/tests/control" \
+    "$DEB_STAGE_ROOT/debian/tests/requirements/install.txt" \
+    "$DEB_INSTALL_ROOT/usr/bin/zstd"
+then
+    phase6_log "Debian autopkgtests already fresh; skipping rerun"
+    exit 0
+fi
 
-if rg -n "original/libzstd-1.5.5\\+dfsg2" "$STAGE_ROOT/debian/tests" >/dev/null; then
+if rg -n "original/libzstd-1.5.5\\+dfsg2" "$DEB_STAGE_ROOT/debian/tests" >/dev/null; then
     printf 'safe/debian/tests still reference ../original\n' >&2
     exit 1
 fi
 
-python3 - "$STAGE_ROOT/debian/tests/control" "$STAGE_ROOT" <<'PY'
+python3 - "$DEB_STAGE_ROOT/debian/tests/control" "$DEB_STAGE_ROOT" <<'PY'
 from __future__ import annotations
 
 import pathlib
@@ -37,7 +51,7 @@ for rel in sorted(set(re.findall(r"debian/tests/[A-Za-z0-9_./-]+", control))):
         raise SystemExit(f"missing autopkgtest path: {rel}")
 PY
 
-python3 - "$UPSTREAM_CONTROL" "$STAGE_ROOT/debian/tests/control" <<'PY'
+python3 - "$UPSTREAM_CONTROL" "$DEB_STAGE_ROOT/debian/tests/control" <<'PY'
 from __future__ import annotations
 
 import pathlib
@@ -63,26 +77,28 @@ if upstream != safe:
     )
 PY
 
-AUTOPKGTEST_VENV="$SAFE_ROOT/out/deb/default/autopkgtest-venv"
 if ! python3 - <<'PY' >/dev/null 2>&1
 import importlib.util
 raise SystemExit(0 if importlib.util.find_spec("click") and importlib.util.find_spec("typedload") else 1)
 PY
 then
+    AUTOPKGTEST_VENV_TMPDIR=$(mktemp -d "${TMPDIR:-/tmp}/libzstd-autopkgtest-venv.XXXXXX")
+    trap 'rm -rf "$AUTOPKGTEST_VENV_TMPDIR"' EXIT
+    AUTOPKGTEST_VENV="$AUTOPKGTEST_VENV_TMPDIR/venv"
     python3 -m venv "$AUTOPKGTEST_VENV"
-    "$AUTOPKGTEST_VENV/bin/pip" install -r "$STAGE_ROOT/debian/tests/requirements/install.txt"
+    "$AUTOPKGTEST_VENV/bin/pip" install -r "$DEB_STAGE_ROOT/debian/tests/requirements/install.txt"
     export PATH="$AUTOPKGTEST_VENV/bin:$PATH"
 fi
 
-export PATH="$INSTALL_ROOT/usr/bin:$PATH"
-export LD_LIBRARY_PATH="$INSTALL_ROOT/usr/lib/$MULTIARCH${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export PKG_CONFIG_SYSROOT_DIR="$INSTALL_ROOT"
-export PKG_CONFIG_LIBDIR="$INSTALL_ROOT/usr/lib/$MULTIARCH/pkgconfig"
-export CMAKE_PREFIX_PATH="$INSTALL_ROOT/usr"
+export PATH="$DEB_INSTALL_ROOT/usr/bin:$PATH"
+export LD_LIBRARY_PATH="$DEB_INSTALL_ROOT/usr/lib/$DEB_MULTIARCH${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PKG_CONFIG_SYSROOT_DIR="$DEB_INSTALL_ROOT"
+export PKG_CONFIG_LIBDIR="$DEB_INSTALL_ROOT/usr/lib/$DEB_MULTIARCH/pkgconfig"
+export CMAKE_PREFIX_PATH="$DEB_INSTALL_ROOT/usr"
 
 assert_binary_uses_safe_package_lib() {
     local binary=$1
-    local expected="$INSTALL_ROOT/usr/lib/$MULTIARCH/libzstd.so.1"
+    local expected="$DEB_INSTALL_ROOT/usr/lib/$DEB_MULTIARCH/libzstd.so.1"
     local resolved
 
     resolved=$(
@@ -100,9 +116,9 @@ assert_binary_uses_safe_package_lib() {
     fi
 }
 
-assert_binary_uses_safe_package_lib "$INSTALL_ROOT/usr/bin/zstd"
+assert_binary_uses_safe_package_lib "$DEB_INSTALL_ROOT/usr/bin/zstd"
 
-python3 - "$STAGE_ROOT/debian/tests/control" <<'PY' |
+python3 - "$DEB_STAGE_ROOT/debian/tests/control" <<'PY' |
 from __future__ import annotations
 
 import pathlib
@@ -124,10 +140,12 @@ PY
 while IFS=$'\t' read -r feature command; do
     printf 'running autopkgtest: %s\n' "$feature"
     (
-        cd "$STAGE_ROOT"
+        cd "$DEB_STAGE_ROOT"
         sh -ec "$command" </dev/null
     ) || {
         printf 'autopkgtest failed: %s\n' "$feature" >&2
         exit 1
     }
 done
+
+phase6_touch_stamp "$STAMP_FILE"

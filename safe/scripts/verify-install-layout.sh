@@ -6,10 +6,49 @@ SAFE_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 SOURCE_DIR_NAME=libzstd-1.5.5+dfsg2
 VERSION=1.5.5
 SONAME=1
+source "$SAFE_ROOT/scripts/phase6-common.sh"
 
 MODE=artifacts
 if [[ ${1:-} == --debian ]]; then
     MODE=debian
+fi
+
+phase6_require_phase4_inputs "$0"
+
+stamp_name=verify-install-layout
+if [[ $MODE == debian ]]; then
+    stamp_name+=-debian
+fi
+ARTIFACT_STAMP="$SAFE_ROOT/out/obj/release-default/.build-artifacts.signature"
+HELPER_STAMP="$SAFE_ROOT/out/original-cli/.build-original-cli.signature"
+METADATA_FILE="$SAFE_ROOT/out/deb/default/metadata.env"
+DEFAULT_INSTALL_ROOT="$SAFE_ROOT/out/install/release-default"
+DEFAULT_HELPER_ROOT="$SAFE_ROOT/out/original-cli/lib"
+DEFAULT_STAGE_ROOT="$SAFE_ROOT/out/debian-src/default/$SOURCE_DIR_NAME"
+DEFAULT_DEB_ROOT="$SAFE_ROOT/out/deb/default"
+DEFAULT_DEB_INSTALL_ROOT="$DEFAULT_DEB_ROOT/stage-root"
+if [[ -f $METADATA_FILE ]]; then
+    # shellcheck disable=SC1090
+    source "$METADATA_FILE"
+fi
+STAMP_FILE=$(phase6_stamp_path "$stamp_name")
+if phase6_stamp_is_fresh \
+    "$STAMP_FILE" \
+    "$0" \
+    "$SCRIPT_DIR/phase6-common.sh" \
+    "$ARTIFACT_STAMP" \
+    "$HELPER_STAMP" \
+    "$METADATA_FILE" \
+    "$DEFAULT_INSTALL_ROOT/usr/include/zstd.h" \
+    "$DEFAULT_INSTALL_ROOT/usr/bin/zstd" \
+    "$DEFAULT_INSTALL_ROOT/usr/bin/pzstd" \
+    "$DEFAULT_HELPER_ROOT/libzstd.so.$VERSION" \
+    "$DEFAULT_HELPER_ROOT/libzstd.mk" \
+    "$DEFAULT_STAGE_ROOT/debian/tests/control" \
+    "$DEFAULT_DEB_INSTALL_ROOT/usr/bin/zstd"
+then
+    phase6_log "install layout verification for mode '$MODE' already fresh; skipping rerun"
+    exit 0
 fi
 
 assert_exists() {
@@ -51,21 +90,6 @@ assert_symlink_target() {
     }
 }
 
-ensure_default_phase4_roots() {
-    bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release
-    bash "$SAFE_ROOT/scripts/build-original-cli-against-safe.sh"
-    bash "$SAFE_ROOT/scripts/build-deb.sh"
-}
-
-ensure_default_phase4_roots
-
-DEFAULT_INSTALL_ROOT="$SAFE_ROOT/out/install/release-default"
-DEFAULT_HELPER_ROOT="$SAFE_ROOT/out/original-cli/lib"
-DEFAULT_STAGE_ROOT="$SAFE_ROOT/out/debian-src/default/$SOURCE_DIR_NAME"
-DEFAULT_DEB_ROOT="$SAFE_ROOT/out/deb/default"
-DEFAULT_DEB_INSTALL_ROOT="$DEFAULT_DEB_ROOT/stage-root"
-METADATA_FILE="$DEFAULT_DEB_ROOT/metadata.env"
-
 assert_exists "$DEFAULT_INSTALL_ROOT/usr/include/zstd.h"
 assert_exists "$DEFAULT_INSTALL_ROOT/usr/bin/zstd"
 assert_exists "$DEFAULT_INSTALL_ROOT/usr/bin/zstdcat"
@@ -91,6 +115,7 @@ if [[ $MODE == artifacts ]]; then
     INSTALL_ROOT="$DEFAULT_INSTALL_ROOT"
     MULTIARCH=$(dpkg-architecture -qDEB_HOST_MULTIARCH)
 else
+    # shellcheck disable=SC1090
     source "$METADATA_FILE"
 fi
 
@@ -194,3 +219,5 @@ if [[ $MODE == debian ]]; then
     assert_exists "$INSTALL_ROOT/usr/share/man/man1/zstdless.1.gz"
     assert_exists "$INSTALL_ROOT/usr/share/man/man1/pzstd.1.gz"
 fi
+
+phase6_touch_stamp "$STAMP_FILE"

@@ -9,6 +9,23 @@ phase6_ensure_datagen
 phase6_export_safe_env
 phase6_require_command rsync
 
+STAMP_FILE=$(phase6_stamp_path run-original-playtests)
+if phase6_stamp_is_fresh \
+    "$STAMP_FILE" \
+    "$0" \
+    "$SCRIPT_DIR/phase6-common.sh" \
+    "$BINDIR/zstd" \
+    "$HELPER_LIB_ROOT/libzstd.a" \
+    "$HELPER_LIB_ROOT/libzstd.so.1.5.5" \
+    && phase6_tracked_repo_paths_are_fresh \
+        "$STAMP_FILE" \
+        "$TESTS_ROOT" \
+        "$ORIGINAL_ROOT/programs"
+then
+    phase6_log "playTests.sh and variant coverage already fresh; skipping rerun"
+    exit 0
+fi
+
 stage_playtests_sandbox() {
     local sandbox_root="$PHASE6_OUT/playtests-sandbox"
 
@@ -38,3 +55,5 @@ phase6_log "running test-variants.sh against the safe library variants"
     cd "$PHASE6_VARIANTS_TESTS"
     sh ./test-variants.sh
 )
+
+phase6_touch_stamp "$STAMP_FILE"

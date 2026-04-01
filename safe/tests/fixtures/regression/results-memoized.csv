@@ -57,181 +57,181 @@ silesia.tar,level 13,compress cctx,4994002
 silesia.tar,level 16,compress cctx,5020225
 silesia.tar,level 19,compress cctx,5019857
 silesia.tar,no source size,compress cctx,5097508
-github,level -5,compress cctx,168109
-github,level -5 with dict,compress cctx,55152
-github,level -3,compress cctx,168109
-github,level -3 with dict,compress cctx,55152
-github,level -1,compress cctx,169609
-github,level -1 with dict,compress cctx,56652
-github,level 0,compress cctx,165964
-github,level 0 with dict,compress cctx,46079
-github,level 1,compress cctx,168109
-github,level 1 with dict,compress cctx,55152
-github,level 3,compress cctx,165964
-github,level 3 with dict,compress cctx,46079
-github,level 4,compress cctx,166208
-github,level 4 with dict,compress cctx,45607
-github,level 5,compress cctx,166208
-github,level 5 with dict,compress cctx,45689
-github,level 6,compress cctx,166208
-github,level 6 with dict,compress cctx,45831
-github,level 7,compress cctx,166208
-github,level 7 with dict,compress cctx,46277
-github,level 9,compress cctx,166208
-github,level 9 with dict,compress cctx,46381
-github,level 13,compress cctx,166208
-github,level 13 with dict,compress cctx,46728
-github,level 16,compress cctx,166208
-github,level 16 with dict,compress cctx,46710
-github,level 19,compress cctx,166208
-github,level 19 with dict,compress cctx,46710
-github,no source size,compress cctx,165964
-github,no source size with dict,compress cctx,46079
+github,level -5,compress cctx,168049
+github,level -5 with dict,compress cctx,50270
+github,level -3,compress cctx,168049
+github,level -3 with dict,compress cctx,50270
+github,level -1,compress cctx,169549
+github,level -1 with dict,compress cctx,51770
+github,level 0,compress cctx,165904
+github,level 0 with dict,compress cctx,40909
+github,level 1,compress cctx,168049
+github,level 1 with dict,compress cctx,50270
+github,level 3,compress cctx,165904
+github,level 3 with dict,compress cctx,40909
+github,level 4,compress cctx,166148
+github,level 4 with dict,compress cctx,40795
+github,level 5,compress cctx,166148
+github,level 5 with dict,compress cctx,40983
+github,level 6,compress cctx,166148
+github,level 6 with dict,compress cctx,41262
+github,level 7,compress cctx,166148
+github,level 7 with dict,compress cctx,42107
+github,level 9,compress cctx,166148
+github,level 9 with dict,compress cctx,42292
+github,level 13,compress cctx,166148
+github,level 13 with dict,compress cctx,42945
+github,level 16,compress cctx,166148
+github,level 16 with dict,compress cctx,42997
+github,level 19,compress cctx,166148
+github,level 19 with dict,compress cctx,42996
+github,no source size,compress cctx,165904
+github,no source size with dict,compress cctx,40909
 github.tar,level -5,compress cctx,617083
-github.tar,level -5 with dict,compress cctx,50475
+github.tar,level -5 with dict,compress cctx,49269
 github.tar,level -3,compress cctx,522928
-github.tar,level -3 with dict,compress cctx,50475
+github.tar,level -3 with dict,compress cctx,49269
 github.tar,level -1,compress cctx,51168
-github.tar,level -1 with dict,compress cctx,50478
+github.tar,level -1 with dict,compress cctx,49272
 github.tar,level 0,compress cctx,44535
-github.tar,level 0 with dict,compress cctx,43772
+github.tar,level 0 with dict,compress cctx,42974
 github.tar,level 1,compress cctx,51165
-github.tar,level 1 with dict,compress cctx,50475
+github.tar,level 1 with dict,compress cctx,49269
 github.tar,level 3,compress cctx,44535
-github.tar,level 3 with dict,compress cctx,43772
+github.tar,level 3 with dict,compress cctx,42974
 github.tar,level 4,compress cctx,42400
-github.tar,level 4 with dict,compress cctx,41634
+github.tar,level 4 with dict,compress cctx,41065
 github.tar,level 5,compress cctx,42374
-github.tar,level 5 with dict,compress cctx,41572
+github.tar,level 5 with dict,compress cctx,41018
 github.tar,level 6,compress cctx,42362
-github.tar,level 6 with dict,compress cctx,41543
+github.tar,level 6 with dict,compress cctx,40982
 github.tar,level 7,compress cctx,42337
-github.tar,level 7 with dict,compress cctx,41414
+github.tar,level 7 with dict,compress cctx,40888
 github.tar,level 9,compress cctx,42552
-github.tar,level 9 with dict,compress cctx,41473
+github.tar,level 9 with dict,compress cctx,40961
 github.tar,level 13,compress cctx,42391
-github.tar,level 13 with dict,compress cctx,41445
+github.tar,level 13 with dict,compress cctx,40935
 github.tar,level 16,compress cctx,42204
-github.tar,level 16 with dict,compress cctx,41168
+github.tar,level 16 with dict,compress cctx,40620
 github.tar,level 19,compress cctx,41932
-github.tar,level 19 with dict,compress cctx,40933
+github.tar,level 19 with dict,compress cctx,40404
 github.tar,no source size,compress cctx,44535
-github.tar,no source size with dict,compress cctx,43772
+github.tar,no source size with dict,compress cctx,42974
 silesia,level -5,zstdcli,10667125
 silesia,level -3,zstdcli,9851958
 silesia,level -1,zstdcli,5400444
-silesia,level 0,zstdcli,5089144
-silesia,level 1,zstdcli,5400408
-silesia,level 3,zstdcli,5089144
-silesia,level 4,zstdcli,5028115
-silesia,level 5,zstdcli,5021911
-silesia,level 6,zstdcli,5012919
-silesia,level 7,zstdcli,4994414
-silesia,level 9,zstdcli,4990229
-silesia,level 13,zstdcli,4986348
-silesia,level 16,zstdcli,5008548
-silesia,level 19,zstdcli,5008003
-silesia,long distance mode,zstdcli,5089144
-silesia,multithreaded,zstdcli,5089144
-silesia,multithreaded long distance mode,zstdcli,5089144
-silesia,small window log,zstdcli,7045142
-silesia,small hash log,zstdcli,5089144
-silesia,small chain log,zstdcli,5089144
-silesia,explicit params,zstdcli,5089096
-silesia.tar,level -5,zstdcli,5479109
-silesia.tar,level -3,zstdcli,5469249
-silesia.tar,level -1,zstdcli,5421765
-silesia.tar,level 0,zstdcli,5097275
-silesia.tar,level 1,zstdcli,5421510
-silesia.tar,level 3,zstdcli,5097275
-silesia.tar,level 4,zstdcli,5031872
-silesia.tar,level 5,zstdcli,5027119
-silesia.tar,level 6,zstdcli,5017472
-silesia.tar,level 7,zstdcli,4973213
-silesia.tar,level 9,zstdcli,4961117
-silesia.tar,level 13,zstdcli,4922709
-silesia.tar,level 16,zstdcli,4936623
-silesia.tar,level 19,zstdcli,4933393
-silesia.tar,no source size,zstdcli,5099552
-silesia.tar,long distance mode,zstdcli,5085519
-silesia.tar,multithreaded,zstdcli,5097275
-silesia.tar,multithreaded long distance mode,zstdcli,5085519
-silesia.tar,small window log,zstdcli,7019602
-silesia.tar,small hash log,zstdcli,5086916
-silesia.tar,small chain log,zstdcli,5086916
-silesia.tar,explicit params,zstdcli,5128503
-github,level -5,zstdcli,170109
-github,level -5 with dict,zstdcli,57152
-github,level -3,zstdcli,170109
-github,level -3 with dict,zstdcli,57152
-github,level -1,zstdcli,171609
-github,level -1 with dict,zstdcli,58652
-github,level 0,zstdcli,167964
-github,level 0 with dict,zstdcli,48079
-github,level 1,zstdcli,170109
-github,level 1 with dict,zstdcli,57152
-github,level 3,zstdcli,167964
-github,level 3 with dict,zstdcli,48079
-github,level 4,zstdcli,168208
-github,level 4 with dict,zstdcli,47607
-github,level 5,zstdcli,168208
-github,level 5 with dict,zstdcli,47689
-github,level 6,zstdcli,168208
-github,level 6 with dict,zstdcli,47831
-github,level 7,zstdcli,168208
-github,level 7 with dict,zstdcli,48277
-github,level 9,zstdcli,168208
-github,level 9 with dict,zstdcli,48381
-github,level 13,zstdcli,168208
-github,level 13 with dict,zstdcli,48728
-github,level 16,zstdcli,168208
-github,level 16 with dict,zstdcli,48710
-github,level 19,zstdcli,168208
-github,level 19 with dict,zstdcli,48710
-github,long distance mode,zstdcli,167964
-github,multithreaded,zstdcli,167964
-github,multithreaded long distance mode,zstdcli,167964
-github,small window log,zstdcli,167964
-github,small hash log,zstdcli,167964
-github,small chain log,zstdcli,167964
-github,explicit params,zstdcli,165964
+silesia,level 0,zstdcli,5076338
+silesia,level 1,zstdcli,5385642
+silesia,level 3,zstdcli,5076338
+silesia,level 4,zstdcli,5003572
+silesia,level 5,zstdcli,4998811
+silesia,level 6,zstdcli,4990359
+silesia,level 7,zstdcli,4948677
+silesia,level 9,zstdcli,4944131
+silesia,level 13,zstdcli,4905296
+silesia,level 16,zstdcli,4920911
+silesia,level 19,zstdcli,4920175
+silesia,long distance mode,zstdcli,5076338
+silesia,multithreaded,zstdcli,5076338
+silesia,multithreaded long distance mode,zstdcli,5076338
+silesia,small window log,zstdcli,7043243
+silesia,small hash log,zstdcli,5076338
+silesia,small chain log,zstdcli,5076338
+silesia,explicit params,zstdcli,5086729
+silesia.tar,level -5,zstdcli,6138416
+silesia.tar,level -3,zstdcli,5980528
+silesia.tar,level -1,zstdcli,5405192
+silesia.tar,level 0,zstdcli,5083361
+silesia.tar,level 1,zstdcli,5394023
+silesia.tar,level 3,zstdcli,5083361
+silesia.tar,level 4,zstdcli,5014784
+silesia.tar,level 5,zstdcli,5009351
+silesia.tar,level 6,zstdcli,5006631
+silesia.tar,level 7,zstdcli,4961892
+silesia.tar,level 9,zstdcli,4957631
+silesia.tar,level 13,zstdcli,4919508
+silesia.tar,level 16,zstdcli,4932839
+silesia.tar,level 19,zstdcli,4928184
+silesia.tar,no source size,zstdcli,5083358
+silesia.tar,long distance mode,zstdcli,5081752
+silesia.tar,multithreaded,zstdcli,5083361
+silesia.tar,multithreaded long distance mode,zstdcli,5081752
+silesia.tar,small window log,zstdcli,7045008
+silesia.tar,small hash log,zstdcli,5082776
+silesia.tar,small chain log,zstdcli,5082776
+silesia.tar,explicit params,zstdcli,5101280
+github,level -5,zstdcli,170049
+github,level -5 with dict,zstdcli,52270
+github,level -3,zstdcli,170049
+github,level -3 with dict,zstdcli,52270
+github,level -1,zstdcli,171549
+github,level -1 with dict,zstdcli,53770
+github,level 0,zstdcli,167904
+github,level 0 with dict,zstdcli,42909
+github,level 1,zstdcli,170049
+github,level 1 with dict,zstdcli,52270
+github,level 3,zstdcli,167904
+github,level 3 with dict,zstdcli,42909
+github,level 4,zstdcli,168148
+github,level 4 with dict,zstdcli,42795
+github,level 5,zstdcli,168148
+github,level 5 with dict,zstdcli,42983
+github,level 6,zstdcli,168148
+github,level 6 with dict,zstdcli,43262
+github,level 7,zstdcli,168148
+github,level 7 with dict,zstdcli,44107
+github,level 9,zstdcli,168148
+github,level 9 with dict,zstdcli,44292
+github,level 13,zstdcli,168148
+github,level 13 with dict,zstdcli,44945
+github,level 16,zstdcli,168148
+github,level 16 with dict,zstdcli,44997
+github,level 19,zstdcli,168148
+github,level 19 with dict,zstdcli,44996
+github,long distance mode,zstdcli,167904
+github,multithreaded,zstdcli,167904
+github,multithreaded long distance mode,zstdcli,167904
+github,small window log,zstdcli,167904
+github,small hash log,zstdcli,167904
+github,small chain log,zstdcli,167904
+github,explicit params,zstdcli,165904
 github.tar,level -5,zstdcli,617087
-github.tar,level -5 with dict,zstdcli,50479
+github.tar,level -5 with dict,zstdcli,49273
 github.tar,level -3,zstdcli,522932
-github.tar,level -3 with dict,zstdcli,50479
+github.tar,level -3 with dict,zstdcli,49273
 github.tar,level -1,zstdcli,51172
-github.tar,level -1 with dict,zstdcli,50482
-github.tar,level 0,zstdcli,44539
-github.tar,level 0 with dict,zstdcli,43776
-github.tar,level 1,zstdcli,51169
-github.tar,level 1 with dict,zstdcli,50479
-github.tar,level 3,zstdcli,44539
-github.tar,level 3 with dict,zstdcli,43776
-github.tar,level 4,zstdcli,42404
-github.tar,level 4 with dict,zstdcli,41638
-github.tar,level 5,zstdcli,42378
-github.tar,level 5 with dict,zstdcli,41576
-github.tar,level 6,zstdcli,42366
-github.tar,level 6 with dict,zstdcli,41547
-github.tar,level 7,zstdcli,42341
-github.tar,level 7 with dict,zstdcli,41418
-github.tar,level 9,zstdcli,42556
-github.tar,level 9 with dict,zstdcli,41477
-github.tar,level 13,zstdcli,42395
-github.tar,level 13 with dict,zstdcli,41449
-github.tar,level 16,zstdcli,42208
-github.tar,level 16 with dict,zstdcli,41172
-github.tar,level 19,zstdcli,41936
-github.tar,level 19 with dict,zstdcli,40937
-github.tar,no source size,zstdcli,44536
-github.tar,no source size with dict,zstdcli,43773
-github.tar,long distance mode,zstdcli,44539
-github.tar,multithreaded,zstdcli,44539
-github.tar,multithreaded long distance mode,zstdcli,44539
-github.tar,small window log,zstdcli,133826
-github.tar,small hash log,zstdcli,44539
-github.tar,small chain log,zstdcli,44539
-github.tar,explicit params,zstdcli,44535
+github.tar,level -1 with dict,zstdcli,49276
+github.tar,level 0,zstdcli,44555
+github.tar,level 0 with dict,zstdcli,42711
+github.tar,level 1,zstdcli,51131
+github.tar,level 1 with dict,zstdcli,49432
+github.tar,level 3,zstdcli,44555
+github.tar,level 3 with dict,zstdcli,42711
+github.tar,level 4,zstdcli,41721
+github.tar,level 4 with dict,zstdcli,40622
+github.tar,level 5,zstdcli,41675
+github.tar,level 5 with dict,zstdcli,40576
+github.tar,level 6,zstdcli,41675
+github.tar,level 6 with dict,zstdcli,40535
+github.tar,level 7,zstdcli,41370
+github.tar,level 7 with dict,zstdcli,40208
+github.tar,level 9,zstdcli,41404
+github.tar,level 9 with dict,zstdcli,40399
+github.tar,level 13,zstdcli,41248
+github.tar,level 13 with dict,zstdcli,40255
+github.tar,level 16,zstdcli,41322
+github.tar,level 16 with dict,zstdcli,39965
+github.tar,level 19,zstdcli,41037
+github.tar,level 19 with dict,zstdcli,39822
+github.tar,no source size,zstdcli,44552
+github.tar,no source size with dict,zstdcli,42708
+github.tar,long distance mode,zstdcli,44555
+github.tar,multithreaded,zstdcli,44555
+github.tar,multithreaded long distance mode,zstdcli,44555
+github.tar,small window log,zstdcli,133823
+github.tar,small hash log,zstdcli,44555
+github.tar,small chain log,zstdcli,44555
+github.tar,explicit params,zstdcli,44223
 silesia,level -5,advanced one pass,10667077
 silesia,level -3,advanced one pass,9851910
 silesia,level -1,advanced one pass,5400396
@@ -250,7 +250,7 @@ silesia,no source size,advanced one pass,5089096
 silesia,long distance mode,advanced one pass,5089096
 silesia,multithreaded,advanced one pass,5089096
 silesia,multithreaded long distance mode,advanced one pass,5089096
-silesia,small window log,advanced one pass,7045094
+silesia,small window log,advanced one pass,7043195
 silesia,small hash log,advanced one pass,5089096
 silesia,small chain log,advanced one pass,5089096
 silesia,explicit params,advanced one pass,5089108
@@ -272,77 +272,77 @@ silesia.tar,no source size,advanced one pass,5097508
 silesia.tar,long distance mode,advanced one pass,5097508
 silesia.tar,multithreaded,advanced one pass,5097508
 silesia.tar,multithreaded long distance mode,advanced one pass,5097508
-silesia.tar,small window log,advanced one pass,7044391
+silesia.tar,small window log,advanced one pass,7042560
 silesia.tar,small hash log,advanced one pass,5097508
 silesia.tar,small chain log,advanced one pass,5097508
 silesia.tar,explicit params,advanced one pass,5097509
-github,level -5,advanced one pass,168109
-github,level -5 with dict,advanced one pass,55152
-github,level -3,advanced one pass,168109
-github,level -3 with dict,advanced one pass,55152
-github,level -1,advanced one pass,169609
-github,level -1 with dict,advanced one pass,56652
-github,level 0,advanced one pass,165964
-github,level 0 with dict,advanced one pass,46079
-github,level 1,advanced one pass,168109
-github,level 1 with dict,advanced one pass,55152
-github,level 3,advanced one pass,165964
-github,level 3 with dict,advanced one pass,46079
-github,level 4,advanced one pass,166208
-github,level 4 with dict,advanced one pass,45607
-github,level 5,advanced one pass,166208
-github,level 5 with dict,advanced one pass,45689
-github,level 6,advanced one pass,166208
-github,level 6 with dict,advanced one pass,45831
-github,level 7,advanced one pass,166208
-github,level 7 with dict,advanced one pass,46277
-github,level 9,advanced one pass,166208
-github,level 9 with dict,advanced one pass,46381
-github,level 13,advanced one pass,166208
-github,level 13 with dict,advanced one pass,46728
-github,level 16,advanced one pass,166208
-github,level 16 with dict,advanced one pass,46710
-github,level 19,advanced one pass,166208
-github,level 19 with dict,advanced one pass,46710
-github,no source size,advanced one pass,165964
-github,no source size with dict,advanced one pass,46079
-github,long distance mode,advanced one pass,165964
-github,multithreaded,advanced one pass,165964
-github,multithreaded long distance mode,advanced one pass,165964
-github,small window log,advanced one pass,165964
-github,small hash log,advanced one pass,165964
-github,small chain log,advanced one pass,165964
-github,explicit params,advanced one pass,167494
+github,level -5,advanced one pass,168049
+github,level -5 with dict,advanced one pass,50270
+github,level -3,advanced one pass,168049
+github,level -3 with dict,advanced one pass,50270
+github,level -1,advanced one pass,169549
+github,level -1 with dict,advanced one pass,51770
+github,level 0,advanced one pass,165904
+github,level 0 with dict,advanced one pass,40909
+github,level 1,advanced one pass,168049
+github,level 1 with dict,advanced one pass,50270
+github,level 3,advanced one pass,165904
+github,level 3 with dict,advanced one pass,40909
+github,level 4,advanced one pass,166148
+github,level 4 with dict,advanced one pass,40795
+github,level 5,advanced one pass,166148
+github,level 5 with dict,advanced one pass,40983
+github,level 6,advanced one pass,166148
+github,level 6 with dict,advanced one pass,41262
+github,level 7,advanced one pass,166148
+github,level 7 with dict,advanced one pass,42107
+github,level 9,advanced one pass,166148
+github,level 9 with dict,advanced one pass,42292
+github,level 13,advanced one pass,166148
+github,level 13 with dict,advanced one pass,42945
+github,level 16,advanced one pass,166148
+github,level 16 with dict,advanced one pass,42997
+github,level 19,advanced one pass,166148
+github,level 19 with dict,advanced one pass,42996
+github,no source size,advanced one pass,165904
+github,no source size with dict,advanced one pass,40909
+github,long distance mode,advanced one pass,165904
+github,multithreaded,advanced one pass,165904
+github,multithreaded long distance mode,advanced one pass,165904
+github,small window log,advanced one pass,165904
+github,small hash log,advanced one pass,165904
+github,small chain log,advanced one pass,165904
+github,explicit params,advanced one pass,167434
 github.tar,level -5,advanced one pass,617083
-github.tar,level -5 with dict,advanced one pass,50475
+github.tar,level -5 with dict,advanced one pass,49269
 github.tar,level -3,advanced one pass,522928
-github.tar,level -3 with dict,advanced one pass,50475
+github.tar,level -3 with dict,advanced one pass,49269
 github.tar,level -1,advanced one pass,51168
-github.tar,level -1 with dict,advanced one pass,50478
+github.tar,level -1 with dict,advanced one pass,49272
 github.tar,level 0,advanced one pass,44535
-github.tar,level 0 with dict,advanced one pass,43772
+github.tar,level 0 with dict,advanced one pass,42974
 github.tar,level 1,advanced one pass,51165
-github.tar,level 1 with dict,advanced one pass,50475
+github.tar,level 1 with dict,advanced one pass,49269
 github.tar,level 3,advanced one pass,44535
-github.tar,level 3 with dict,advanced one pass,43772
+github.tar,level 3 with dict,advanced one pass,42974
 github.tar,level 4,advanced one pass,42400
-github.tar,level 4 with dict,advanced one pass,41634
+github.tar,level 4 with dict,advanced one pass,41065
 github.tar,level 5,advanced one pass,42374
-github.tar,level 5 with dict,advanced one pass,41572
+github.tar,level 5 with dict,advanced one pass,41018
 github.tar,level 6,advanced one pass,42362
-github.tar,level 6 with dict,advanced one pass,41543
+github.tar,level 6 with dict,advanced one pass,40982
 github.tar,level 7,advanced one pass,42337
-github.tar,level 7 with dict,advanced one pass,41414
+github.tar,level 7 with dict,advanced one pass,40888
 github.tar,level 9,advanced one pass,42552
-github.tar,level 9 with dict,advanced one pass,41473
+github.tar,level 9 with dict,advanced one pass,40961
 github.tar,level 13,advanced one pass,42391
-github.tar,level 13 with dict,advanced one pass,41445
+github.tar,level 13 with dict,advanced one pass,40935
 github.tar,level 16,advanced one pass,42204
-github.tar,level 16 with dict,advanced one pass,41168
+github.tar,level 16 with dict,advanced one pass,40620
 github.tar,level 19,advanced one pass,41932
-github.tar,level 19 with dict,advanced one pass,40933
+github.tar,level 19 with dict,advanced one pass,40404
 github.tar,no source size,advanced one pass,44535
-github.tar,no source size with dict,advanced one pass,43772
+github.tar,no source size with dict,advanced one pass,42974
 github.tar,long distance mode,advanced one pass,44535
 github.tar,multithreaded,advanced one pass,44535
 github.tar,multithreaded long distance mode,advanced one pass,44535
@@ -368,7 +368,7 @@ silesia,no source size,advanced one pass small out,5089096
 silesia,long distance mode,advanced one pass small out,5089096
 silesia,multithreaded,advanced one pass small out,5089096
 silesia,multithreaded long distance mode,advanced one pass small out,5089096
-silesia,small window log,advanced one pass small out,7045094
+silesia,small window log,advanced one pass small out,7043195
 silesia,small hash log,advanced one pass small out,5089096
 silesia,small chain log,advanced one pass small out,5089096
 silesia,explicit params,advanced one pass small out,5089108
@@ -390,77 +390,77 @@ silesia.tar,no source size,advanced one pass small out,5097508
 silesia.tar,long distance mode,advanced one pass small out,5097508
 silesia.tar,multithreaded,advanced one pass small out,5097508
 silesia.tar,multithreaded long distance mode,advanced one pass small out,5097508
-silesia.tar,small window log,advanced one pass small out,7044391
+silesia.tar,small window log,advanced one pass small out,7042560
 silesia.tar,small hash log,advanced one pass small out,5097508
 silesia.tar,small chain log,advanced one pass small out,5097508
 silesia.tar,explicit params,advanced one pass small out,5097509
-github,level -5,advanced one pass small out,168109
-github,level -5 with dict,advanced one pass small out,55152
-github,level -3,advanced one pass small out,168109
-github,level -3 with dict,advanced one pass small out,55152
-github,level -1,advanced one pass small out,169609
-github,level -1 with dict,advanced one pass small out,56652
-github,level 0,advanced one pass small out,165964
-github,level 0 with dict,advanced one pass small out,46079
-github,level 1,advanced one pass small out,168109
-github,level 1 with dict,advanced one pass small out,55152
-github,level 3,advanced one pass small out,165964
-github,level 3 with dict,advanced one pass small out,46079
-github,level 4,advanced one pass small out,166208
-github,level 4 with dict,advanced one pass small out,45607
-github,level 5,advanced one pass small out,166208
-github,level 5 with dict,advanced one pass small out,45689
-github,level 6,advanced one pass small out,166208
-github,level 6 with dict,advanced one pass small out,45831
-github,level 7,advanced one pass small out,166208
-github,level 7 with dict,advanced one pass small out,46277
-github,level 9,advanced one pass small out,166208
-github,level 9 with dict,advanced one pass small out,46381
-github,level 13,advanced one pass small out,166208
-github,level 13 with dict,advanced one pass small out,46728
-github,level 16,advanced one pass small out,166208
-github,level 16 with dict,advanced one pass small out,46710
-github,level 19,advanced one pass small out,166208
-github,level 19 with dict,advanced one pass small out,46710
-github,no source size,advanced one pass small out,165964
-github,no source size with dict,advanced one pass small out,46079
-github,long distance mode,advanced one pass small out,165964
-github,multithreaded,advanced one pass small out,165964
-github,multithreaded long distance mode,advanced one pass small out,165964
-github,small window log,advanced one pass small out,165964
-github,small hash log,advanced one pass small out,165964
-github,small chain log,advanced one pass small out,165964
-github,explicit params,advanced one pass small out,167494
+github,level -5,advanced one pass small out,168049
+github,level -5 with dict,advanced one pass small out,50270
+github,level -3,advanced one pass small out,168049
+github,level -3 with dict,advanced one pass small out,50270
+github,level -1,advanced one pass small out,169549
+github,level -1 with dict,advanced one pass small out,51770
+github,level 0,advanced one pass small out,165904
+github,level 0 with dict,advanced one pass small out,40909
+github,level 1,advanced one pass small out,168049
+github,level 1 with dict,advanced one pass small out,50270
+github,level 3,advanced one pass small out,165904
+github,level 3 with dict,advanced one pass small out,40909
+github,level 4,advanced one pass small out,166148
+github,level 4 with dict,advanced one pass small out,40795
+github,level 5,advanced one pass small out,166148
+github,level 5 with dict,advanced one pass small out,40983
+github,level 6,advanced one pass small out,166148
+github,level 6 with dict,advanced one pass small out,41262
+github,level 7,advanced one pass small out,166148
+github,level 7 with dict,advanced one pass small out,42107
+github,level 9,advanced one pass small out,166148
+github,level 9 with dict,advanced one pass small out,42292
+github,level 13,advanced one pass small out,166148
+github,level 13 with dict,advanced one pass small out,42945
+github,level 16,advanced one pass small out,166148
+github,level 16 with dict,advanced one pass small out,42997
+github,level 19,advanced one pass small out,166148
+github,level 19 with dict,advanced one pass small out,42996
+github,no source size,advanced one pass small out,165904
+github,no source size with dict,advanced one pass small out,40909
+github,long distance mode,advanced one pass small out,165904
+github,multithreaded,advanced one pass small out,165904
+github,multithreaded long distance mode,advanced one pass small out,165904
+github,small window log,advanced one pass small out,165904
+github,small hash log,advanced one pass small out,165904
+github,small chain log,advanced one pass small out,165904
+github,explicit params,advanced one pass small out,167434
 github.tar,level -5,advanced one pass small out,617083
-github.tar,level -5 with dict,advanced one pass small out,50475
+github.tar,level -5 with dict,advanced one pass small out,49269
 github.tar,level -3,advanced one pass small out,522928
-github.tar,level -3 with dict,advanced one pass small out,50475
+github.tar,level -3 with dict,advanced one pass small out,49269
 github.tar,level -1,advanced one pass small out,51168
-github.tar,level -1 with dict,advanced one pass small out,50478
+github.tar,level -1 with dict,advanced one pass small out,49272
 github.tar,level 0,advanced one pass small out,44535
-github.tar,level 0 with dict,advanced one pass small out,43772
+github.tar,level 0 with dict,advanced one pass small out,42974
 github.tar,level 1,advanced one pass small out,51165
-github.tar,level 1 with dict,advanced one pass small out,50475
+github.tar,level 1 with dict,advanced one pass small out,49269
 github.tar,level 3,advanced one pass small out,44535
-github.tar,level 3 with dict,advanced one pass small out,43772
+github.tar,level 3 with dict,advanced one pass small out,42974
 github.tar,level 4,advanced one pass small out,42400
-github.tar,level 4 with dict,advanced one pass small out,41634
+github.tar,level 4 with dict,advanced one pass small out,41065
 github.tar,level 5,advanced one pass small out,42374
-github.tar,level 5 with dict,advanced one pass small out,41572
+github.tar,level 5 with dict,advanced one pass small out,41018
 github.tar,level 6,advanced one pass small out,42362
-github.tar,level 6 with dict,advanced one pass small out,41543
+github.tar,level 6 with dict,advanced one pass small out,40982
 github.tar,level 7,advanced one pass small out,42337
-github.tar,level 7 with dict,advanced one pass small out,41414
+github.tar,level 7 with dict,advanced one pass small out,40888
 github.tar,level 9,advanced one pass small out,42552
-github.tar,level 9 with dict,advanced one pass small out,41473
+github.tar,level 9 with dict,advanced one pass small out,40961
 github.tar,level 13,advanced one pass small out,42391
-github.tar,level 13 with dict,advanced one pass small out,41445
+github.tar,level 13 with dict,advanced one pass small out,40935
 github.tar,level 16,advanced one pass small out,42204
-github.tar,level 16 with dict,advanced one pass small out,41168
+github.tar,level 16 with dict,advanced one pass small out,40620
 github.tar,level 19,advanced one pass small out,41932
-github.tar,level 19 with dict,advanced one pass small out,40933
+github.tar,level 19 with dict,advanced one pass small out,40404
 github.tar,no source size,advanced one pass small out,44535
-github.tar,no source size with dict,advanced one pass small out,43772
+github.tar,no source size with dict,advanced one pass small out,42974
 github.tar,long distance mode,advanced one pass small out,44535
 github.tar,multithreaded,advanced one pass small out,44535
 github.tar,multithreaded long distance mode,advanced one pass small out,44535
@@ -486,7 +486,7 @@ silesia,no source size,advanced streaming,5089060
 silesia,long distance mode,advanced streaming,5089096
 silesia,multithreaded,advanced streaming,5089096
 silesia,multithreaded long distance mode,advanced streaming,5089096
-silesia,small window log,advanced streaming,7045094
+silesia,small window log,advanced streaming,7043195
 silesia,small hash log,advanced streaming,5089096
 silesia,small chain log,advanced streaming,5089096
 silesia,explicit params,advanced streaming,5089108
@@ -508,77 +508,77 @@ silesia.tar,no source size,advanced streaming,5097505
 silesia.tar,long distance mode,advanced streaming,5097508
 silesia.tar,multithreaded,advanced streaming,5097508
 silesia.tar,multithreaded long distance mode,advanced streaming,5097508
-silesia.tar,small window log,advanced streaming,7044391
+silesia.tar,small window log,advanced streaming,7042560
 silesia.tar,small hash log,advanced streaming,5097508
 silesia.tar,small chain log,advanced streaming,5097508
 silesia.tar,explicit params,advanced streaming,5097509
-github,level -5,advanced streaming,168109
-github,level -5 with dict,advanced streaming,55152
-github,level -3,advanced streaming,168109
-github,level -3 with dict,advanced streaming,55152
-github,level -1,advanced streaming,169609
-github,level -1 with dict,advanced streaming,56652
-github,level 0,advanced streaming,165964
-github,level 0 with dict,advanced streaming,46079
-github,level 1,advanced streaming,168109
-github,level 1 with dict,advanced streaming,55152
-github,level 3,advanced streaming,165964
-github,level 3 with dict,advanced streaming,46079
-github,level 4,advanced streaming,166208
-github,level 4 with dict,advanced streaming,45607
-github,level 5,advanced streaming,166208
-github,level 5 with dict,advanced streaming,45689
-github,level 6,advanced streaming,166208
-github,level 6 with dict,advanced streaming,45831
-github,level 7,advanced streaming,166208
-github,level 7 with dict,advanced streaming,46277
-github,level 9,advanced streaming,166208
-github,level 9 with dict,advanced streaming,46381
-github,level 13,advanced streaming,166208
-github,level 13 with dict,advanced streaming,46728
-github,level 16,advanced streaming,166208
-github,level 16 with dict,advanced streaming,46710
-github,level 19,advanced streaming,166208
-github,level 19 with dict,advanced streaming,46710
-github,no source size,advanced streaming,165494
-github,no source size with dict,advanced streaming,45609
-github,long distance mode,advanced streaming,165964
-github,multithreaded,advanced streaming,165964
-github,multithreaded long distance mode,advanced streaming,165964
-github,small window log,advanced streaming,165964
-github,small hash log,advanced streaming,165964
-github,small chain log,advanced streaming,165964
-github,explicit params,advanced streaming,167494
+github,level -5,advanced streaming,168049
+github,level -5 with dict,advanced streaming,50270
+github,level -3,advanced streaming,168049
+github,level -3 with dict,advanced streaming,50270
+github,level -1,advanced streaming,169549
+github,level -1 with dict,advanced streaming,51770
+github,level 0,advanced streaming,165904
+github,level 0 with dict,advanced streaming,40909
+github,level 1,advanced streaming,168049
+github,level 1 with dict,advanced streaming,50270
+github,level 3,advanced streaming,165904
+github,level 3 with dict,advanced streaming,40909
+github,level 4,advanced streaming,166148
+github,level 4 with dict,advanced streaming,40795
+github,level 5,advanced streaming,166148
+github,level 5 with dict,advanced streaming,40983
+github,level 6,advanced streaming,166148
+github,level 6 with dict,advanced streaming,41262
+github,level 7,advanced streaming,166148
+github,level 7 with dict,advanced streaming,42107
+github,level 9,advanced streaming,166148
+github,level 9 with dict,advanced streaming,42292
+github,level 13,advanced streaming,166148
+github,level 13 with dict,advanced streaming,42945
+github,level 16,advanced streaming,166148
+github,level 16 with dict,advanced streaming,42997
+github,level 19,advanced streaming,166148
+github,level 19 with dict,advanced streaming,42996
+github,no source size,advanced streaming,165434
+github,no source size with dict,advanced streaming,40439
+github,long distance mode,advanced streaming,165904
+github,multithreaded,advanced streaming,165904
+github,multithreaded long distance mode,advanced streaming,165904
+github,small window log,advanced streaming,165904
+github,small hash log,advanced streaming,165904
+github,small chain log,advanced streaming,165904
+github,explicit params,advanced streaming,167434
 github.tar,level -5,advanced streaming,617083
-github.tar,level -5 with dict,advanced streaming,50475
+github.tar,level -5 with dict,advanced streaming,49269
 github.tar,level -3,advanced streaming,522928
-github.tar,level -3 with dict,advanced streaming,50475
+github.tar,level -3 with dict,advanced streaming,49269
 github.tar,level -1,advanced streaming,51168
-github.tar,level -1 with dict,advanced streaming,50478
+github.tar,level -1 with dict,advanced streaming,49272
 github.tar,level 0,advanced streaming,44535
-github.tar,level 0 with dict,advanced streaming,43772
+github.tar,level 0 with dict,advanced streaming,42974
 github.tar,level 1,advanced streaming,51165
-github.tar,level 1 with dict,advanced streaming,50475
+github.tar,level 1 with dict,advanced streaming,49269
 github.tar,level 3,advanced streaming,44535
-github.tar,level 3 with dict,advanced streaming,43772
+github.tar,level 3 with dict,advanced streaming,42974
 github.tar,level 4,advanced streaming,42400
-github.tar,level 4 with dict,advanced streaming,41634
+github.tar,level 4 with dict,advanced streaming,41065
 github.tar,level 5,advanced streaming,42374
-github.tar,level 5 with dict,advanced streaming,41572
+github.tar,level 5 with dict,advanced streaming,41018
 github.tar,level 6,advanced streaming,42362
-github.tar,level 6 with dict,advanced streaming,41543
+github.tar,level 6 with dict,advanced streaming,40982
 github.tar,level 7,advanced streaming,42337
-github.tar,level 7 with dict,advanced streaming,41414
+github.tar,level 7 with dict,advanced streaming,40888
 github.tar,level 9,advanced streaming,42552
-github.tar,level 9 with dict,advanced streaming,41473
+github.tar,level 9 with dict,advanced streaming,40961
 github.tar,level 13,advanced streaming,42391
-github.tar,level 13 with dict,advanced streaming,41445
+github.tar,level 13 with dict,advanced streaming,40935
 github.tar,level 16,advanced streaming,42204
-github.tar,level 16 with dict,advanced streaming,41168
+github.tar,level 16 with dict,advanced streaming,40620
 github.tar,level 19,advanced streaming,41932
-github.tar,level 19 with dict,advanced streaming,40933
+github.tar,level 19 with dict,advanced streaming,40404
 github.tar,no source size,advanced streaming,44532
-github.tar,no source size with dict,advanced streaming,43769
+github.tar,no source size with dict,advanced streaming,42704
 github.tar,long distance mode,advanced streaming,44535
 github.tar,multithreaded,advanced streaming,44535
 github.tar,multithreaded long distance mode,advanced streaming,44535

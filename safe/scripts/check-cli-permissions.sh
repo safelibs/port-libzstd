@@ -9,6 +9,19 @@ phase6_require_phase4_inputs "$0"
 phase6_export_safe_env
 phase6_assert_uses_safe_lib "$BINDIR/zstd"
 
+STAMP_FILE=$(phase6_stamp_path check-cli-permissions)
+if phase6_stamp_is_fresh \
+    "$STAMP_FILE" \
+    "$0" \
+    "$SCRIPT_DIR/phase6-common.sh" \
+    "$SAFE_ROOT/scripts" \
+    "$REPO_ROOT/relevant_cves.json" \
+    "$BINDIR/zstd"
+then
+    phase6_log "CLI permission audit already fresh; skipping rerun"
+    exit 0
+fi
+
 WORK_DIR="$PHASE6_OUT/cli-permissions"
 rm -rf "$WORK_DIR"
 install -d "$WORK_DIR"
@@ -117,3 +130,5 @@ phase6_log "checking $DECOMPRESS_PERMISSION_CVE creation mode on decompression o
     exit 1
 }
 require_atomic_mode decompress 'source\.bin\.out' 400 'decompression output'
+
+phase6_touch_stamp "$STAMP_FILE"

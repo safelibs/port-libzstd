@@ -12,7 +12,14 @@ use super::{
     CompressionLevel, Matcher, block_header::BlockHeader, frame_header::FrameHeader, levels::*,
     match_generator::MatchGeneratorDriver,
 };
-use crate::fse::fse_encoder::{FSETable, default_ll_table, default_ml_table, default_of_table};
+use crate::{
+    decoding::dictionary::Dictionary,
+    fse::fse_encoder::{
+        FSETable, build_table_from_probabilities, default_ll_table, default_ml_table,
+        default_of_table,
+    },
+    huff0::huff0_encoder::HuffmanTable,
+};
 
 use crate::io::{Read, Write};
 
@@ -39,9 +46,17 @@ pub struct FrameCompressor<R: Read, W: Write, M: Matcher> {
     uncompressed_data: Option<R>,
     compressed_data: Option<W>,
     compression_level: CompressionLevel,
+    seeded_dictionary: Option<Vec<u8>>,
     state: CompressState<M>,
     #[cfg(feature = "hash")]
     hasher: XxHash64,
+}
+
+/// A stateful block encoder that preserves block-local compression state
+/// across multiple calls so callers can build one frame incrementally.
+pub struct StreamingBlockCompressor<M: Matcher> {
+    compression_level: CompressionLevel,
+    state: CompressState<M>,
 }
 
 #[derive(Clone)]
@@ -61,6 +76,7 @@ impl PreviousFseTable {
     }
 }
 
+#[derive(Clone)]
 pub(crate) struct FseTables {
     pub(crate) ll_default: FSETable,
     pub(crate) ll_previous: Option<PreviousFseTable>,
@@ -99,6 +115,7 @@ impl<R: Read, W: Write> FrameCompressor<R, W, MatchGeneratorDriver> {
             uncompressed_data: None,
             compressed_data: None,
             compression_level,
+            seeded_dictionary: None,
             state: CompressState {
                 matcher: MatchGeneratorDriver::new(1024 * 128, 1),
                 last_huff_table: None,
@@ -117,6 +134,7 @@ impl<R: Read, W: Write, M: Matcher> FrameCompressor<R, W, M> {
         Self {
             uncompressed_data: None,
             compressed_data: None,
+            seeded_dictionary: None,
             state: CompressState {
                 matcher,
                 last_huff_table: None,
@@ -143,6 +161,17 @@ impl<R: Read, W: Write, M: Matcher> FrameCompressor<R, W, M> {
         self.compressed_data.replace(compressed_data)
     }
 
+    /// Seed the frame state from a formatted dictionary so the first block can
+    /// reuse the dictionary's entropy tables and repeat offsets.
+    pub fn seed_dictionary(&mut self, raw: &[u8]) -> bool {
+        if Dictionary::decode_dict(raw).is_err() {
+            return false;
+        }
+        self.seeded_dictionary = Some(raw.to_vec());
+        self.apply_seeded_dictionary();
+        true
+    }
+
     /// Compress the uncompressed data from the provided source as one Zstd frame and write it to the provided drain
     ///
     /// This will repeatedly call [Read::read] on the source to fill up blocks until the source returns 0 on the read call.
@@ -152,12 +181,8 @@ impl<R: Read, W: Write, M: Matcher> FrameCompressor<R, W, M> {
     /// [Read::take] function
     pub fn compress(&mut self) {
         // Clearing buffers to allow re-using of the compressor
-        self.state.matcher.reset(self.compression_level);
-        self.state.last_huff_table = None;
-        self.state.fse_tables.ll_previous = None;
-        self.state.fse_tables.ml_previous = None;
-        self.state.fse_tables.of_previous = None;
-        self.state.offset_hist = [1, 4, 8];
+        reset_compress_state(&mut self.state, self.compression_level);
+        self.apply_seeded_dictionary();
         #[cfg(feature = "hash")]
         {
             self.hasher = XxHash64::with_seed(0);
@@ -301,6 +326,135 @@ impl<R: Read, W: Write, M: Matcher> FrameCompressor<R, W, M> {
     pub fn compression_level(&self) -> CompressionLevel {
         self.compression_level
     }
+
+    fn apply_seeded_dictionary(&mut self) {
+        let Some(raw) = self.seeded_dictionary.as_deref() else {
+            return;
+        };
+        let _ = apply_dictionary_to_state(&mut self.state, raw);
+    }
+}
+
+impl<M: Matcher> StreamingBlockCompressor<M> {
+    /// Create a new stateful block compressor with a custom matcher.
+    pub fn new_with_matcher(matcher: M, compression_level: CompressionLevel) -> Self {
+        let mut compressor = Self {
+            compression_level,
+            state: CompressState {
+                matcher,
+                last_huff_table: None,
+                fse_tables: FseTables::new(),
+                offset_hist: [1, 4, 8],
+            },
+        };
+        compressor.reset();
+        compressor
+    }
+
+    /// Reset state for the start of a new frame.
+    pub fn reset(&mut self) {
+        reset_compress_state(&mut self.state, self.compression_level);
+    }
+
+    /// Seed the block state from a formatted dictionary.
+    pub fn seed_dictionary(&mut self, raw: &[u8]) -> bool {
+        apply_dictionary_to_state(&mut self.state, raw)
+    }
+
+    /// Trim retained matcher history before encoding the next logical job.
+    pub fn trim_recent_history(&mut self, limit: usize) {
+        self.state.matcher.trim_recent_history(limit);
+    }
+
+    /// Encode one or more blocks, preserving entropy and repeat-offset state
+    /// for subsequent calls. The returned bytes do not include a frame header
+    /// or checksum trailer.
+    pub fn encode_blocks(&mut self, src: &[u8], last_block: bool) -> Vec<u8> {
+        let mut output = Vec::with_capacity(src.len().saturating_add(32));
+
+        if src.is_empty() {
+            if last_block {
+                let header = BlockHeader {
+                    last_block: true,
+                    block_type: crate::blocks::block::BlockType::Raw,
+                    block_size: 0,
+                };
+                header.serialize(&mut output);
+            }
+            return output;
+        }
+
+        let mut input_pos = 0usize;
+        while input_pos < src.len() {
+            let mut block = self.state.matcher.get_next_space();
+            let take = (src.len() - input_pos).min(block.len());
+            block[..take].copy_from_slice(&src[input_pos..input_pos + take]);
+            block.truncate(take);
+            let is_last_block = last_block && input_pos + take == src.len();
+            match self.compression_level {
+                CompressionLevel::Uncompressed => {
+                    let header = BlockHeader {
+                        last_block: is_last_block,
+                        block_type: crate::blocks::block::BlockType::Raw,
+                        block_size: take.try_into().unwrap(),
+                    };
+                    header.serialize(&mut output);
+                    output.extend_from_slice(&block);
+                }
+                CompressionLevel::Fastest | CompressionLevel::Default => {
+                    compress_fastest(&mut self.state, is_last_block, block, &mut output);
+                }
+                _ => {
+                    unimplemented!();
+                }
+            }
+            input_pos += take;
+        }
+
+        output
+    }
+}
+
+fn reset_compress_state<M: Matcher>(
+    state: &mut CompressState<M>,
+    compression_level: CompressionLevel,
+) {
+    state.matcher.reset(compression_level);
+    state.last_huff_table = None;
+    state.fse_tables.ll_previous = None;
+    state.fse_tables.ml_previous = None;
+    state.fse_tables.of_previous = None;
+    state.offset_hist = [1, 4, 8];
+}
+
+fn apply_dictionary_to_state<M: Matcher>(state: &mut CompressState<M>, raw: &[u8]) -> bool {
+    let Ok(dict) = Dictionary::decode_dict(raw) else {
+        return false;
+    };
+
+    state.last_huff_table = Some(HuffmanTable::build_from_weights(
+        &dict.huf.table.encoder_weights(),
+    ));
+    state.fse_tables.ll_previous = Some(PreviousFseTable::Custom(Box::new(
+        build_table_from_probabilities(
+            dict.fse.literal_lengths.symbol_probabilities.as_slice(),
+            dict.fse.literal_lengths.accuracy_log,
+        ),
+    )));
+    state.fse_tables.ml_previous = Some(PreviousFseTable::Custom(Box::new(
+        build_table_from_probabilities(
+            dict.fse.match_lengths.symbol_probabilities.as_slice(),
+            dict.fse.match_lengths.accuracy_log,
+        ),
+    )));
+    state.fse_tables.of_previous = Some(PreviousFseTable::Custom(Box::new(
+        build_table_from_probabilities(
+            dict.fse.offsets.symbol_probabilities.as_slice(),
+            dict.fse.offsets.accuracy_log,
+        ),
+    )));
+    state.offset_hist = dict.offset_hist;
+    true
 }
 
 #[cfg(test)]

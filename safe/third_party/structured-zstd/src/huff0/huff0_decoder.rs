@@ -111,6 +111,26 @@ impl HuffmanTable {
         self.fse_table.reset();
     }
 
+    pub(crate) fn encoder_weights(&self) -> Vec<usize> {
+        let mut weights = self
+            .weights
+            .iter()
+            .map(|weight| usize::from(*weight))
+            .collect::<Vec<_>>();
+        let weight_sum = self.weights.iter().fold(0u32, |acc, weight| {
+            acc + if *weight > 0 {
+                1_u32 << (*weight - 1)
+            } else {
+                0
+            }
+        });
+        let max_bits = highest_bit_set(weight_sum) as u8;
+        let left_over = (1 << max_bits) - weight_sum;
+        let last_weight = highest_bit_set(left_over) as usize;
+        weights.push(last_weight);
+        weights
+    }
+
     /// Read from `source` and decode the input, populating the huffman decoding table.
     ///
     /// Returns the number of bytes read.

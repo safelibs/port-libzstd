@@ -387,7 +387,7 @@ fn decompress_streaming_and_skippable_helpers() {
     check_result(dstream::ZSTD_initDStream(zds), "ZSTD_initDStream");
 
     while offset < modern.len() || produced < output.len() {
-        let take = (modern.len() - offset).min(9);
+        let take = (modern.len() - offset).min(7);
         let mut input = ZSTD_inBuffer {
             src: modern[offset..].as_ptr().cast(),
             size: take,

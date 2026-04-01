@@ -9,6 +9,20 @@ phase6_export_safe_env
 phase6_assert_uses_safe_lib "$BINDIR/zstd"
 
 GZIP_DIR="$TESTS_ROOT/gzip"
+STAMP_FILE=$(phase6_stamp_path run-original-gzip-tests)
+if phase6_stamp_is_fresh \
+    "$STAMP_FILE" \
+    "$0" \
+    "$SCRIPT_DIR/phase6-common.sh" \
+    "$BINDIR/zstd" \
+    && phase6_tracked_repo_paths_are_fresh \
+        "$STAMP_FILE" \
+        "$GZIP_DIR"
+then
+    phase6_log "original gzip compatibility suite already fresh; skipping rerun"
+    exit 0
+fi
+
 phase6_log "running original gzip compatibility shell suite against the safe CLI"
 
 cleanup() {
@@ -86,3 +100,5 @@ tests=(
         fi
     done
 )
+
+phase6_touch_stamp "$STAMP_FILE"

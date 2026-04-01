@@ -1,54 +1,67 @@
 use crate::{
     ffi::{
-        compress::{stream_pending_bytes, with_cctx_ref, EncoderContext},
+        compress::{mt_job_size, stream_pending_bytes, with_cctx_ref, EncoderContext},
         types::{ZSTD_CCtx, ZSTD_frameProgression},
     },
     threading::pool::configured_worker_count,
 };
 
-fn mt_job_size(cctx: &EncoderContext) -> usize {
+fn mt_progression_job_size(cctx: &EncoderContext) -> usize {
     let block_size = cctx.frame_block_size().max(1);
     match usize::try_from(cctx.job_size).ok().filter(|size| *size > 0) {
         Some(job_size) => job_size.max(block_size),
-        None => block_size,
+        None => mt_job_size(cctx),
     }
 }
 
 fn mt_started_jobs(cctx: &EncoderContext, job_size: usize) -> usize {
-    if cctx.stream.input.is_empty() {
-        0
+    let ingested = cctx.stream.input.len();
+    let full_jobs = ingested / job_size;
+    if cctx.stream.frame_finished && ingested % job_size != 0 {
+        full_jobs.saturating_add(1)
     } else {
-        cctx.stream.input.len().div_ceil(job_size)
+        full_jobs
     }
 }
 
 fn mt_active_workers(cctx: &EncoderContext, job_size: usize, workers: usize) -> usize {
-    if workers == 0 || cctx.stream.frame_finished {
+    if workers == 0 {
         return 0;
     }
 
-    let emitted = cctx.stream.emitted_input.min(cctx.stream.input.len());
-    let buffered = cctx.stream.input.len().saturating_sub(emitted);
-    if buffered == 0 {
+    let started_jobs = mt_started_jobs(cctx, job_size);
+    if started_jobs == 0 {
         0
     } else {
-        buffered.div_ceil(job_size).min(workers).max(1)
+        let emitted = cctx.stream.emitted_input.min(cctx.stream.input.len());
+        let has_unfinished_work = cctx.stream.mt_handoff_pending
+            || stream_pending_bytes(cctx) != 0
+            || emitted < cctx.stream.input.len()
+            || !cctx.stream.frame_finished;
+        if has_unfinished_work {
+            started_jobs.min(workers).max(1)
+        } else {
+            0
+        }
     }
 }
 
 fn mt_consumed_bytes(cctx: &EncoderContext, job_size: usize, active_workers: usize) -> usize {
-    let emitted = cctx.stream.emitted_input.min(cctx.stream.input.len());
+    let started_bytes = cctx
+        .stream
+        .input
+        .len()
+        .min(mt_started_jobs(cctx, job_size).saturating_mul(job_size));
     if active_workers == 0 {
-        return emitted;
+        return cctx
+            .stream
+            .emitted_input
+            .min(started_bytes)
+            .min(cctx.stream.input.len());
     }
 
-    let buffered = cctx.stream.input.len().saturating_sub(emitted);
-    let inflight_capacity = job_size.saturating_mul(active_workers);
-    let inflight = buffered.min(inflight_capacity);
-    let queued = buffered.saturating_sub(inflight);
-    emitted
-        .saturating_add(queued)
-        .saturating_add(inflight / 2)
+    started_bytes
+        .saturating_sub(job_size.saturating_mul(active_workers) / 2)
         .min(cctx.stream.input.len())
 }
 
@@ -75,7 +88,7 @@ pub extern "C" fn ZSTD_getFrameProgression(cctx: *const ZSTD_CCtx) -> ZSTD_frame
                 0,
             )
         } else {
-            let job_size = mt_job_size(cctx);
+            let job_size = mt_progression_job_size(cctx);
             let active_workers = mt_active_workers(cctx, job_size, workers);
             (
                 mt_consumed_bytes(cctx, job_size, active_workers) as u64,

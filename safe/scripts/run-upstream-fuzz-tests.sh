@@ -7,41 +7,33 @@ source "$SCRIPT_DIR/phase6-common.sh"
 phase6_require_phase4_inputs "$0"
 phase6_export_safe_env
 
-phase6_log "building ported fuzz drivers"
-make -C "$SAFE_ROOT/tests/ported/whitebox" fuzz
-
 WORK_DIR="$PHASE6_OUT/fuzz"
 install -d "$WORK_DIR/corpora"
 STAMP_FILE="$WORK_DIR/.stamp"
 
 fuzz_results_are_fresh() {
-    [[ -f $STAMP_FILE ]] || return 1
-    local dep
-    for dep in \
+    phase6_stamp_is_fresh \
+        "$STAMP_FILE" \
         "$SCRIPT_DIR/run-upstream-fuzz-tests.sh" \
-        "$SAFE_ROOT/tests/ported/whitebox" \
-        "$ORIGINAL_ROOT/tests/fuzz" \
-        "$ORIGINAL_ROOT/tests/golden-compression" \
-        "$ORIGINAL_ROOT/tests/golden-decompression" \
-        "$ORIGINAL_ROOT/tests/golden-dictionaries" \
+        "$SCRIPT_DIR/phase6-common.sh" \
         "$FUZZ_FIXTURE_ROOT" \
-        "$SAFE_ROOT/out/phase6/whitebox/fuzz"
-    do
-        if [[ -d $dep ]]; then
-            if find "$dep" -type f -newer "$STAMP_FILE" -print -quit | grep -q .; then
-                return 1
-            fi
-        elif [[ -e $dep && $dep -nt $STAMP_FILE ]]; then
-            return 1
-        fi
-    done
-    return 0
+        "$SAFE_ROOT/out/phase6/whitebox/fuzz" \
+        && phase6_tracked_repo_paths_are_fresh \
+            "$STAMP_FILE" \
+            "$SAFE_ROOT/tests/ported/whitebox" \
+            "$ORIGINAL_ROOT/tests/fuzz" \
+            "$ORIGINAL_ROOT/tests/golden-compression" \
+            "$ORIGINAL_ROOT/tests/golden-decompression" \
+            "$ORIGINAL_ROOT/tests/golden-dictionaries"
 }
 
 if fuzz_results_are_fresh; then
     phase6_log "fuzz corpus drivers already fresh; skipping rerun"
     exit 0
 fi
+
+phase6_log "building ported fuzz drivers"
+make -C "$SAFE_ROOT/tests/ported/whitebox" fuzz
 
 raw_targets=(
     block_round_trip

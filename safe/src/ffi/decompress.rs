@@ -1329,9 +1329,12 @@ pub(crate) fn stream_decompress(
                     BufferlessStage::NeedStart
                         | BufferlessStage::NeedHeaderRemainder(_)
                         | BufferlessStage::NeedSkippableHeaderRemainder(_)
-                ) && !frame::partial_frame_prefix_is_valid(&dctx.stream.compressed, dctx.format)
-                {
-                    return Err(ZSTD_ErrorCode::ZSTD_error_prefix_unknown);
+                ) {
+                    let mut partial_prefix = dctx.bufferless.frame_bytes.clone();
+                    partial_prefix.extend_from_slice(&dctx.stream.compressed);
+                    if !frame::partial_frame_prefix_is_valid(&partial_prefix, dctx.format) {
+                        return Err(ZSTD_ErrorCode::ZSTD_error_prefix_unknown);
+                    }
                 }
                 apply_deferred_input_advance(dctx, input);
                 return Ok(need - dctx.stream.compressed.len());

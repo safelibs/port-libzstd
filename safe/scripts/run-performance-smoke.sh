@@ -8,6 +8,20 @@ phase6_require_phase4_inputs "$0"
 phase6_export_safe_env
 phase6_assert_uses_safe_lib "$BINDIR/zstd"
 
+STAMP_FILE=$(phase6_stamp_path run-performance-smoke)
+if phase6_stamp_is_fresh \
+    "$STAMP_FILE" \
+    "$0" \
+    "$SCRIPT_DIR/phase6-common.sh" \
+    "$SAFE_ROOT/scripts" \
+    "$VERSIONS_FIXTURE_ROOT" \
+    "$REGRESSION_FIXTURE_ROOT" \
+    "$BINDIR/zstd"
+then
+    phase6_log "performance smoke already fresh; skipping rerun"
+    exit 0
+fi
+
 WORK_DIR="$PHASE6_OUT/performance-smoke"
 CORPUS="$WORK_DIR/corpus.txt"
 COMPRESSED="$WORK_DIR/corpus.txt.zst"
@@ -105,3 +119,5 @@ print(
     f"stream-decode={stream_decode:.3f}s"
 )
 PY
+
+phase6_touch_stamp "$STAMP_FILE"

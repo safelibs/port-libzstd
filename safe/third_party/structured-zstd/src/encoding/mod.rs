@@ -8,7 +8,7 @@ pub(crate) mod util;
 
 mod frame_compressor;
 mod levels;
-pub use frame_compressor::FrameCompressor;
+pub use frame_compressor::{FrameCompressor, StreamingBlockCompressor};
 pub use match_generator::MatchGeneratorDriver;
 
 use crate::io::{Read, Write};
@@ -93,6 +93,18 @@ pub trait Matcher {
     fn skip_matching(&mut self);
     /// Process the data in the last commited space for future matching AND generate matches for the data
     fn start_matching(&mut self, handle_sequence: impl for<'a> FnMut(Sequence<'a>));
+    /// Save any matcher-local repeat-offset history that must stay aligned with
+    /// the emitted block type. Matchers that don't track repeat offsets can use
+    /// the default no-op implementation.
+    fn repeat_offsets(&self) -> Option<[u32; 3]> {
+        None
+    }
+    /// Restore matcher-local repeat-offset history after a provisional
+    /// compressed-block attempt is downgraded to a raw block.
+    fn restore_repeat_offsets(&mut self, _offsets: [u32; 3]) {}
+    /// Trim retained history between logical jobs while keeping the matcher
+    /// otherwise live for the rest of the frame.
+    fn trim_recent_history(&mut self, _limit: usize) {}
     /// Reset this matcher so it can be used for the next new frame
     fn reset(&mut self, level: CompressionLevel);
     /// The size of the window the decoder will need to execute all sequences produced by this matcher

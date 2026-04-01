@@ -10,6 +10,23 @@ phase6_export_safe_env
 phase6_ensure_datagen
 
 PZSTD_DIR="$ORIGINAL_ROOT/contrib/pzstd"
+STAMP_FILE=$(phase6_stamp_path run-pzstd-tests)
+if phase6_stamp_is_fresh \
+    "$STAMP_FILE" \
+    "$0" \
+    "$SCRIPT_DIR/phase6-common.sh" \
+    "$BINDIR/zstd" \
+    "$HELPER_LIB_ROOT/libzstd.a" \
+    "$HELPER_LIB_ROOT/libzstd.so.1.5.5" \
+    && phase6_tracked_repo_paths_are_fresh \
+        "$STAMP_FILE" \
+        "$PZSTD_DIR" \
+        "$ORIGINAL_ROOT/programs"
+then
+    phase6_log "pzstd coverage already fresh; skipping rerun"
+    exit 0
+fi
+
 PZSTD_ROUNDTRIP_BIN=${PZSTD_ROUNDTRIP_BIN:-}
 GTEST_SRC=/usr/src/googletest
 if [[ ! -d $GTEST_SRC ]]; then
@@ -257,16 +274,18 @@ run_pzstd_test_family() {
 
     case "$target" in
         test-pzstd-tsan|test-pzstd-asan)
-            if ! phase6_have_pzstd_sanitizer_runtime "$target"; then
-                case $? in
-                    3)
-                        return 0
-                        ;;
-                    *)
-                        return 1
-                        ;;
-                esac
-            fi
+            local runtime_status=0
+            phase6_have_pzstd_sanitizer_runtime "$target" || runtime_status=$?
+            case $runtime_status in
+                0)
+                    ;;
+                3)
+                    return 0
+                    ;;
+                *)
+                    return 1
+                    ;;
+            esac
             ;;
     esac
 
@@ -293,7 +312,7 @@ run_pzstd_roundtripcheck() {
     fi
 
     phase6_log "running bounded pzstd roundtripcheck"
-    run_pzstd_make roundtrip
+    run_pzstd_make tests roundtrip
     export PZSTD_ROUNDTRIP_BIN="$roundtrip_bin"
     export PZSTD_ROUNDTRIP_STYLE="$roundtrip_style"
     PZSTD_ROUNDTRIP_CASES="$PZSTD_ROUNDTRIP_CASES" \
@@ -325,3 +344,5 @@ fi
 if phase6_have_pzstd_toolchain address; then
     run_pzstd_test_family test-pzstd-asan "$PZSTD_OPTIONAL_TESTFLAGS"
 fi
+
+phase6_touch_stamp "$STAMP_FILE"

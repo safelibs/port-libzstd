@@ -2,11 +2,17 @@
 
 Last reviewed: 2026-03-31
 
-The shipping `libzstd` no longer relies on runtime symbol lookup or a hidden
-helper-object archive for advanced compression APIs. `safe/build.rs` now
-compiles only the bounded legacy decode shim, while the advanced parameter,
-dictionary, static-context, sequence, threading, and dictionary-builder entry
-points are owned by Rust code in the shared library itself.
+The shipping `libzstd` no longer relies on dynamic loader symbol resolution,
+an environment-selected upstream helper library, or a hidden helper-object
+archive for advanced compression APIs. `safe/build.rs` only compiles the
+bounded legacy decode shim, while the advanced parameter, dictionary,
+static-context, sequence, threading, and dictionary-builder entry points are
+owned by Rust code in the shared library itself.
+
+The final release gate now consumes the refreshed Phase 4 install and Debian
+outputs together with the Phase 6 dependent image artifacts directly. It does
+not rebuild those roots implicitly, and it does not reintroduce any runtime
+dependency on upstream C beyond the approved legacy decode shim.
 
 ## Remaining Unsafe Categories
 
@@ -20,8 +26,8 @@ points are owned by Rust code in the shared library itself.
 4. The legacy v0.5-v0.7 decode shim, which remains the only linked C bridge in
    the shipping library.
 
-No `unsafe` remains in order to support deleted helper archives, runtime symbol
-lookup, or temporary upstream replay contexts.
+No `unsafe` remains in order to support deleted helper archives, dynamic symbol
+resolution, or transitional upstream replay paths.
 
 ## Module Inventory
 
@@ -67,7 +73,7 @@ lookup, or temporary upstream replay contexts.
   as `unsafe extern "C" fn` typedefs so the published ABI matches upstream
   headers exactly.
 
-## Target State
+## Final State
 
 The remaining `unsafe` surface is now restricted to preserving the upstream C
 ABI, handling opaque-handle ownership, copying across raw buffer boundaries,

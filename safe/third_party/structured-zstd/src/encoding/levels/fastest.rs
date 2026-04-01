@@ -38,13 +38,25 @@ pub fn compress_fastest<M: Matcher>(
         header.serialize(output);
         output.push(rle_byte);
     } else {
+        let previous_huff_table = state.last_huff_table.clone();
+        let previous_fse_tables = state.fse_tables.clone();
+        let previous_offset_hist = state.offset_hist;
+        let previous_matcher_offsets = state.matcher.repeat_offsets();
         // Compress as a standard compressed block
         let mut compressed = Vec::new();
         state.matcher.commit_space(uncompressed_data);
+        let raw_block = state.matcher.get_last_space().to_vec();
         compress_block(state, &mut compressed);
-        // If the compressed data is larger than the maximum
-        // allowable block size, instead store uncompressed
-        if compressed.len() >= MAX_BLOCK_SIZE as usize {
+        // Raw blocks are always cheaper when the compressed payload doesn't
+        // beat the original byte count, and they are also required once the
+        // compressed payload exceeds the maximum encodable block size.
+        if compressed.len() >= raw_block.len() || compressed.len() >= MAX_BLOCK_SIZE as usize {
+            state.last_huff_table = previous_huff_table;
+            state.fse_tables = previous_fse_tables;
+            state.offset_hist = previous_offset_hist;
+            if let Some(offsets) = previous_matcher_offsets {
+                state.matcher.restore_repeat_offsets(offsets);
+            }
             let header = BlockHeader {
                 last_block,
                 block_type: crate::blocks::block::BlockType::Raw,
@@ -52,7 +64,7 @@ pub fn compress_fastest<M: Matcher>(
             };
             // Write the header, then the block
             header.serialize(output);
-            output.extend_from_slice(state.matcher.get_last_space());
+            output.extend_from_slice(&raw_block);
         } else {
             let header = BlockHeader {
                 last_block,

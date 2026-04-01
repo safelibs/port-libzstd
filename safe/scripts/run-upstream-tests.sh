@@ -17,6 +17,29 @@ fi
 phase6_require_phase4_inputs "$0"
 phase6_export_safe_env
 phase6_assert_uses_safe_lib "$BINDIR/zstd" "$BINDIR/pzstd"
+
+stamp_name=run-upstream-tests
+if [[ $OFFLINE_ONLY -eq 1 ]]; then
+    stamp_name+=-offline-only
+fi
+STAMP_FILE=$(phase6_stamp_path "$stamp_name")
+if phase6_stamp_is_fresh \
+    "$STAMP_FILE" \
+    "$0" \
+    "$SCRIPT_DIR/phase6-common.sh" \
+    "$BINDIR/zstd" \
+    "$BINDIR/pzstd" \
+    "$HELPER_LIB_ROOT" \
+    "$LIBDIR/libzstd.so.1.5.5" \
+    && phase6_tracked_repo_paths_are_fresh \
+        "$STAMP_FILE" \
+        "$TESTS_ROOT" \
+        "$ORIGINAL_ROOT/programs"
+then
+    phase6_log "upstream release-gate coverage already fresh; skipping rerun"
+    exit 0
+fi
+
 UPSTREAM_TESTS_LIB_ROOT=$(phase6_prepare_upstream_tests_helper_root "$PHASE6_OUT/upstream-tests/lib")
 UPSTREAM_TESTS_BUILD_ROOT="$PHASE6_OUT/upstream-tests/obj"
 install -d "$UPSTREAM_TESTS_BUILD_ROOT"
@@ -235,3 +258,5 @@ if [[ $OFFLINE_ONLY -eq 0 ]]; then
 else
     phase6_log "upstream release gate already runs entirely offline"
 fi
+
+phase6_touch_stamp "$STAMP_FILE"

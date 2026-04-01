@@ -8,6 +8,22 @@ phase6_require_command valgrind
 phase6_require_phase4_inputs "$0"
 phase6_export_safe_env
 
+STAMP_FILE=$(phase6_stamp_path run-zlibwrapper-tests)
+if phase6_stamp_is_fresh \
+    "$STAMP_FILE" \
+    "$0" \
+    "$SCRIPT_DIR/phase6-common.sh" \
+    "$HELPER_LIB_ROOT/libzstd.a" \
+    "$HELPER_LIB_ROOT/libzstd.so.1.5.5" \
+    && phase6_tracked_repo_paths_are_fresh \
+        "$STAMP_FILE" \
+        "$ORIGINAL_ROOT/zlibWrapper" \
+        "$ORIGINAL_ROOT/programs"
+then
+    phase6_log "zlibWrapper coverage already fresh; skipping rerun"
+    exit 0
+fi
+
 EXAMPLE_SHIM="$ORIGINAL_ROOT/zlibWrapper/examples/zlib.h"
 
 cleanup_example_shim() {
@@ -181,3 +197,5 @@ phase6_assert_uses_safe_lib \
     "$ORIGINAL_ROOT/zlibWrapper/example_zstd" \
     "$ORIGINAL_ROOT/zlibWrapper/fitblk_zstd" \
     "$ORIGINAL_ROOT/zlibWrapper/zwrapbench"
+
+phase6_touch_stamp "$STAMP_FILE"

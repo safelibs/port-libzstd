@@ -4,19 +4,34 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 SAFE_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 MULTIARCH=$(dpkg-architecture -qDEB_HOST_MULTIARCH)
+source "$SAFE_ROOT/scripts/phase6-common.sh"
 
-ensure_default_phase4_roots() {
-    bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release
-    bash "$SAFE_ROOT/scripts/build-original-cli-against-safe.sh"
-    bash "$SAFE_ROOT/scripts/build-deb.sh"
-}
+phase6_require_phase4_inputs "$0"
 
-ensure_default_phase4_roots
+DEFAULT_ARTIFACT_STAMP="$SAFE_ROOT/out/obj/release-default/.build-artifacts.signature"
+MT_ARTIFACT_STAMP="$SAFE_ROOT/out/obj/release-mt/.build-artifacts.signature"
+NOMT_ARTIFACT_STAMP="$SAFE_ROOT/out/obj/release-nomt/.build-artifacts.signature"
+STAMP_FILE=$(phase6_stamp_path run-build-variant-tests)
+if phase6_stamp_is_fresh \
+    "$STAMP_FILE" \
+    "$0" \
+    "$SCRIPT_DIR/phase6-common.sh" \
+    "$DEFAULT_ARTIFACT_STAMP" \
+    "$MT_ARTIFACT_STAMP" \
+    "$NOMT_ARTIFACT_STAMP" \
+    && phase6_tracked_repo_paths_are_fresh \
+        "$STAMP_FILE" \
+        "$SAFE_ROOT/Cargo.toml" \
+        "$SAFE_ROOT/include" \
+        "$SAFE_ROOT/src" \
+        "$SAFE_ROOT/tests"
+then
+    phase6_log "build variant verification already fresh; skipping rerun"
+    exit 0
+fi
 
-bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release
 bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release --variant mt
 bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release --variant nomt
-bash "$SAFE_ROOT/scripts/verify-install-layout.sh"
 
 DEFAULT_LIBDIR="$SAFE_ROOT/out/install/release-default/usr/lib/$MULTIARCH"
 MT_LIBDIR="$SAFE_ROOT/out/install/release-mt/usr/lib/$MULTIARCH"
@@ -62,3 +77,5 @@ if cmp -s "$MT_LIBDIR/libzstd.so.1.5.5" "$NOMT_LIBDIR/libzstd.so.1.5.5"; then
     printf 'mt and nomt shared objects are unexpectedly identical\n' >&2
     exit 1
 fi
+
+phase6_touch_stamp "$STAMP_FILE"
