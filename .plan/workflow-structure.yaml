@@ -3,130 +3,297 @@ yaml_source_mode: inline-only
 verifier_encoding: explicit-phases
 phases:
   - order: 1
-    id: impl_safe_decompression_independence
+    id: impl_validator_setup_initial_run
     type: implement
     bounce_target: null
+    required_preexisting_inputs:
+      - .plan/goal.md
+      - safe/
+      - original/libzstd-1.5.5+dfsg2/
+      - safe/abi/original.exports.txt
+      - safe/abi/original.soname.txt
+      - safe/abi/export_map.toml
+      - safe/tests/upstream_test_matrix.toml
+      - safe/tests/dependents/dependent_matrix.toml
+      - safe/tests/fixtures/versions/
+      - safe/tests/fixtures/regression/
+      - safe/tests/fixtures/fuzz-corpora/
+      - dependents.json
+      - all_cves.json
+      - relevant_cves.json
+      - test-original.sh
+      - safe/docker/dependents/
+      - safe/scripts/build-artifacts.sh
+      - safe/scripts/build-original-cli-against-safe.sh
+      - safe/scripts/build-deb.sh
+      - safe/debian/control
+      - safe/debian/rules
+      - safe/debian/*.install
+      - safe/scripts/run-full-suite.sh
+      - safe/scripts/verify-export-parity.sh
+      - safe/scripts/verify-install-layout.sh
+      - .gitignore
   - order: 2
-    id: script_safe_decompression_independence
-    type: script
-    bounce_target: impl_safe_decompression_independence
+    id: check_validator_setup_software_tester
+    type: check
+    bounce_target: impl_validator_setup_initial_run
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - .gitignore
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/scripts/run-validator-regressions.sh
+      - safe/out/validator/override-debs/libzstd/
+      - safe/out/validator/artifacts/proof/port-04-test-debs-lock.json
+      - safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json
   - order: 3
-    id: check_safe_decompression_software_tester
+    id: check_validator_setup_senior_tester
     type: check
-    bounce_target: impl_safe_decompression_independence
+    bounce_target: impl_validator_setup_initial_run
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - .gitignore
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/scripts/run-validator-regressions.sh
+      - safe/out/validator/override-debs/libzstd/
+      - safe/out/validator/artifacts/proof/port-04-test-debs-lock.json
+      - safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json
   - order: 4
-    id: check_safe_decompression_senior_tester
-    type: check
-    bounce_target: impl_safe_decompression_independence
+    id: impl_validator_source_cli_regressions
+    type: implement
+    bounce_target: null
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/scripts/run-validator-regressions.sh
+      - safe/tests/rust/compress.rs
+      - safe/tests/rust/decompress.rs
+      - safe/tests/capi/roundtrip_smoke.c
+      - safe/tests/capi/decompress_smoke.c
+      - safe/tests/capi/frame_probe.c
+      - safe/tests/capi/invalid_dictionaries_driver.c
+      - safe/tests/capi/bigdict_driver.c
+      - safe/scripts/run-capi-roundtrip.sh
+      - safe/scripts/run-capi-decompression.sh
+      - safe/src/compress/
+      - safe/src/decompress/
+      - safe/src/dict_builder/
+      - safe/src/common/error.rs
+      - safe/src/common/frame.rs
+      - safe/src/ffi/compress.rs
+      - safe/src/ffi/decompress.rs
+      - safe/out/validator/artifacts/port-04-test/results/libzstd/
+      - safe/out/validator/artifacts/port-04-test/logs/libzstd/
   - order: 5
-    id: impl_safe_compression_core
-    type: implement
-    bounce_target: null
+    id: check_validator_source_software_tester
+    type: check
+    bounce_target: impl_validator_source_cli_regressions
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/scripts/run-validator-regressions.sh
+      - safe/out/validator/artifacts/port-04-test/results/libzstd/
+      - safe/out/validator/artifacts/proof/port-04-test-debs-lock.json
   - order: 6
-    id: script_safe_compression_core
-    type: script
-    bounce_target: impl_safe_compression_core
+    id: check_validator_source_senior_tester
+    type: check
+    bounce_target: impl_validator_source_cli_regressions
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/out/validator/artifacts/port-04-test/results/libzstd/
   - order: 7
-    id: check_safe_compression_core_software_tester
-    type: check
-    bounce_target: impl_safe_compression_core
+    id: impl_validator_streaming_capi_regressions
+    type: implement
+    bounce_target: null
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/scripts/run-validator-regressions.sh
+      - safe/src/compress/cstream.rs
+      - safe/src/compress/cctx.rs
+      - safe/src/compress/cctx_params.rs
+      - safe/src/compress/params.rs
+      - safe/src/ffi/compress.rs
+      - safe/src/decompress/dstream.rs
+      - safe/src/decompress/dctx.rs
+      - safe/src/ffi/decompress.rs
+      - safe/src/ffi/types.rs
+      - safe/tests/capi/zstream_driver.c
+      - safe/tests/capi/roundtrip_smoke.c
+      - safe/tests/capi/paramgrill_driver.c
+      - safe/scripts/run-capi-roundtrip.sh
+      - safe/out/validator/artifacts/port-04-test/results/libzstd/
+      - safe/out/validator/artifacts/port-04-test/logs/libzstd/
   - order: 8
-    id: check_safe_compression_core_senior_tester
+    id: check_validator_capi_software_tester
     type: check
-    bounce_target: impl_safe_compression_core
+    bounce_target: impl_validator_streaming_capi_regressions
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/scripts/run-validator-regressions.sh
+      - safe/out/validator/artifacts/port-04-test/results/libzstd/
+      - safe/out/validator/artifacts/proof/port-04-test-debs-lock.json
   - order: 9
-    id: impl_safe_advanced_abi_completion
-    type: implement
-    bounce_target: null
+    id: check_validator_capi_senior_tester
+    type: check
+    bounce_target: impl_validator_streaming_capi_regressions
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/out/validator/artifacts/port-04-test/results/libzstd/
   - order: 10
-    id: script_safe_advanced_abi_completion
-    type: script
-    bounce_target: impl_safe_advanced_abi_completion
+    id: impl_validator_libarchive_usage_regressions
+    type: implement
+    bounce_target: null
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/scripts/run-validator-regressions.sh
+      - safe/out/validator/artifacts/port-04-test/results/libzstd/
+      - safe/out/validator/artifacts/port-04-test/logs/libzstd/
+      - dependents.json
+      - test-original.sh
+      - safe/docker/dependents/
+      - safe/docker/dependents/entrypoint.sh
+      - safe/tests/dependents/dependent_matrix.toml
+      - safe/tests/dependents/src/libarchive_probe.c
+      - safe/scripts/run-dependent-matrix.sh
+      - safe/scripts/build-dependent-image.sh
+      - safe/src/compress/
+      - safe/src/decompress/
+      - safe/src/common/frame.rs
+      - safe/src/ffi/compress.rs
+      - safe/src/ffi/decompress.rs
+      - safe/scripts/build-artifacts.sh
+      - safe/scripts/build-original-cli-against-safe.sh
+      - safe/scripts/build-deb.sh
   - order: 11
-    id: check_safe_advanced_abi_software_tester
+    id: check_validator_usage_software_tester
     type: check
-    bounce_target: impl_safe_advanced_abi_completion
+    bounce_target: impl_validator_libarchive_usage_regressions
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/scripts/run-validator-regressions.sh
+      - safe/out/validator/artifacts/port-04-test/results/libzstd/
+      - safe/out/validator/artifacts/proof/port-04-test-debs-lock.json
+      - safe/scripts/build-dependent-image.sh
+      - safe/scripts/run-dependent-matrix.sh
+      - test-original.sh
   - order: 12
-    id: check_safe_advanced_abi_senior_tester
+    id: check_validator_usage_senior_tester
     type: check
-    bounce_target: impl_safe_advanced_abi_completion
+    bounce_target: impl_validator_libarchive_usage_regressions
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/out/validator/artifacts/port-04-test/results/libzstd/
+      - safe/scripts/verify-install-layout.sh
+      - safe/scripts/verify-link-compat.sh
   - order: 13
-    id: impl_safe_packaging_install
+    id: impl_validator_remaining_burn_down
     type: implement
     bounce_target: null
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/scripts/run-validator-regressions.sh
+      - safe/out/validator/artifacts/
   - order: 14
-    id: script_safe_packaging_install
-    type: script
-    bounce_target: impl_safe_packaging_install
+    id: check_validator_remaining_software_tester
+    type: check
+    bounce_target: impl_validator_remaining_burn_down
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/scripts/run-validator-regressions.sh
+      - safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json
   - order: 15
-    id: check_safe_packaging_software_tester
+    id: check_validator_remaining_senior_tester
     type: check
-    bounce_target: impl_safe_packaging_install
+    bounce_target: impl_validator_remaining_burn_down
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/out/validator/
   - order: 16
-    id: check_safe_packaging_senior_tester
-    type: check
-    bounce_target: impl_safe_packaging_install
+    id: impl_validator_final_clean_run
+    type: implement
+    bounce_target: null
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/scripts/run-validator-regressions.sh
+      - safe/scripts/run-full-suite.sh
+      - safe/scripts/build-dependent-image.sh
+      - safe/abi/original.exports.txt
+      - safe/abi/original.soname.txt
+      - safe/abi/export_map.toml
+      - safe/tests/upstream_test_matrix.toml
+      - safe/tests/dependents/dependent_matrix.toml
+      - safe/tests/fixtures/versions/
+      - safe/tests/fixtures/regression/
+      - safe/tests/fixtures/fuzz-corpora/
+      - dependents.json
+      - all_cves.json
+      - relevant_cves.json
+      - test-original.sh
+      - safe/docker/dependents/
+      - safe/out/validator/artifacts/
   - order: 17
-    id: impl_upstream_release_gates
-    type: implement
-    bounce_target: null
+    id: check_validator_final_software_tester
+    type: check
+    bounce_target: impl_validator_final_clean_run
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/scripts/run-validator-regressions.sh
+      - safe/scripts/run-full-suite.sh
+      - safe/scripts/build-dependent-image.sh
+      - safe/out/validator/artifacts/proof/port-04-test-debs-lock.json
+      - safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json
+      - safe/out/validator/artifacts/proof/port-04-test-validation-proof.json
   - order: 18
-    id: script_upstream_release_gates
-    type: script
-    bounce_target: impl_upstream_release_gates
-  - order: 19
-    id: check_upstream_release_gates_software_tester
+    id: check_validator_final_senior_tester
     type: check
-    bounce_target: impl_upstream_release_gates
-  - order: 20
-    id: check_upstream_release_gates_senior_tester
-    type: check
-    bounce_target: impl_upstream_release_gates
-  - order: 21
-    id: impl_dependent_image_matrix
-    type: implement
-    bounce_target: null
-  - order: 22
-    id: script_dependent_image_matrix
-    type: script
-    bounce_target: impl_dependent_image_matrix
-  - order: 23
-    id: check_dependent_image_matrix_software_tester
-    type: check
-    bounce_target: impl_dependent_image_matrix
-  - order: 24
-    id: check_dependent_image_matrix_senior_tester
-    type: check
-    bounce_target: impl_dependent_image_matrix
-  - order: 25
-    id: impl_compat_regressions_and_fixes
-    type: implement
-    bounce_target: null
-  - order: 26
-    id: script_compat_regressions_and_fixes
-    type: script
-    bounce_target: impl_compat_regressions_and_fixes
-  - order: 27
-    id: check_compat_regressions_software_tester
-    type: check
-    bounce_target: impl_compat_regressions_and_fixes
-  - order: 28
-    id: check_compat_regressions_senior_tester
-    type: check
-    bounce_target: impl_compat_regressions_and_fixes
-  - order: 29
-    id: impl_final_release_burn_down
-    type: implement
-    bounce_target: null
-  - order: 30
-    id: script_final_release_burn_down
-    type: script
-    bounce_target: impl_final_release_burn_down
-  - order: 31
-    id: check_final_release_software_tester
-    type: check
-    bounce_target: impl_final_release_burn_down
-  - order: 32
-    id: check_final_release_senior_tester
-    type: check
-    bounce_target: impl_final_release_burn_down
+    bounce_target: impl_validator_final_clean_run
+    required_preexisting_inputs:
+      - validator/
+      - validator-report.md
+      - safe/scripts/run-validator-libzstd.sh
+      - safe/scripts/check-validator-phase-results.py
+      - safe/out/validator/artifacts/port-04-test/results/libzstd/
+      - safe/out/validator/artifacts/proof/port-04-test-validation-proof.json
