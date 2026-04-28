@@ -89,7 +89,6 @@ Proof generation was not run because the matrix had failed testcases.
 
 | testcase_id | kind | client_application | exit_code | error | result_path | log_path | assigned_remediation_phase | remediation_status | regression_test | fix_commit | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| usage-libarchive-tools-zstd-extract-specific-member | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-extract-specific-member.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-extract-specific-member.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while extracting a named member from a zstd-compressed tar archive. Observed in the Phase 3 verifier rerun and assigned to the later libarchive usage phase. |
 | usage-libarchive-tools-zstd-two-topdirs-list | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while listing a zstd-compressed tar archive with two top-level directories. |
 
 **Skip List**
@@ -148,10 +147,13 @@ Phase 3 Base Commit: ff7819723e25d9b669aebf22032e4daab5db7a38
 - Validator Commit: 1319bb0374ef66428a42dd71e49553c6d057feaf
 - Streaming C API rows assigned to this phase in the original Phase 1 table: 0
 - No streaming C API failures assigned to impl_validator_streaming_capi_regressions
-- Existing `streaming-c-api-smoke` validator artifact: status `passed`, exit code 0, result path `safe/out/validator/artifacts/port-04-test/results/libzstd/streaming-c-api-smoke.json`, log path `safe/out/validator/artifacts/port-04-test/logs/libzstd/streaming-c-api-smoke.log`
-- Current validator artifact summary after the Phase 3 verifier rerun: 85 cases, 5 source cases, 80 usage cases, 83 passed, 2 failed, 85 casts, validator runner status 1
-- Remaining open validator rows: `usage-libarchive-tools-zstd-extract-specific-member` and `usage-libarchive-tools-zstd-two-topdirs-list`, both assigned to `impl_validator_libarchive_usage_regressions`
-- Net safe code changes in this phase: none
+- `streaming-c-api-smoke` validator artifact after the Phase 3 rerun: status `passed`, exit code 0, port commit `9da27a66e67f999b649ad6d220ed00c76847d656`, result path `safe/out/validator/artifacts/port-04-test/results/libzstd/streaming-c-api-smoke.json`, log path `safe/out/validator/artifacts/port-04-test/logs/libzstd/streaming-c-api-smoke.log`
+- Current validator artifact summary after the Phase 3 rerun: 85 cases, 5 source cases, 80 usage cases, 84 passed, 1 failed, 85 casts, validator runner status 1
+- Current `usage-libarchive-tools-zstd-extract-specific-member` artifact: status `passed`, exit code 0, port commit `9da27a66e67f999b649ad6d220ed00c76847d656`
+- Remaining open validator row: `usage-libarchive-tools-zstd-two-topdirs-list`, assigned to `impl_validator_libarchive_usage_regressions`
+- Streaming C API senior-bounce fix commit: `9da27a66e67f999b649ad6d220ed00c76847d656`
+- Regression test: `safe/tests/capi/zstream_driver.c` (`decompress_stream_rejects_staged_null_destination`)
+- Net safe code changes in this phase: `safe/src/ffi/decompress.rs` rejects null staged-output destinations before copying, and `safe/tests/capi/zstream_driver.c` covers the staged `ZSTD_decompressStream` null-destination error path.
 
 **Phase 3 Commands Inspected**
 
@@ -176,19 +178,31 @@ rg -n 'streaming-c-api-smoke|impl_validator_streaming_capi_regressions|Phase 3|u
 sed -n '1,260p' safe/scripts/check-validator-phase-results.py
 git log --oneline --decorate -5
 git status --short
-sed -n '1,240p' safe/out/validator/artifacts/port-04-test/logs/libzstd/usage-libarchive-tools-zstd-extract-specific-member.log
+cargo fmt --manifest-path safe/Cargo.toml --check
+bash safe/scripts/run-capi-roundtrip.sh
+cargo test --manifest-path safe/Cargo.toml --release --all-targets
+bash safe/scripts/run-capi-decompression.sh
+set +e; bash safe/scripts/run-validator-libzstd.sh; status=$?; printf 'VALIDATOR_RUNNER_STATUS=%s\n' "$status"; exit 0
+VALIDATOR_RUNNER_STATUS=1 python3 safe/scripts/check-validator-phase-results.py --results-root safe/out/validator/artifacts/port-04-test/results/libzstd --report validator-report.md --completed-phase impl_validator_source_cli_regressions --completed-phase impl_validator_streaming_capi_regressions --allow-remaining-phase impl_validator_libarchive_usage_regressions --allow-remaining-phase impl_validator_remaining_burn_down
 python3 - <<'PY'
 import json, pathlib
 root=pathlib.Path('safe/out/validator/artifacts/port-04-test/results/libzstd')
 print(json.dumps(json.loads((root/'summary.json').read_text()), indent=2))
-for p in sorted(root.glob('*.json')):
-    if p.name != 'summary.json':
-        data=json.loads(p.read_text())
-        if data.get('status') == 'failed':
-            print(data['testcase_id'], data.get('log_path'))
+for name in ['streaming-c-api-smoke.json',
+             'usage-libarchive-tools-zstd-extract-specific-member.json',
+             'usage-libarchive-tools-zstd-two-topdirs-list.json']:
+    data=json.loads((root/name).read_text())
+    print(name, data.get('status'), data.get('exit_code'), data.get('port_commit'))
 PY
+sed -n '1,220p' safe/out/validator/artifacts/port-04-test/logs/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.log
+sed -n '1,220p' safe/out/validator/artifacts/port-04-test/logs/libzstd/streaming-c-api-smoke.log
+bash -lc 'base=$(awk "/Phase 3 Base Commit:/ {print \$5; exit}" validator-report.md); test -n "$base"; git diff --check "$base..HEAD"'
+bash safe/scripts/verify-export-parity.sh
+bash safe/scripts/verify-link-compat.sh
+rg -n 'streaming-c-api-smoke|No streaming C API failures assigned|ZSTD_compressStream2|ZSTD_decompressStream|usage-libarchive-tools-zstd-extract-specific-member|usage-libarchive-tools-zstd-two-topdirs-list' validator-report.md safe/tests safe/src
+test ! -f safe/out/validator/skip.env
 ```
 
 **Phase 3 Result**
 
-No safe implementation, package, or regression-test changes were made because no Phase 1 row was assigned to `impl_validator_streaming_capi_regressions`. The existing `streaming-c-api-smoke` result is passing. The currently remaining failed testcases are libarchive usage failures assigned to the later libarchive usage phase.
+No validator streaming C API failure row was assigned to `impl_validator_streaming_capi_regressions`, and the validator `streaming-c-api-smoke` result is passing. The senior-tester bounce identified a streaming decompression pointer-validation gap outside the validator failure table; this phase fixed it in `9da27a66e67f999b649ad6d220ed00c76847d656` and added the C regression listed above. The only current validator failure is the libarchive usage testcase assigned to the later libarchive usage phase.
