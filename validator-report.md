@@ -6,7 +6,7 @@ Phase 1 Base Commit: c9970b608feeb7d1e1cfc94e40c7ee8aa1ed7fbb
 - Validator Commit: 1319bb0374ef66428a42dd71e49553c6d057feaf
 - Validator branch: main
 - Planning reference commit: 1319bb0374ef66428a42dd71e49553c6d057feaf
-- Local safe commit: 7449e04c60003a369e329f69f1f2295219dc72b9
+- Local safe commit: 93bd2c1baafa6691637b6a9edf62035453e3fd6d
 
 **Python Setup**
 
@@ -28,8 +28,8 @@ The validator override leaf is `safe/out/validator/override-debs/libzstd/`.
 - Path: `safe/out/validator/artifacts/proof/port-04-test-debs-lock.json`
 - Repository: local/port-libzstd
 - Tag ref: refs/tags/libzstd/04-test-local
-- Commit: 7449e04c60003a369e329f69f1f2295219dc72b9
-- Release tag: build-7449e04c6000
+- Commit: 93bd2c1baafa6691637b6a9edf62035453e3fd6d
+- Release tag: build-93bd2c1baafa
 - Package architectures: amd64
 - Package sizes: libzstd1=379926, libzstd-dev=3831578, zstd=159324
 - Package SHA256 hashes: libzstd1=c0f6bdc23d5338e12a832443c33ec5d7322f98089e40d12b6bf5683390cacad3, libzstd-dev=7c6abfe048c50409f0bbc9ac4dcfb4c9db3f516db246e04e1ef0b767adc31c6c, zstd=8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91
@@ -80,8 +80,8 @@ Proof generation was not run because the matrix had failed testcases.
 - Cases: 85
 - Source cases: 5
 - Usage cases: 80
-- Passed: 83
-- Failed: 2
+- Passed: 84
+- Failed: 1
 - Casts: 85
 - Validator runner status: 1
 
@@ -89,7 +89,6 @@ Proof generation was not run because the matrix had failed testcases.
 
 | testcase_id | kind | client_application | exit_code | error | result_path | log_path | assigned_remediation_phase | remediation_status | regression_test | fix_commit | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| usage-libarchive-tools-zstd-two-space-files-list | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-two-space-files-list.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-two-space-files-list.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while listing a zstd-compressed tar archive containing a filename with a space. |
 | usage-libarchive-tools-zstd-two-topdirs-list | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while listing a zstd-compressed tar archive with two top-level directories. |
 
 **Skip List**
