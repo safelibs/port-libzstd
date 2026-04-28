@@ -366,17 +366,32 @@ test_libarchive() {
   local dir
   dir=$TEST_ROOT/libarchive
   rm -rf "$dir"
-  mkdir -p "$dir/input/sub" "$dir/out"
+  mkdir -p "$dir/basic/input/sub" "$dir/basic/out"
 
   assert_uses_safe_lib "$(command -v bsdtar)"
 
-  printf 'alpha\n' >"$dir/input/a.txt"
-  printf 'beta\n' >"$dir/input/sub/b.txt"
+  printf 'alpha\n' >"$dir/basic/input/a.txt"
+  printf 'beta\n' >"$dir/basic/input/sub/b.txt"
 
-  bsdtar --zstd -cf "$dir/archive.tar.zst" -C "$dir/input" .
-  bsdtar -tf "$dir/archive.tar.zst" | grep -F './sub/b.txt' >/dev/null
-  bsdtar -xf "$dir/archive.tar.zst" -C "$dir/out"
-  diff -ru "$dir/input" "$dir/out"
+  bsdtar --zstd -cf "$dir/basic/archive.tar.zst" -C "$dir/basic/input" .
+  bsdtar -tf "$dir/basic/archive.tar.zst" | grep -F './sub/b.txt' >/dev/null
+  bsdtar -xf "$dir/basic/archive.tar.zst" -C "$dir/basic/out"
+  diff -ru "$dir/basic/input" "$dir/basic/out"
+
+  mkdir -p "$dir/topdirs/input/top1" "$dir/topdirs/input/top2"
+  printf 'alpha\n' >"$dir/topdirs/input/top1/alpha.txt"
+  printf 'beta\n' >"$dir/topdirs/input/top2/beta.txt"
+  bsdtar --zstd -cf "$dir/topdirs/archive.tar.zst" -C "$dir/topdirs/input" top1 top2
+  bsdtar -tf "$dir/topdirs/archive.tar.zst" >"$dir/topdirs/list"
+  grep -F 'top1/alpha.txt' "$dir/topdirs/list" >/dev/null
+  grep -F 'top2/beta.txt' "$dir/topdirs/list" >/dev/null
+
+  mkdir -p "$dir/specific/src/dir" "$dir/specific/out"
+  printf 'alpha payload\n' >"$dir/specific/src/alpha.txt"
+  printf 'beta payload\n' >"$dir/specific/src/dir/beta.txt"
+  bsdtar -acf "$dir/specific/archive.tar.zst" -C "$dir/specific/src" .
+  bsdtar -xvf "$dir/specific/archive.tar.zst" -C "$dir/specific/out" ./dir/beta.txt >"$dir/specific/extract.log"
+  grep -F 'beta payload' "$dir/specific/out/dir/beta.txt" >/dev/null
 }
 
 test_btrfs() {

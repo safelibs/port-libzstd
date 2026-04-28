@@ -178,6 +178,48 @@ fn compressible_sample(size: usize) -> Vec<u8> {
     out
 }
 
+fn libarchive_two_topdirs_tar_payload() -> Vec<u8> {
+    fn append_header(
+        out: &mut Vec<u8>,
+        name: &[u8],
+        mode: &[u8; 8],
+        body_size: usize,
+        typeflag: u8,
+    ) {
+        let mut header = [0u8; 512];
+        header[..name.len()].copy_from_slice(name);
+        header[100..108].copy_from_slice(mode);
+        header[108..116].copy_from_slice(b"000000 \0");
+        header[116..124].copy_from_slice(b"000000 \0");
+        let size = format!("{body_size:011o} ");
+        header[124..136].copy_from_slice(size.as_bytes());
+        header[136..148].copy_from_slice(b"15174230751 ");
+        header[156] = typeflag;
+        header[257..263].copy_from_slice(b"ustar\0");
+        header[263..265].copy_from_slice(b"00");
+        header[148..156].fill(b' ');
+        let checksum: u32 = header.iter().map(|byte| u32::from(*byte)).sum();
+        let checksum = format!("{checksum:06o}\0 ");
+        header[148..156].copy_from_slice(checksum.as_bytes());
+        out.extend_from_slice(&header);
+    }
+
+    fn append_file(out: &mut Vec<u8>, name: &[u8], body: &[u8]) {
+        append_header(out, name, b"000644 \0", body.len(), b'0');
+        out.extend_from_slice(body);
+        let padding = (512 - (body.len() % 512)) % 512;
+        out.resize(out.len() + padding, 0);
+    }
+
+    let mut out = Vec::new();
+    append_header(&mut out, b"top1/", b"000755 \0", 0, b'5');
+    append_file(&mut out, b"top1/alpha.txt", b"alpha\n");
+    append_header(&mut out, b"top2/", b"000755 \0", 0, b'5');
+    append_file(&mut out, b"top2/beta.txt", b"beta\n");
+    out.resize(10 * 1024, 0);
+    out
+}
+
 fn dict_biased_sample(dict: &[u8], size: usize, seed: u32) -> Vec<u8> {
     let mut out = Vec::with_capacity(size);
     let mut cursor = (seed as usize) % dict.len();
@@ -2020,6 +2062,42 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     cdict::ZSTD_freeCDict(cdict_ptr);
     cctx_params::ZSTD_freeCCtxParams(cctx_params_ptr);
     cstream::ZSTD_freeCStream(zcs2);
+    cstream::ZSTD_freeCStream(zcs);
+}
+
+#[test]
+fn compress_streaming_tar_headers_roundtrip_for_libarchive_usage() {
+    let src = libarchive_two_topdirs_tar_payload();
+    let zcs = cstream::ZSTD_createCStream();
+    let mut compressed = vec![0u8; cstream::ZSTD_CStreamOutSize()];
+    let mut input = ZSTD_inBuffer {
+        src: src.as_ptr().cast(),
+        size: src.len(),
+        pos: 0,
+    };
+    let mut output = ZSTD_outBuffer {
+        dst: compressed.as_mut_ptr().cast(),
+        size: compressed.len(),
+        pos: 0,
+    };
+    assert!(!zcs.is_null());
+
+    check_result(cstream::ZSTD_initCStream(zcs, 3), "ZSTD_initCStream");
+    check_result(
+        cstream::ZSTD_compressStream(zcs, &mut output, &mut input),
+        "ZSTD_compressStream(libarchive mirror)",
+    );
+    assert_eq!(input.pos, input.size);
+    loop {
+        let remaining = cstream::ZSTD_endStream(zcs, &mut output);
+        check_result(remaining, "ZSTD_endStream(libarchive mirror)");
+        if remaining == 0 {
+            break;
+        }
+    }
+    compressed.truncate(output.pos);
+    decompress_exact(&compressed, &src);
+
     cstream::ZSTD_freeCStream(zcs);
 }
 

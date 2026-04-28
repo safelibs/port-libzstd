@@ -24,7 +24,7 @@ use core::{
 };
 use oxiarc_zstd::{LevelConfig as OxiarcLevelConfig, MatchFinder as OxiarcMatchFinder};
 use std::{borrow::Cow, vec::Vec};
-use structured_zstd::decoding::Dictionary as StructuredDictionary;
+use structured_zstd::decoding::{Dictionary as StructuredDictionary, FrameDecoder};
 use structured_zstd::encoding::{
     CompressionLevel as StructuredCompressionLevel, FrameCompressor, Matcher,
     Sequence as StructuredSequence, StreamingBlockCompressor,
@@ -1741,6 +1741,7 @@ fn structured_payload(
     } else {
         history.to_vec()
     };
+    let can_validate_plain = history.is_empty() && structured_entropy_dictionary(ctx).is_none();
     let max_window_size = history.len().saturating_add(slice_size).max(slice_size);
     let matcher = DictionaryMatcher::new(
         history,
@@ -1758,6 +1759,10 @@ fn structured_payload(
     compressor.set_drain(&mut encoded);
     compressor.compress();
 
+    if can_validate_plain && !structured_frame_roundtrips(&encoded, src) {
+        return Ok(small_no_history_raw_payload(src, ctx));
+    }
+
     let header = match parse_frame_header(&encoded, ZSTD_format_e::ZSTD_f_zstd1)? {
         HeaderProbe::Header(header) => header,
         HeaderProbe::Need(_) => return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC),
@@ -1771,6 +1776,12 @@ fn structured_payload(
         ctx.compression_level,
         encoded[start..encoded.len() - trailer].to_vec(),
     )
+}
+
+fn structured_frame_roundtrips(encoded: &[u8], src: &[u8]) -> bool {
+    let mut decoded = Vec::with_capacity(src.len());
+    let mut decoder = FrameDecoder::new();
+    decoder.decode_all_to_vec(encoded, &mut decoded).is_ok() && decoded == src
 }
 
 fn uses_structured_history_source(bytes: &[u8], dict_content_type: ZSTD_dictContentType_e) -> bool {
