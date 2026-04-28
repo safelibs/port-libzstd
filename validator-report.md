@@ -264,3 +264,55 @@ Current package outputs used by the final local package smoke:
 | libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 380926 | 9c05c6f3a144354da30827b2a020d1341f4f6f57d3e9e6c6d1aef22988b6b27c |
 | libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 3830588 | 1525e2933b9d26206f51a8e51af45935bcb11629cfb93203f22048ed39f5f6e6 |
 | zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
+
+**Phase 5: Remaining Failures, Validator-Bug Triage, and Report Consolidation**
+
+Phase 5 Base Commit: eaed055405b7cdf7d38a2b1ee76255f3dc7a5d91
+- Implement phase: `impl_validator_remaining_burn_down`
+- Validator Commit: 1319bb0374ef66428a42dd71e49553c6d057feaf
+- No remaining failures assigned to impl_validator_remaining_burn_down
+- Residual failure rows owned by this phase: 0
+- Validator-bug skips generated: none
+- Safe code, package metadata, and regression-test changes in this phase: none
+
+**Phase 5 Commands Run**
+
+```bash
+git status --short
+sed -n '1,240p' .plan/workflow-structure.yaml
+sed -n '1,260p' validator-report.md
+rg -n 'impl_validator_remaining_burn_down|Phase 5|open|Unclassified|Remaining|Validator Bug|skipped_validator_bug|fixed' validator-report.md safe/out/validator/artifacts -g '*.json' -g '*.md' -g '*.txt' -g '*.log'
+sed -n '260,520p' validator-report.md
+python3 -m json.tool safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json
+find safe/out/validator/artifacts/port-04-test/results/libzstd -maxdepth 1 -name '*.json' -print | sort | wc -l
+rg -n '"status": "failed"|"status": "error"|"failed"' safe/out/validator/artifacts/port-04-test/results/libzstd/*.json
+git -C validator rev-parse HEAD
+git -C validator status --short --branch
+test -f safe/out/validator/skip.env; echo skip_env_status=$?
+set +e; bash safe/scripts/run-validator-libzstd.sh; status=$?; printf 'VALIDATOR_RUNNER_STATUS=%s\n' "$status"; exit 0
+VALIDATOR_RUNNER_STATUS=0 python3 safe/scripts/check-validator-phase-results.py --results-root safe/out/validator/artifacts/port-04-test/results/libzstd --report validator-report.md --completed-phase impl_validator_source_cli_regressions --completed-phase impl_validator_streaming_capi_regressions --completed-phase impl_validator_libarchive_usage_regressions --completed-phase impl_validator_remaining_burn_down
+python3 -m json.tool safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json
+python3 -m json.tool safe/out/validator/artifacts/proof/port-04-test-debs-lock.json
+ls -l safe/out/validator/artifacts/proof
+bash safe/scripts/run-validator-regressions.sh
+bash -lc 'set +e; bash safe/scripts/run-validator-libzstd.sh; status=$?; set -e; VALIDATOR_RUNNER_STATUS=$status python3 safe/scripts/check-validator-phase-results.py --results-root safe/out/validator/artifacts/port-04-test/results/libzstd --report validator-report.md --completed-phase impl_validator_source_cli_regressions --completed-phase impl_validator_streaming_capi_regressions --completed-phase impl_validator_libarchive_usage_regressions --completed-phase impl_validator_remaining_burn_down; test "$status" -eq 0'
+python3 -m json.tool safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json >/dev/null
+rg -n 'Unclassified|Remaining|Validator Bug|Skip|No remaining failures assigned to impl_validator_remaining_burn_down' validator-report.md
+cargo test --manifest-path safe/Cargo.toml --release --all-targets
+bash safe/scripts/verify-export-parity.sh
+bash -lc 'base=$(awk "/Phase 5 Base Commit:/ {print \$5; exit}" validator-report.md); test -n "$base"; git diff --check "$base..HEAD"'
+test -z "$(git -C validator status --porcelain --untracked-files=no)"
+bash -lc 'if [ -f safe/out/validator/skip.env ]; then py=python3; if [ -x safe/out/validator/venv/bin/python ]; then py="$PWD/safe/out/validator/venv/bin/python"; else python3 -c "import yaml"; fi; set -a; . safe/out/validator/skip.env; set +a; test -n "${VALIDATOR_TESTS_ROOT:-}"; test -d "$VALIDATOR_TESTS_ROOT/libzstd"; test -d "$VALIDATOR_TESTS_ROOT/tests/libzstd"; "$py" validator/tools/testcases.py --config validator/repositories.yml --tests-root "$VALIDATOR_TESTS_ROOT" --library libzstd --check --min-source-cases "$VALIDATOR_MIN_SOURCE_CASES" --min-usage-cases "$VALIDATOR_MIN_USAGE_CASES" --min-cases "$VALIDATOR_MIN_CASES"; fi'
+find safe/out/validator -maxdepth 3 -type d | sort | sed -n '1,120p'
+rg -n 'skip|skipped|validator bug|justification|No remaining failures assigned to impl_validator_remaining_burn_down' validator-report.md
+```
+
+**Phase 5 Result**
+
+Strict full validator run passed with `VALIDATOR_RUNNER_STATUS=0`. Final validator artifacts at `safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json`: 85 cases, 5 source cases, 80 usage cases, 85 passed, 0 failed, 85 casts. The full result set contains 85 testcase result JSON files plus `summary.json`.
+
+Proof artifacts were generated at `safe/out/validator/artifacts/proof/port-04-test-debs-lock.json` and `safe/out/validator/artifacts/proof/port-04-test-validation-proof.json`. The generated port lock records local safe commit `eaed055405b7cdf7d38a2b1ee76255f3dc7a5d91` with release tag `build-eaed055405b7`.
+
+No validator bug was identified. `safe/out/validator/skip.env` is absent, no filtered test root was generated, and `validator/` remains unmodified.
+
+Phase 5 verification passed: `safe/scripts/run-validator-regressions.sh` found no local validator regression directory, the strict validator plus phase-result check passed, `summary.json` parsed as valid JSON, `cargo test --manifest-path safe/Cargo.toml --release --all-targets` passed, `safe/scripts/verify-export-parity.sh` verified 185 exported symbols, `git diff --check` found no whitespace errors, and the validator checkout had no tracked or modified files.
