@@ -139,3 +139,43 @@ VALIDATOR_RUNNER_STATUS=1 python3 safe/scripts/check-validator-phase-results.py 
 No safe implementation, package, or regression-test changes remain in the net Phase 2 diff because no source-case failures were assigned to `impl_validator_source_cli_regressions`. The current libarchive usage failure remains recorded as an open row assigned to `impl_validator_libarchive_usage_regressions`, the later phase reserved for libarchive usage remediation.
 
 Post-correction validator artifacts at `safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json`: 85 cases, 5 source cases, 80 usage cases, 84 passed, 1 failed, 85 casts, validator runner status 1. The current failed testcase is `usage-libarchive-tools-zstd-two-topdirs-list`; `check-validator-phase-results.py` passed and reported it as an allowed remaining failed testcase for `impl_validator_libarchive_usage_regressions`.
+
+**Phase 3: Streaming C API Validator Failures**
+
+Phase 3 Base Commit: ff7819723e25d9b669aebf22032e4daab5db7a38
+- Implement phase: `impl_validator_streaming_capi_regressions`
+- Validator Commit: 1319bb0374ef66428a42dd71e49553c6d057feaf
+- Streaming C API rows assigned to this phase in the original Phase 1 table: 0
+- No streaming C API failures assigned to impl_validator_streaming_capi_regressions
+- Existing `streaming-c-api-smoke` validator artifact: status `passed`, exit code 0, result path `safe/out/validator/artifacts/port-04-test/results/libzstd/streaming-c-api-smoke.json`, log path `safe/out/validator/artifacts/port-04-test/logs/libzstd/streaming-c-api-smoke.log`
+- Remaining open validator row: `usage-libarchive-tools-zstd-two-topdirs-list`, assigned to `impl_validator_libarchive_usage_regressions`
+- Net safe code changes in this phase: none
+
+**Phase 3 Commands Inspected**
+
+```bash
+git status --short && git rev-parse HEAD
+sed -n '1,240p' .plan/workflow-structure.yaml
+sed -n '1,260p' validator-report.md
+rg -n 'streaming-c-api-smoke|impl_validator_streaming_capi_regressions|Phase 3|Phase 1|open|fixed|assigned' validator-report.md safe/out/validator/artifacts/port-04-test/results/libzstd safe/out/validator/artifacts/port-04-test/logs/libzstd
+git -C validator rev-parse HEAD && git -C validator status --short --branch
+python3 - <<'PY'
+import json, pathlib
+for name in ['summary.json', 'streaming-c-api-smoke.json']:
+    p=pathlib.Path('safe/out/validator/artifacts/port-04-test/results/libzstd')/name
+    print('---', p)
+    print('exists', p.exists())
+    if p.exists():
+        data=json.loads(p.read_text())
+        print(json.dumps(data, indent=2)[:4000])
+PY
+sed -n '1,220p' safe/out/validator/artifacts/port-04-test/logs/libzstd/streaming-c-api-smoke.log
+rg -n 'streaming-c-api-smoke|impl_validator_streaming_capi_regressions|Phase 3|usage-libarchive-tools-zstd-two-topdirs-list' safe/out/validator/artifacts/port-04-test/results/libzstd/*.json validator-report.md
+sed -n '1,260p' safe/scripts/check-validator-phase-results.py
+git log --oneline --decorate -5
+git status --short
+```
+
+**Phase 3 Result**
+
+No safe implementation, package, or regression-test changes were made because no Phase 1 row was assigned to `impl_validator_streaming_capi_regressions`. The existing `streaming-c-api-smoke` result is passing, and the only remaining failed testcase belongs to the later libarchive usage phase.
