@@ -87,9 +87,11 @@ stage_corpus() {
         install -m 0644 \
             "$ORIGINAL_ROOT/tests/golden-decompression/rle-first-block.zst" \
             "$dest/rle-first-block.zst"
-        install -m 0644 \
-            "$ORIGINAL_ROOT/tests/fuzz/corpora/block_decompress-seed/z000000.zst" \
-            "$dest/z000000.zst"
+        if [[ -f $ORIGINAL_ROOT/tests/fuzz/corpora/block_decompress-seed/z000000.zst ]]; then
+            install -m 0644 \
+                "$ORIGINAL_ROOT/tests/fuzz/corpora/block_decompress-seed/z000000.zst" \
+                "$dest/z000000.zst"
+        fi
     else
         rsync -a "$FUZZ_FIXTURE_ROOT/dictionary/" "$dest/"
         install -m 0644 \
