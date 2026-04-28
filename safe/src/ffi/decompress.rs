@@ -257,6 +257,9 @@ fn drain_staged_output(
     if dst_capacity == 0 {
         return Err(ZSTD_ErrorCode::ZSTD_error_noForwardProgress_destFull);
     }
+    if dst.is_null() {
+        return Err(ZSTD_ErrorCode::ZSTD_error_dstBuffer_null);
+    }
     let to_write = remaining.len().min(dst_capacity);
     // SAFETY: The caller provides `dst_capacity` writable bytes at `dst`.
     unsafe {

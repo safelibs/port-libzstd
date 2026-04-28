@@ -168,6 +168,42 @@ static int decompress_exact(const void* compressed,
     return 0;
 }
 
+static int decompress_stream_rejects_staged_null_destination(const void* compressed,
+                                                            size_t compressed_size,
+                                                            const unsigned char* expected,
+                                                            size_t expected_size)
+{
+    ZSTD_DCtx* const dctx = ZSTD_createDCtx();
+    unsigned char first_byte[1];
+    ZSTD_inBuffer input = { compressed, compressed_size, 0 };
+    ZSTD_outBuffer small_output = { first_byte, sizeof(first_byte), 0 };
+    ZSTD_outBuffer null_output = { NULL, expected_size, 0 };
+    size_t input_pos_before_error;
+    size_t ret;
+    ZSTD_ErrorCode code;
+
+    CHECK(dctx != NULL, "failed to create staged-output DCtx\n");
+    ret = ZSTD_decompressStream(dctx, &small_output, &input);
+    CHECK(!ZSTD_isError(ret), "ZSTD_decompressStream(staging) failed: %s\n",
+          ZSTD_getErrorName(ret));
+    CHECK(small_output.pos == sizeof(first_byte),
+          "ZSTD_decompressStream did not fill the staging probe output\n");
+    CHECK(first_byte[0] == expected[0], "staging probe decoded the wrong first byte\n");
+
+    input_pos_before_error = input.pos;
+    ret = ZSTD_decompressStream(dctx, &null_output, &input);
+    CHECK(ZSTD_isError(ret), "ZSTD_decompressStream accepted a NULL staged output buffer\n");
+    code = ZSTD_getErrorCode(ret);
+    CHECK(code == ZSTD_error_dstBuffer_null,
+          "ZSTD_decompressStream returned %s instead of dstBuffer_null\n",
+          ZSTD_getErrorName(ret));
+    CHECK(null_output.pos == 0U, "NULL staged output advanced output.pos\n");
+    CHECK(input.pos == input_pos_before_error, "NULL staged output advanced input.pos\n");
+
+    ZSTD_freeDCtx(dctx);
+    return 0;
+}
+
 static unsigned frame_first_block_type(const unsigned char* frame, size_t frame_size)
 {
     size_t const header_size = ZSTD_frameHeaderSize(frame, frame_size);
@@ -481,6 +517,15 @@ int main(int argc, char** argv)
     CHECK(dict_handle != NULL && tuned_params != NULL, "failed to create test CDict state\n");
     CHECK_Z(ZSTD_CCtxParams_init(tuned_params, 4));
     CHECK_Z(ZSTD_CCtxParams_setParameter(tuned_params, ZSTD_c_windowLog, 14));
+
+    compressed_size = ZSTD_compress(compressed, ZSTD_compressBound(src_size), src, src_size, 4);
+    CHECK(!ZSTD_isError(compressed_size), "ZSTD_compress(staged null dst) failed: %s\n",
+          ZSTD_getErrorName(compressed_size));
+    if (decompress_stream_rejects_staged_null_destination(compressed, compressed_size,
+                                                          src, src_size)) {
+        return 1;
+    }
+
     tuned_dict_handle = ZSTD_createCDict_advanced2(
         dict,
         dict_size,
