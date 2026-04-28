@@ -84,17 +84,9 @@ Proof generation was not run because the matrix had failed testcases.
 
 **Failure Classification**
 
-The latest required rerun currently fails `usage-libarchive-tools-zstd-two-topdirs-list`.
-The `usage-libarchive-tools-zstd-space-file-extract` and
-`usage-libarchive-tools-zstd-stdout-member-alpha` rows are retained as open
-because they failed in required Phase 1 reruns with the same libarchive
-`Unrecognized archive format` symptom.
-
 | testcase_id | kind | client_application | exit_code | error | result_path | log_path | assigned_remediation_phase | remediation_status | regression_test | fix_commit | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| usage-libarchive-tools-zstd-space-file-extract | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-space-file-extract.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-space-file-extract.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while extracting a zstd-compressed tar containing a filename with a space; observed_in_phase1_rerun_flake. |
-| usage-libarchive-tools-zstd-stdout-member-alpha | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-stdout-member-alpha.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-stdout-member-alpha.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while extracting alpha.txt to stdout from a zstd-compressed tar; observed_in_phase1_rerun_flake. |
-| usage-libarchive-tools-zstd-two-topdirs-list | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while listing a zstd-compressed tar with two top-level directories; observed_in_phase1_rerun_flake. |
+| usage-libarchive-tools-zstd-two-topdirs-list | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while listing a zstd-compressed tar with two top-level directories. |
 
 **Skip List**
 
