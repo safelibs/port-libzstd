@@ -1759,10 +1759,6 @@ fn structured_payload(
     compressor.set_drain(&mut encoded);
     compressor.compress();
 
-    if can_validate_plain && !structured_frame_roundtrips(&encoded, src) {
-        return Ok(small_no_history_raw_payload(src, ctx));
-    }
-
     let header = match parse_frame_header(&encoded, ZSTD_format_e::ZSTD_f_zstd1)? {
         HeaderProbe::Header(header) => header,
         HeaderProbe::Need(_) => return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC),
@@ -1772,16 +1768,39 @@ fn structured_payload(
     if start > encoded.len() || start + trailer > encoded.len() {
         return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
     }
-    maybe_prepend_fast_empty_block(
+    let payload = maybe_prepend_fast_empty_block(
         ctx.compression_level,
         encoded[start..encoded.len() - trailer].to_vec(),
-    )
+    )?;
+
+    if can_validate_plain && !structured_payload_roundtrips(&payload, src, ctx) {
+        return Ok(small_no_history_raw_payload(src, ctx));
+    }
+
+    Ok(payload)
 }
 
-fn structured_frame_roundtrips(encoded: &[u8], src: &[u8]) -> bool {
+fn payload_validation_content_size(ctx: &EncoderContext, src_len: usize) -> Option<usize> {
+    if ctx.stream_mode || ctx.stream.frame_started {
+        stream_content_size(ctx)
+    } else {
+        Some(src_len)
+    }
+}
+
+fn structured_payload_roundtrips(payload: &[u8], src: &[u8], ctx: &EncoderContext) -> bool {
+    let Ok(mut frame) = build_frame_header(ctx, payload_validation_content_size(ctx, src.len()))
+    else {
+        return false;
+    };
+    frame.extend_from_slice(payload);
+    if ctx.fparams.checksumFlag != 0 {
+        frame.extend_from_slice(&(xxh64(src) as u32).to_le_bytes());
+    }
+
     matches!(
         decode_all_frames(
-            encoded,
+            &frame,
             DictionaryRef::None,
             ZSTD_format_e::ZSTD_f_zstd1,
             usize::MAX,
