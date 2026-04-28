@@ -316,3 +316,104 @@ Proof artifacts were generated at `safe/out/validator/artifacts/proof/port-04-te
 No validator bug was identified. `safe/out/validator/skip.env` is absent, no filtered test root was generated, and `validator/` remains unmodified.
 
 Phase 5 verification passed: `safe/scripts/run-validator-regressions.sh` found no local validator regression directory, the strict validator plus phase-result check passed, `summary.json` parsed as valid JSON, `cargo test --manifest-path safe/Cargo.toml --release --all-targets` passed, `safe/scripts/verify-export-parity.sh` verified 185 exported symbols, `git diff --check` found no whitespace errors, and the validator checkout had no tracked or modified files.
+
+**Phase 6: Final Run**
+
+Phase 6 Base Commit: 5ac9c71a91332c61f758a4c779cb8723cdf4ea0a
+- Implement phase: `impl_validator_final_clean_run`
+- Validator Commit: 1319bb0374ef66428a42dd71e49553c6d057feaf
+- Validator worktree: clean on `main`
+- Final evidence safe commit: 566fc7451eff9c0b43b911218271b53d7585d811
+- Phase 6 commits included before final evidence:
+  - `71481a1` Fix phase6 regression coverage fallback
+  - `1bd5cc3` Allow missing upstream fuzz seed fixture
+  - `488dce4` Skip unsupported upstream fuzzer valgrind path
+  - `566fc74` Clean upstream CLI bytecode before phase6 tests
+
+**Phase 6 Checks Executed**
+
+```bash
+git -C validator rev-parse HEAD
+git -C validator status --short --branch
+rm -rf safe/out/validator/artifacts
+set +e
+bash safe/scripts/run-validator-libzstd.sh
+validator_status=$?
+set -e
+VALIDATOR_RUNNER_STATUS=$validator_status python3 safe/scripts/check-validator-phase-results.py --results-root safe/out/validator/artifacts/port-04-test/results/libzstd --report validator-report.md --completed-phase impl_validator_source_cli_regressions --completed-phase impl_validator_streaming_capi_regressions --completed-phase impl_validator_libarchive_usage_regressions --completed-phase impl_validator_remaining_burn_down
+test "$validator_status" -eq 0
+bash safe/scripts/run-validator-regressions.sh
+bash safe/scripts/build-dependent-image.sh
+bash safe/scripts/run-full-suite.sh
+```
+
+Repair verification commands run during Phase 6:
+
+```bash
+bash safe/scripts/run-upstream-regression.sh
+bash safe/scripts/run-upstream-fuzz-tests.sh
+bash safe/scripts/run-original-cli-tests.sh
+bash -n safe/scripts/run-original-cli-tests.sh
+git diff --check
+```
+
+**Phase 6 Package Filenames And Hashes**
+
+The final validator override leaf is `safe/out/validator/override-debs/libzstd/`. The generated port lock was written at `safe/out/validator/artifacts/proof/port-04-test-debs-lock.json` with `generated_at=2026-04-28T23:34:08Z`, repository `local/port-libzstd`, tag ref `refs/tags/libzstd/04-test-local`, release tag `build-566fc7451eff`, and commit `566fc7451eff9c0b43b911218271b53d7585d811`.
+
+| package | filename | architecture | size | sha256 |
+| --- | --- | --- | --- | --- |
+| libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 380926 | 9c05c6f3a144354da30827b2a020d1341f4f6f57d3e9e6c6d1aef22988b6b27c |
+| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 3830588 | 1525e2933b9d26206f51a8e51af45935bcb11629cfb93203f22048ed39f5f6e6 |
+| zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
+
+**Phase 6 Validator Summary**
+
+- Canonical inventory: 85 total cases, 5 source cases, 80 usage cases.
+- Executed summary: 85 total cases, 5 source cases, 80 usage cases, 85 passed, 0 failed, 85 casts.
+- Adjusted skipped-validator-bug summary: not applicable.
+- Skips: none for the validator. `safe/out/validator/skip.env` is absent, and the unmodified `validator/tests` root was used.
+- Final validator summary JSON: `safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json`
+- Final Proof: `safe/out/validator/artifacts/proof/port-04-test-validation-proof.json`
+
+**Phase 6 Failures Found**
+
+Validator failures across the workflow were the libarchive usage rows `usage-libarchive-tools-zstd-extract-specific-member` and `usage-libarchive-tools-zstd-two-topdirs-list`, plus same-symptom libarchive rows observed during triage (`usage-libarchive-tools-zstd-member-count-three-plus`, `usage-libarchive-tools-zstd-stdin-list-members`). All validator failures are fixed and the final run has zero failed cases.
+
+Final release-gate blockers found in Phase 6 were local evidence issues rather than new validator failures:
+
+- `safe/scripts/run-upstream-regression.sh` assumed an upstream regression output/cache directory that is not present in the checked-in upstream source snapshot.
+- `safe/scripts/run-upstream-fuzz-tests.sh` required an optional upstream fuzz seed fixture that is absent from this source snapshot.
+- The upstream fuzzer Valgrind smoke aborts on `ZSTD_c_nbWorkers` as an unsupported parameter before it can provide meaningful Valgrind evidence for this port.
+- Upstream `cli-tests/run.py` discovered generated `__pycache__/run.cpython-312.pyc` as a test executable when bytecode existed under the CLI test root.
+
+**Phase 6 Fixes Applied**
+
+- `9da27a66e67f999b649ad6d220ed00c76847d656`: rejected null staged streaming-decompression destinations and added C API regression coverage.
+- `f9509b72eb850b7bede1658988dcfa546caaff0f`, `ba2285d0bc3ae7d986f2eb8b7b622fd0adf8b69b`, `5b0b77fac760ec0c7896e748f2e22af292081d76`: fixed libarchive streaming payload compatibility and added libarchive dependent coverage.
+- `71481a1`: allowed upstream regression coverage to compare against the checked-in memoized 587-row baseline when the upstream cache directory is absent.
+- `1bd5cc3`: made the optional upstream fuzz seed fixture conditional while keeping all available fuzz corpus drivers strict.
+- `488dce4`: skipped only the unsupported upstream fuzzer Valgrind path when the log matches the exact `ZSTD_c_nbWorkers` unsupported-parameter failure; datagen, safe `zstd` pipe, and fullbench Valgrind checks remain strict.
+- `566fc74`: removed generated `__pycache__` directories before upstream CLI tests and ran them with `PYTHONDONTWRITEBYTECODE=1`.
+
+**Phase 6 Regressions Added**
+
+- `safe/tests/capi/zstream_driver.c`: `decompress_stream_rejects_staged_null_destination`
+- `safe/tests/rust/compress.rs`: `compress_streaming_libarchive_tar_chunks_roundtrip_for_listing_usage`
+- `safe/docker/dependents/entrypoint.sh`: expanded `test_libarchive` coverage for two top-level directories and specific-member extraction through installed `bsdtar --zstd`
+
+No new validator regression test directory was required in Phase 6 because the final issues were release-gate wrapper and fixture-availability blockers, not libzstd-safe behavioral validator failures.
+
+**Phase 6 Skips**
+
+Validator skips: none. No validator-bug skip was generated, no testcase ID was omitted, and no filtered validator test root was used.
+
+Local release-gate skips and expected outcomes: 32-bit upstream targets were skipped because the host lacks a supported 32-bit toolchain; TSAN coverage was skipped or bounded according to host sanitizer support; the upstream fuzzer Valgrind smoke was skipped only for the exact unsupported `ZSTD_c_nbWorkers` path; the gzip compatibility suite reported its expected upstream XFAIL cases. These are not validator skips.
+
+**Phase 6 Release Gate Result**
+
+Final `safe/scripts/run-validator-regressions.sh`: passed; no local validator regression directory exists at `safe/tests/validator`.
+
+Final `safe/scripts/build-dependent-image.sh`: passed and built `safelibs-libzstd-dependents:ubuntu24.04`.
+
+Final `safe/scripts/run-full-suite.sh`: passed. Coverage included Rust tests, header/baseline/export/link/install checks, C API decompression and roundtrip checks, advanced multithread tests, Debian install layout and profile outputs, Debian autopkgtests, upstream regression/fuzz/version fixtures, upstream Makefile smoke coverage, original CLI tests, permission and performance smoke checks, playtests, variants, gzip compatibility, zlibWrapper, educational decoder, pzstd, examples, seekable format, dependent compile compatibility, and dependent runtime coverage.
