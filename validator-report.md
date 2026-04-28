@@ -89,6 +89,7 @@ Proof generation was not run because the matrix had failed testcases.
 
 | testcase_id | kind | client_application | exit_code | error | result_path | log_path | assigned_remediation_phase | remediation_status | regression_test | fix_commit | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| usage-libarchive-tools-zstd-extract-specific-member | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-extract-specific-member.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-extract-specific-member.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while extracting a named member from a zstd-compressed tar archive. Observed in the Phase 3 verifier rerun and assigned to the later libarchive usage phase. |
 | usage-libarchive-tools-zstd-two-topdirs-list | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while listing a zstd-compressed tar archive with two top-level directories. |
 
 **Skip List**
@@ -136,9 +137,9 @@ VALIDATOR_RUNNER_STATUS=1 python3 safe/scripts/check-validator-phase-results.py 
 
 **Phase 2 Result**
 
-No safe implementation, package, or regression-test changes remain in the net Phase 2 diff because no source-case failures were assigned to `impl_validator_source_cli_regressions`. The current libarchive usage failure remains recorded as an open row assigned to `impl_validator_libarchive_usage_regressions`, the later phase reserved for libarchive usage remediation.
+No safe implementation, package, or regression-test changes remain in the net Phase 2 diff because no source-case failures were assigned to `impl_validator_source_cli_regressions`. At the Phase 2 handoff, the known libarchive usage failure remained recorded as an open row assigned to `impl_validator_libarchive_usage_regressions`, the later phase reserved for libarchive usage remediation.
 
-Post-correction validator artifacts at `safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json`: 85 cases, 5 source cases, 80 usage cases, 84 passed, 1 failed, 85 casts, validator runner status 1. The current failed testcase is `usage-libarchive-tools-zstd-two-topdirs-list`; `check-validator-phase-results.py` passed and reported it as an allowed remaining failed testcase for `impl_validator_libarchive_usage_regressions`.
+Phase 2 post-correction validator artifacts at `safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json`: 85 cases, 5 source cases, 80 usage cases, 84 passed, 1 failed, 85 casts, validator runner status 1. The failed testcase at that point was `usage-libarchive-tools-zstd-two-topdirs-list`; `check-validator-phase-results.py` passed and reported it as an allowed remaining failed testcase for `impl_validator_libarchive_usage_regressions`.
 
 **Phase 3: Streaming C API Validator Failures**
 
@@ -148,7 +149,8 @@ Phase 3 Base Commit: ff7819723e25d9b669aebf22032e4daab5db7a38
 - Streaming C API rows assigned to this phase in the original Phase 1 table: 0
 - No streaming C API failures assigned to impl_validator_streaming_capi_regressions
 - Existing `streaming-c-api-smoke` validator artifact: status `passed`, exit code 0, result path `safe/out/validator/artifacts/port-04-test/results/libzstd/streaming-c-api-smoke.json`, log path `safe/out/validator/artifacts/port-04-test/logs/libzstd/streaming-c-api-smoke.log`
-- Remaining open validator row: `usage-libarchive-tools-zstd-two-topdirs-list`, assigned to `impl_validator_libarchive_usage_regressions`
+- Current validator artifact summary after the Phase 3 verifier rerun: 85 cases, 5 source cases, 80 usage cases, 83 passed, 2 failed, 85 casts, validator runner status 1
+- Remaining open validator rows: `usage-libarchive-tools-zstd-extract-specific-member` and `usage-libarchive-tools-zstd-two-topdirs-list`, both assigned to `impl_validator_libarchive_usage_regressions`
 - Net safe code changes in this phase: none
 
 **Phase 3 Commands Inspected**
@@ -174,8 +176,19 @@ rg -n 'streaming-c-api-smoke|impl_validator_streaming_capi_regressions|Phase 3|u
 sed -n '1,260p' safe/scripts/check-validator-phase-results.py
 git log --oneline --decorate -5
 git status --short
+sed -n '1,240p' safe/out/validator/artifacts/port-04-test/logs/libzstd/usage-libarchive-tools-zstd-extract-specific-member.log
+python3 - <<'PY'
+import json, pathlib
+root=pathlib.Path('safe/out/validator/artifacts/port-04-test/results/libzstd')
+print(json.dumps(json.loads((root/'summary.json').read_text()), indent=2))
+for p in sorted(root.glob('*.json')):
+    if p.name != 'summary.json':
+        data=json.loads(p.read_text())
+        if data.get('status') == 'failed':
+            print(data['testcase_id'], data.get('log_path'))
+PY
 ```
 
 **Phase 3 Result**
 
-No safe implementation, package, or regression-test changes were made because no Phase 1 row was assigned to `impl_validator_streaming_capi_regressions`. The existing `streaming-c-api-smoke` result is passing, and the only remaining failed testcase belongs to the later libarchive usage phase.
+No safe implementation, package, or regression-test changes were made because no Phase 1 row was assigned to `impl_validator_streaming_capi_regressions`. The existing `streaming-c-api-smoke` result is passing. The currently remaining failed testcases are libarchive usage failures assigned to the later libarchive usage phase.
