@@ -6,7 +6,7 @@ Phase 1 Base Commit: c9970b608feeb7d1e1cfc94e40c7ee8aa1ed7fbb
 - Validator Commit: 1319bb0374ef66428a42dd71e49553c6d057feaf
 - Validator branch: main
 - Planning reference commit: 1319bb0374ef66428a42dd71e49553c6d057feaf
-- Local safe commit: 02ef19834532653585e41f3c34bed786a39682a4
+- Local safe commit: 369d504d9a470b276c43174b12591adb636e682f
 
 **Python Setup**
 
@@ -19,8 +19,8 @@ The validator override leaf is `safe/out/validator/override-debs/libzstd/`.
 
 | package | filename | architecture | size | sha256 |
 | --- | --- | --- | --- | --- |
-| libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 380312 | 5a8876acaf8d17a96a0ced4465b84df3c84e846ec4ca27674c12a8afe58fa21c |
-| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 3831596 | c8a309e65a59648d30e2f587aa01712301c2b408fec1f8cb42142a633e9d5eab |
+| libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 379926 | c0f6bdc23d5338e12a832443c33ec5d7322f98089e40d12b6bf5683390cacad3 |
+| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 3831578 | 7c6abfe048c50409f0bbc9ac4dcfb4c9db3f516db246e04e1ef0b767adc31c6c |
 | zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
 
 **Generated Port Lock**
@@ -28,11 +28,11 @@ The validator override leaf is `safe/out/validator/override-debs/libzstd/`.
 - Path: `safe/out/validator/artifacts/proof/port-04-test-debs-lock.json`
 - Repository: local/port-libzstd
 - Tag ref: refs/tags/libzstd/04-test-local
-- Commit: 02ef19834532653585e41f3c34bed786a39682a4
-- Release tag: build-02ef19834532
+- Commit: 369d504d9a470b276c43174b12591adb636e682f
+- Release tag: build-369d504d9a47
 - Package architectures: amd64
-- Package sizes: libzstd1=380312, libzstd-dev=3831596, zstd=159324
-- Package SHA256 hashes: libzstd1=5a8876acaf8d17a96a0ced4465b84df3c84e846ec4ca27674c12a8afe58fa21c, libzstd-dev=c8a309e65a59648d30e2f587aa01712301c2b408fec1f8cb42142a633e9d5eab, zstd=8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91
+- Package sizes: libzstd1=379926, libzstd-dev=3831578, zstd=159324
+- Package SHA256 hashes: libzstd1=c0f6bdc23d5338e12a832443c33ec5d7322f98089e40d12b6bf5683390cacad3, libzstd-dev=7c6abfe048c50409f0bbc9ac4dcfb4c9db3f516db246e04e1ef0b767adc31c6c, zstd=8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91
 
 **Exact Commands Run**
 
@@ -46,13 +46,12 @@ rm -rf safe/scripts/__pycache__
 rm -f safe/out/validator/skip.env
 rm -rf safe/out/validator/tests-filtered safe/out/validator/artifacts
 set +e
-bash safe/scripts/run-validator-libzstd.sh
+DEB_BUILD_PROFILES=noudeb bash safe/scripts/run-validator-libzstd.sh
 status=$?
 printf 'VALIDATOR_RUNNER_STATUS=%s\n' "$status"
+set -e
 VALIDATOR_RUNNER_STATUS=$status python3 safe/scripts/check-validator-phase-results.py --results-root safe/out/validator/artifacts/port-04-test/results/libzstd --report validator-report.md --allow-remaining-phase impl_validator_source_cli_regressions --allow-remaining-phase impl_validator_streaming_capi_regressions --allow-remaining-phase impl_validator_libarchive_usage_regressions --allow-remaining-phase impl_validator_remaining_burn_down
-cargo test --manifest-path safe/Cargo.toml small_stream_archive_payload_uses_raw_blocks_for_dependent_readers -- --nocapture
 cargo fmt --manifest-path safe/Cargo.toml --check
-DEB_BUILD_PROFILES=noudeb bash safe/scripts/run-validator-libzstd.sh
 exit 0
 ```
 
@@ -92,7 +91,7 @@ Proof generation completed: `safe/out/validator/artifacts/proof/port-04-test-val
 | testcase_id | kind | client_application | exit_code | error | result_path | log_path | assigned_remediation_phase | remediation_status | regression_test | fix_commit | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
-All validator testcases passed after fixing small no-history stream compression to emit raw zstd blocks for small archive-sized payloads. Regression coverage: `safe/tests/rust/compress.rs::small_stream_archive_payload_uses_raw_blocks_for_dependent_readers`. Fix commit: `02ef19834532653585e41f3c34bed786a39682a4`.
+The current Phase 1 validator evidence run has no failing testcase rows to assign. No libzstd implementation or regression-test changes are included in this phase.
 
 **Skip List**
 
