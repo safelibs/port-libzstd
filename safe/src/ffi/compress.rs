@@ -5,7 +5,7 @@ use crate::{
     },
     decompress::{
         ddict,
-        frame::{parse_frame_header, HeaderProbe},
+        frame::{decode_all_frames, parse_frame_header, DictionaryRef, HeaderProbe},
         huf::is_formatted_dictionary,
     },
     ffi::types::{
@@ -24,7 +24,7 @@ use core::{
 };
 use oxiarc_zstd::{LevelConfig as OxiarcLevelConfig, MatchFinder as OxiarcMatchFinder};
 use std::{borrow::Cow, vec::Vec};
-use structured_zstd::decoding::{Dictionary as StructuredDictionary, FrameDecoder};
+use structured_zstd::decoding::Dictionary as StructuredDictionary;
 use structured_zstd::encoding::{
     CompressionLevel as StructuredCompressionLevel, FrameCompressor, Matcher,
     Sequence as StructuredSequence, StreamingBlockCompressor,
@@ -1779,9 +1779,15 @@ fn structured_payload(
 }
 
 fn structured_frame_roundtrips(encoded: &[u8], src: &[u8]) -> bool {
-    let mut decoded = Vec::with_capacity(src.len());
-    let mut decoder = FrameDecoder::new();
-    decoder.decode_all_to_vec(encoded, &mut decoded).is_ok() && decoded == src
+    matches!(
+        decode_all_frames(
+            encoded,
+            DictionaryRef::None,
+            ZSTD_format_e::ZSTD_f_zstd1,
+            usize::MAX,
+        ),
+        Ok(decoded) if decoded == src
+    )
 }
 
 fn uses_structured_history_source(bytes: &[u8], dict_content_type: ZSTD_dictContentType_e) -> bool {

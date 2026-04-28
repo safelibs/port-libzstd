@@ -2102,6 +2102,50 @@ fn compress_streaming_tar_headers_roundtrip_for_libarchive_usage() {
 }
 
 #[test]
+fn compress_streaming_libarchive_tar_chunks_roundtrip_for_listing_usage() {
+    let src = libarchive_two_topdirs_tar_payload();
+    let chunk_lengths = [512usize, 512, 6, 506, 512, 512, 5, 507, 1024];
+    let expected_len: usize = chunk_lengths.iter().sum();
+    let zcs = cstream::ZSTD_createCStream();
+    let mut compressed = vec![0u8; cstream::ZSTD_CStreamOutSize()];
+    let mut output = ZSTD_outBuffer {
+        dst: compressed.as_mut_ptr().cast(),
+        size: compressed.len(),
+        pos: 0,
+    };
+    let mut offset = 0usize;
+    assert!(!zcs.is_null());
+
+    check_result(cstream::ZSTD_initCStream(zcs, 3), "ZSTD_initCStream");
+    for chunk_len in chunk_lengths {
+        let chunk = &src[offset..offset + chunk_len];
+        let mut input = ZSTD_inBuffer {
+            src: chunk.as_ptr().cast(),
+            size: chunk.len(),
+            pos: 0,
+        };
+        check_result(
+            cstream::ZSTD_compressStream(zcs, &mut output, &mut input),
+            "ZSTD_compressStream(libarchive chunks)",
+        );
+        assert_eq!(input.pos, input.size);
+        offset += chunk_len;
+    }
+    loop {
+        let remaining = cstream::ZSTD_endStream(zcs, &mut output);
+        check_result(remaining, "ZSTD_endStream(libarchive chunks)");
+        if remaining == 0 {
+            break;
+        }
+    }
+    assert_eq!(offset, expected_len);
+    compressed.truncate(output.pos);
+    decompress_exact(&compressed, &src[..expected_len]);
+
+    cstream::ZSTD_freeCStream(zcs);
+}
+
+#[test]
 fn compress_stream2_trained_dictionary_improves_size() {
     let src = zstreamtest_sample(384 * 1024, 0x1234_ABCD);
     let dict = train_zstreamtest_dictionary(&src);
