@@ -90,7 +90,54 @@ Proof generation was not run because the matrix had failed testcases.
 | testcase_id | kind | client_application | exit_code | error | result_path | log_path | assigned_remediation_phase | remediation_status | regression_test | fix_commit | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | usage-libarchive-tools-zstd-two-topdirs-list | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while listing a zstd-compressed tar archive with two top-level directories. |
+| usage-libarchive-tools-zstd-dotfile-stdout | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-dotfile-stdout.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-dotfile-stdout.log | impl_validator_libarchive_usage_regressions | open |  |  | Verifier-refreshed usage failure absent from the original Phase 1 table; deferred to impl_validator_libarchive_usage_regressions. |
+| usage-libarchive-tools-zstd-stdout-member-alpha | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-stdout-member-alpha.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-stdout-member-alpha.log | impl_validator_libarchive_usage_regressions | open |  |  | Verifier-refreshed usage failure absent from the original Phase 1 table; deferred to impl_validator_libarchive_usage_regressions. |
 
 **Skip List**
 
 - Empty. No validator checks were skipped in Phase 1.
+
+**Phase 2: Source CLI, Dictionary, Multiframe, and Corruption Failures**
+
+Phase 2 Base Commit: fe85807776ce1b743ad476b3301aa58bbdf4542f
+- Implement phase: `impl_validator_source_cli_regressions`
+- Validator Commit: 1319bb0374ef66428a42dd71e49553c6d057feaf
+- Source cases inspected: 5
+- Source cases assigned to this phase in the original Phase 1 table: 0
+- No source-case failures assigned to impl_validator_source_cli_regressions
+- Net safe code changes in this phase: none
+
+**Phase 2 Commands Run**
+
+```bash
+sed -n '1,240p' .plan/workflow-structure.yaml
+sed -n '1,260p' validator-report.md
+git rev-parse HEAD
+git -C validator rev-parse HEAD
+git -C validator status --short --branch
+python3 - <<'PY'
+import json, pathlib
+p=pathlib.Path('safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json')
+print(p.exists())
+if p.exists():
+    data=json.loads(p.read_text())
+    print(json.dumps(data, indent=2)[:2000])
+PY
+rg -n 'impl_validator_source_cli_regressions|Phase 2|zstd-compress-decompress|dictionary-train-use|multi-frame-behavior|corrupted-frame-rejection' validator-report.md
+cargo test --manifest-path safe/Cargo.toml --release --all-targets
+bash safe/scripts/verify-export-parity.sh
+cargo test --manifest-path safe/Cargo.toml --release --test compress
+cargo test --manifest-path safe/Cargo.toml --release --test decompress
+bash safe/scripts/run-capi-roundtrip.sh
+bash safe/scripts/run-capi-decompression.sh
+bash -lc 'if [ -d safe/tests/validator ]; then test -x safe/scripts/run-validator-regressions.sh; bash safe/scripts/run-validator-regressions.sh; else echo no-validator-regression-dir; fi'
+test ! -f safe/out/validator/skip.env
+set +e; bash safe/scripts/run-validator-libzstd.sh; status=$?; printf 'VALIDATOR_RUNNER_STATUS=%s\n' "$status"; exit 0
+VALIDATOR_RUNNER_STATUS=1 python3 safe/scripts/check-validator-phase-results.py --results-root safe/out/validator/artifacts/port-04-test/results/libzstd --report validator-report.md --completed-phase impl_validator_source_cli_regressions --allow-remaining-phase impl_validator_streaming_capi_regressions --allow-remaining-phase impl_validator_libarchive_usage_regressions --allow-remaining-phase impl_validator_remaining_burn_down
+```
+
+**Phase 2 Result**
+
+No safe implementation, package, or regression-test changes remain in the net Phase 2 diff because no source-case failures were assigned to `impl_validator_source_cli_regressions`. Refreshed libarchive usage failures are recorded as open rows assigned to `impl_validator_libarchive_usage_regressions`, the later phase reserved for libarchive usage remediation.
+
+Post-correction validator rerun at `safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json`: 85 cases, 5 source cases, 80 usage cases, 84 passed, 1 failed, 85 casts, validator runner status 1. The current failed testcase is `usage-libarchive-tools-zstd-two-topdirs-list`; `check-validator-phase-results.py` passed and reported it as an allowed remaining failed testcase for `impl_validator_libarchive_usage_regressions`.
