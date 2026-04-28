@@ -41,7 +41,6 @@ const XXH64_PRIME_3: u64 = 0x1656_67B1_9E37_79F9;
 const XXH64_PRIME_4: u64 = 0x85EB_CA77_C2B2_AE63;
 const XXH64_PRIME_5: u64 = 0x27D4_EB2F_1656_67C5;
 const ZSTDMT_JOBSIZE_MIN: usize = 512 * 1024;
-const SMALL_NO_HISTORY_RAW_LIMIT: usize = 32 * 1024;
 #[cfg(target_pointer_width = "32")]
 const ZSTDMT_JOBLOG_MAX: u32 = 29;
 #[cfg(not(target_pointer_width = "32"))]
@@ -1811,7 +1810,7 @@ fn payload_with_history(
         return fast_no_history_payload(src, ctx);
     }
 
-    if src.len() <= SMALL_NO_HISTORY_RAW_LIMIT {
+    if src.len() <= 32 {
         return Ok(small_no_history_raw_payload(src, ctx));
     }
 

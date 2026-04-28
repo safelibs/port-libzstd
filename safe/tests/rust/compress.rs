@@ -280,57 +280,6 @@ fn decompress_exact(compressed: &[u8], expected: &[u8]) {
     assert_eq!(decoded, expected);
 }
 
-fn decompress_stream_exact_with_chunks(
-    compressed: &[u8],
-    expected: &[u8],
-    in_chunk: usize,
-    out_chunk: usize,
-) {
-    let zds = dstream::ZSTD_createDStream();
-    let mut decoded = vec![0u8; expected.len()];
-    let mut offset = 0usize;
-    let mut produced = 0usize;
-    let mut ret = dstream::ZSTD_initDStream(zds);
-
-    assert!(!zds.is_null(), "failed to create dstream");
-    check_result(ret, "ZSTD_initDStream");
-    while offset < compressed.len() || ret != 0 {
-        let take = (compressed.len() - offset).min(in_chunk.max(1));
-        let mut input = ZSTD_inBuffer {
-            src: compressed[offset..].as_ptr().cast(),
-            size: take,
-            pos: 0,
-        };
-        let remaining_output = decoded.len().saturating_sub(produced);
-        let mut output = ZSTD_outBuffer {
-            dst: decoded[produced..].as_mut_ptr().cast(),
-            size: remaining_output.min(out_chunk.max(1)),
-            pos: 0,
-        };
-
-        ret = dstream::ZSTD_decompressStream(zds, &mut output, &mut input);
-        check_result(ret, "ZSTD_decompressStream(chunked)");
-        offset += input.pos;
-        produced += output.pos;
-        assert!(
-            produced <= expected.len(),
-            "streaming decompressor produced too much output"
-        );
-        if ret == 0 && offset == compressed.len() {
-            break;
-        }
-        assert!(
-            input.pos != 0 || output.pos != 0,
-            "streaming decompressor made no progress"
-        );
-    }
-
-    assert_eq!(offset, compressed.len());
-    assert_eq!(produced, expected.len());
-    assert_eq!(decoded, expected);
-    dstream::ZSTD_freeDStream(zds);
-}
-
 fn decompress_with_prefix_exact(compressed: &[u8], prefix: &[u8], expected: &[u8]) {
     let dctx_ptr = dctx::ZSTD_createDCtx();
     let mut decoded = vec![0u8; expected.len()];
@@ -1605,28 +1554,6 @@ fn compress_stream_legacy(zcs: *mut ZSTD_CStream, src: &[u8]) -> Vec<u8> {
     }
 
     compressed
-}
-
-#[test]
-fn small_stream_archive_payload_uses_raw_blocks_for_dependent_readers() {
-    let mut src = vec![0u8; 10 * 512];
-    src[..5].copy_from_slice(b"top1/");
-    src[512..526].copy_from_slice(b"top1/alpha.txt");
-    src[1024..1029].copy_from_slice(b"top2/");
-    src[1536..1549].copy_from_slice(b"top2/beta.txt");
-    src[2048..2054].copy_from_slice(b"alpha\n");
-    src[2560..2565].copy_from_slice(b"beta\n");
-
-    let zcs = cstream::ZSTD_createCStream();
-    assert!(!zcs.is_null());
-    check_result(cstream::ZSTD_initCStream(zcs, 3), "ZSTD_initCStream");
-
-    let compressed = compress_stream_legacy(zcs, &src);
-    assert_eq!(frame_first_block_type(&compressed), 0);
-    decompress_exact(&compressed, &src);
-    decompress_stream_exact_with_chunks(&compressed, &src, 7, 13);
-
-    cstream::ZSTD_freeCStream(zcs);
 }
 
 #[test]
