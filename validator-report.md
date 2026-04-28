@@ -89,8 +89,8 @@ Proof generation was not run because the matrix had failed testcases.
 
 | testcase_id | kind | client_application | exit_code | error | result_path | log_path | assigned_remediation_phase | remediation_status | regression_test | fix_commit | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| usage-libarchive-tools-zstd-extract-specific-member | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-extract-specific-member.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-extract-specific-member.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while extracting a named member from a zstd-compressed tar archive. This non-streaming libarchive usage row recurred in Phase 3 package-backed verifier runs and is assigned to the later libarchive usage phase. |
-| usage-libarchive-tools-zstd-two-topdirs-list | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while listing a zstd-compressed tar archive with two top-level directories. |
+| usage-libarchive-tools-zstd-extract-specific-member | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-extract-specific-member.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-extract-specific-member.log | impl_validator_libarchive_usage_regressions | fixed | safe/docker/dependents/entrypoint.sh:test_libarchive; safe/tests/rust/compress.rs::compress_streaming_libarchive_tar_chunks_roundtrip_for_listing_usage | 5b0b77fac760ec0c7896e748f2e22af292081d76 | Fixed by validating structured stream payloads under the exact emitted zstd frame header and falling back to stored blocks when that frame would not round-trip. Final validator result passed. |
+| usage-libarchive-tools-zstd-two-topdirs-list | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.log | impl_validator_libarchive_usage_regressions | fixed | safe/docker/dependents/entrypoint.sh:test_libarchive; safe/tests/rust/compress.rs::compress_streaming_libarchive_tar_chunks_roundtrip_for_listing_usage | 5b0b77fac760ec0c7896e748f2e22af292081d76 | Fixed by validating structured stream payloads under the exact emitted zstd frame header and falling back to stored blocks when that frame would not round-trip. Final validator result passed. |
 
 **Skip List**
 
@@ -207,3 +207,60 @@ test ! -f safe/out/validator/skip.env
 **Phase 3 Result**
 
 No validator streaming C API failure row was assigned to `impl_validator_streaming_capi_regressions`, and the validator `streaming-c-api-smoke` result is passing. The senior-tester bounce identified a streaming decompression pointer-validation gap outside the validator failure table; this phase fixed it in `9da27a66e67f999b649ad6d220ed00c76847d656` and added the C regression listed above. The remaining validator failures are non-streaming libarchive usage testcases assigned to the later libarchive usage phase.
+
+**Phase 4: Libarchive Usage Validator Failures**
+
+Phase 4 Base Commit: 8ff3b4d98827295ed8b4fc07448c33bede1b8e50
+- Implement phase: `impl_validator_libarchive_usage_regressions`
+- Validator Commit: 1319bb0374ef66428a42dd71e49553c6d057feaf
+- Assigned rows fixed: `usage-libarchive-tools-zstd-extract-specific-member`, `usage-libarchive-tools-zstd-two-topdirs-list`
+- Same-symptom rows observed during Phase 4 triage and fixed by the same change: `usage-libarchive-tools-zstd-member-count-three-plus`, `usage-libarchive-tools-zstd-stdin-list-members`
+- Regression coverage: `safe/tests/rust/compress.rs::compress_streaming_libarchive_tar_chunks_roundtrip_for_listing_usage` mirrors libarchive's 512-byte tar chunking; `safe/docker/dependents/entrypoint.sh:test_libarchive` now covers two top-level directories and specific-member extraction through installed `bsdtar --zstd`
+- Fix commits: `f9509b72eb850b7bede1658988dcfa546caaff0f`, `ba2285d0bc3ae7d986f2eb8b7b622fd0adf8b69b`, `5b0b77fac760ec0c7896e748f2e22af292081d76`
+
+**Phase 4 Finding**
+
+Libarchive creates zstd-compressed tar archives by calling `ZSTD_compressStream` repeatedly with tar-sized chunks and then emitting the buffered payload in `ZSTD_endStream`. The safe compressor reused blocks from `structured-zstd` after stripping that encoder's frame header, but the validation checked the source encoder's frame instead of the final libzstd-safe streaming frame. With the emitted unknown-size streaming header, the block could decode to repeated bytes, causing `bsdtar` to report `Unrecognized archive format`.
+
+The final fix validates the payload under the exact frame header libzstd-safe will emit. If that exact frame does not decode back to the input, the compressor uses stored blocks for that no-history payload. This preserves package-installed `bsdtar --zstd` behavior while keeping existing compressed-stream expectations passing for other cases.
+
+**Phase 4 Commands Run**
+
+```bash
+sed -n '1,240p' .plan/workflow-structure.yaml
+git rev-parse HEAD
+git -C validator rev-parse HEAD
+git -C validator status --short --branch
+cargo fmt --manifest-path safe/Cargo.toml --check
+cargo test --manifest-path safe/Cargo.toml --release --test compress compress_streaming_libarchive_tar_chunks_roundtrip_for_listing_usage
+cargo test --manifest-path safe/Cargo.toml --release --test compress
+bash safe/scripts/build-deb.sh
+docker run --rm -t --mount type=bind,src=/home/yans/safelibs/pipeline/ports/port-libzstd/safe/out/deb/default/packages,dst=/override-debs,readonly validator-check-libzstd bash -lc 'set -euo pipefail; /validator/tests/_shared/install_override_debs.sh >/tmp/install.log; for i in 1 2 3 4 5; do tmp=$(mktemp -d); mkdir -p "$tmp/in/top1" "$tmp/in/top2" "$tmp/out"; printf "alpha\n" > "$tmp/in/top1/alpha.txt"; printf "beta\n" > "$tmp/in/top2/beta.txt"; bsdtar --zstd -cf "$tmp/a.tar.zstd" -C "$tmp/in" top1 top2; bsdtar -tf "$tmp/a.tar.zstd" | sort >"$tmp/list"; bsdtar -xf "$tmp/a.tar.zstd" -C "$tmp/out"; cmp "$tmp/in/top1/alpha.txt" "$tmp/out/top1/alpha.txt"; cmp "$tmp/in/top2/beta.txt" "$tmp/out/top2/beta.txt"; done'
+cargo test --manifest-path safe/Cargo.toml --release --all-targets
+bash safe/scripts/verify-export-parity.sh
+bash -lc 'if [ -d safe/tests/validator ]; then test -x safe/scripts/run-validator-regressions.sh; bash safe/scripts/run-validator-regressions.sh; else echo no-validator-regression-dir; fi'
+test ! -f safe/out/validator/skip.env
+set +e; bash safe/scripts/run-validator-libzstd.sh; status=$?; printf 'VALIDATOR_RUNNER_STATUS=%s\n' "$status"; exit 0
+VALIDATOR_RUNNER_STATUS=0 python3 safe/scripts/check-validator-phase-results.py --results-root safe/out/validator/artifacts/port-04-test/results/libzstd --report validator-report.md --completed-phase impl_validator_source_cli_regressions --completed-phase impl_validator_streaming_capi_regressions --completed-phase impl_validator_libarchive_usage_regressions --allow-remaining-phase impl_validator_remaining_burn_down
+bash safe/scripts/build-dependent-image.sh
+bash safe/scripts/run-dependent-matrix.sh --runtime-only --apps libarchive
+bash test-original.sh --runtime-only --apps libarchive
+bash -lc 'base=$(awk "/Phase 4 Base Commit:/ {print \$5; exit}" validator-report.md); test -n "$base"; git diff --check "$base..HEAD"'
+bash safe/scripts/verify-install-layout.sh
+bash safe/scripts/verify-install-layout.sh --debian
+bash safe/scripts/verify-link-compat.sh
+git -C validator status --short --branch
+rg -n 'usage-libarchive-tools|No libarchive usage failures assigned to impl_validator_libarchive_usage_regressions' validator-report.md
+```
+
+**Phase 4 Result**
+
+Final validator artifacts at `safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json`: 85 cases, 5 source cases, 80 usage cases, 85 passed, 0 failed, 85 casts, validator runner status 0. The assigned libarchive usage rows now pass with port commit `5b0b77fac760ec0c7896e748f2e22af292081d76`. No validator checks were skipped and `safe/out/validator/skip.env` is absent. Dependent libarchive runtime coverage, original runtime comparison, install layout, Debian install layout, link compatibility, and validator worktree status checks all passed.
+
+Current package outputs used by the final local package smoke:
+
+| package | filename | architecture | size | sha256 |
+| --- | --- | --- | --- | --- |
+| libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 380926 | 9c05c6f3a144354da30827b2a020d1341f4f6f57d3e9e6c6d1aef22988b6b27c |
+| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 3830588 | 1525e2933b9d26206f51a8e51af45935bcb11629cfb93203f22048ed39f5f6e6 |
+| zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
