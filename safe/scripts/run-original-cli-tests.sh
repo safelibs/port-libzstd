@@ -29,7 +29,8 @@ then
 fi
 
 phase6_log "running original cli-tests against the packaged safe CLI"
-python3 "$TESTS_ROOT/cli-tests/run.py" \
+find "$TESTS_ROOT/cli-tests" -type d -name __pycache__ -prune -exec rm -rf {} +
+PYTHONDONTWRITEBYTECODE=1 python3 "$TESTS_ROOT/cli-tests/run.py" \
     --preserve \
     --zstd "$BINDIR/zstd" \
     --zstdgrep "$BINDIR/zstdgrep" \
