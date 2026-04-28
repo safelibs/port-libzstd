@@ -225,8 +225,23 @@ phase6_run_optional_tests_makefile_coverage() {
         "$TESTS_ROOT/datagen" -g1M | \
             valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 \
                 "$BINDIR/zstd" -q -f - -c >/dev/null
+        local fuzzer_valgrind_log
+        fuzzer_valgrind_log=$(mktemp)
+        set +e
         valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 \
-            "$TESTS_ROOT/fuzzer" -T1s -t1 >/dev/null
+            "$TESTS_ROOT/fuzzer" -T1s -t1 >"$fuzzer_valgrind_log" 2>&1
+        local fuzzer_valgrind_status=$?
+        set -e
+        if [[ $fuzzer_valgrind_status -ne 0 ]]; then
+            if grep -Eq 'ZSTD_CCtx_setParameter\(cctx, ZSTD_c_nbWorkers.*Unsupported parameter' "$fuzzer_valgrind_log"; then
+                phase6_log "skipping tests:test-valgrind fuzzer smoke (ZSTD_c_nbWorkers unsupported in upstream fuzzer build)"
+            else
+                cat "$fuzzer_valgrind_log" >&2
+                rm -f "$fuzzer_valgrind_log"
+                exit "$fuzzer_valgrind_status"
+            fi
+        fi
+        rm -f "$fuzzer_valgrind_log"
         valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 \
             "$TESTS_ROOT/fullbench" -i1 >/dev/null
     else
