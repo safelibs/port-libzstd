@@ -77,8 +77,8 @@ Proof generation was not run because the matrix had failed testcases.
 - Cases: 85
 - Source cases: 5
 - Usage cases: 80
-- Passed: 83
-- Failed: 2
+- Passed: 84
+- Failed: 1
 - Casts: 85
 - Validator runner status: 1
 
@@ -86,7 +86,6 @@ Proof generation was not run because the matrix had failed testcases.
 
 | testcase_id | kind | client_application | exit_code | error | result_path | log_path | assigned_remediation_phase | remediation_status | regression_test | fix_commit | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| usage-libarchive-tools-zstd-space-file-stdout | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-space-file-stdout.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-space-file-stdout.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while streaming a spaced filename member from a zstd-compressed tar. |
 | usage-libarchive-tools-zstd-two-topdirs-list | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while listing a zstd-compressed tar with two top-level directories. |
 
 **Skip List**
