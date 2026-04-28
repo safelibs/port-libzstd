@@ -34,6 +34,7 @@ VALID_REMEDIATION_PHASES = {
 }
 VALID_STATUSES = {"open", "fixed", "skipped_validator_bug"}
 SUSPECTED_VALIDATOR_BUG_MARKER = "suspected_validator_bug_deferred_to_phase5:"
+OBSERVED_FLAKE_MARKER = "observed_in_phase1_rerun_flake"
 
 
 def fail(message: str) -> None:
@@ -191,9 +192,18 @@ def main() -> int:
     open_ids = {testcase_id for testcase_id, row in rows.items() if row["remediation_status"] == "open"}
 
     if not completed:
-        if open_ids != current_failed_ids:
+        missing_open = current_failed_ids - open_ids
+        extra_open = open_ids - current_failed_ids
+        unmarked_extra = sorted(
+            testcase_id
+            for testcase_id in extra_open
+            if OBSERVED_FLAKE_MARKER not in rows[testcase_id]["notes"]
+        )
+        if missing_open or unmarked_extra:
             fail(
-                "open failure table rows must exactly match current failures for initial classification; "
+                "open failure table rows must cover current failures for initial classification, "
+                "and any extra open rows must be marked as previously observed rerun flakes; "
+                f"missing_open={sorted(missing_open)!r}, unmarked_extra={unmarked_extra!r}, "
                 f"open={sorted(open_ids)!r}, current={sorted(current_failed_ids)!r}"
             )
         for testcase_id in sorted(open_ids):

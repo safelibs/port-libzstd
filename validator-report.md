@@ -6,7 +6,7 @@ Phase 1 Base Commit: c9970b608feeb7d1e1cfc94e40c7ee8aa1ed7fbb
 - Validator Commit: 1319bb0374ef66428a42dd71e49553c6d057feaf
 - Validator branch: main
 - Planning reference commit: 1319bb0374ef66428a42dd71e49553c6d057feaf
-- Local safe commit: c9970b608feeb7d1e1cfc94e40c7ee8aa1ed7fbb
+- Local safe commit: 7f582b25acc42a22606043cbcfcc5ba8092afd93
 
 **Python Setup**
 
@@ -28,8 +28,8 @@ The validator override leaf is `safe/out/validator/override-debs/libzstd/`.
 - Path: `safe/out/validator/artifacts/proof/port-04-test-debs-lock.json`
 - Repository: local/port-libzstd
 - Tag ref: refs/tags/libzstd/04-test-local
-- Commit: c9970b608feeb7d1e1cfc94e40c7ee8aa1ed7fbb
-- Release tag: build-c9970b608fee
+- Commit: 7f582b25acc42a22606043cbcfcc5ba8092afd93
+- Release tag: build-7f582b25acc4
 - Package architectures: amd64
 - Package sizes: libzstd1=379926, libzstd-dev=3831578, zstd=159324
 - Package SHA256 hashes: libzstd1=c0f6bdc23d5338e12a832443c33ec5d7322f98089e40d12b6bf5683390cacad3, libzstd-dev=7c6abfe048c50409f0bbc9ac4dcfb4c9db3f516db246e04e1ef0b767adc31c6c, zstd=8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91
@@ -63,7 +63,7 @@ PYTHON=python3 make -C validator check-testcases
 PYTHON=python3 bash validator/test.sh --config validator/repositories.yml --tests-root validator/tests --artifact-root safe/out/validator/artifacts --mode port-04-test --library libzstd --override-deb-root safe/out/validator/override-debs --port-deb-lock safe/out/validator/artifacts/proof/port-04-test-debs-lock.json --record-casts
 ```
 
-Proof generation was not run because the initial matrix had one failed testcase.
+Proof generation was not run because the matrix had failed testcases.
 
 **Matrix Inventory**
 
@@ -84,9 +84,17 @@ Proof generation was not run because the initial matrix had one failed testcase.
 
 **Failure Classification**
 
+The latest required rerun currently fails `usage-libarchive-tools-zstd-two-topdirs-list`.
+The `usage-libarchive-tools-zstd-space-file-extract` and
+`usage-libarchive-tools-zstd-stdout-member-alpha` rows are retained as open
+because they failed in required Phase 1 reruns with the same libarchive
+`Unrecognized archive format` symptom.
+
 | testcase_id | kind | client_application | exit_code | error | result_path | log_path | assigned_remediation_phase | remediation_status | regression_test | fix_commit | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| usage-libarchive-tools-zstd-two-topdirs-list | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while listing a zstd-compressed tar with two top-level directories. |
+| usage-libarchive-tools-zstd-space-file-extract | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-space-file-extract.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-space-file-extract.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while extracting a zstd-compressed tar containing a filename with a space; observed_in_phase1_rerun_flake. |
+| usage-libarchive-tools-zstd-stdout-member-alpha | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-stdout-member-alpha.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-stdout-member-alpha.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while extracting alpha.txt to stdout from a zstd-compressed tar; observed_in_phase1_rerun_flake. |
+| usage-libarchive-tools-zstd-two-topdirs-list | usage | libarchive-tools | 1 | testcase command exited with status 1 | port-04-test/results/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.json | port-04-test/logs/libzstd/usage-libarchive-tools-zstd-two-topdirs-list.log | impl_validator_libarchive_usage_regressions | open |  |  | bsdtar reported "Unrecognized archive format" while listing a zstd-compressed tar with two top-level directories; observed_in_phase1_rerun_flake. |
 
 **Skip List**
 
