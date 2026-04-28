@@ -311,7 +311,7 @@ rg -n 'skip|skipped|validator bug|justification|No remaining failures assigned t
 
 Strict full validator run passed with `VALIDATOR_RUNNER_STATUS=0`. Final validator artifacts at `safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json`: 85 cases, 5 source cases, 80 usage cases, 85 passed, 0 failed, 85 casts. The full result set contains 85 testcase result JSON files plus `summary.json`.
 
-Proof artifacts were generated at `safe/out/validator/artifacts/proof/port-04-test-debs-lock.json` and `safe/out/validator/artifacts/proof/port-04-test-validation-proof.json`. The generated port lock records local safe commit `eaed055405b7cdf7d38a2b1ee76255f3dc7a5d91` with release tag `build-eaed055405b7`.
+Proof artifacts were generated at `safe/out/validator/artifacts/proof/port-04-test-debs-lock.json` and `safe/out/validator/artifacts/proof/port-04-test-validation-proof.json`. These paths are overwritten by later final validator reruns; the current lock/proof JSON should be read directly for generated commit, timestamp, and release-tag metadata.
 
 No validator bug was identified. `safe/out/validator/skip.env` is absent, no filtered test root was generated, and `validator/` remains unmodified.
 
@@ -323,12 +323,13 @@ Phase 6 Base Commit: 5ac9c71a91332c61f758a4c779cb8723cdf4ea0a
 - Implement phase: `impl_validator_final_clean_run`
 - Validator Commit: 1319bb0374ef66428a42dd71e49553c6d057feaf
 - Validator worktree: clean on `main`
-- Final evidence safe commit: 566fc7451eff9c0b43b911218271b53d7585d811
-- Phase 6 commits included before final evidence:
+- Latest code-bearing safe commit included before final evidence: 566fc7451eff9c0b43b911218271b53d7585d811
+- Phase 6 code and release-gate commits included before final evidence:
   - `71481a1` Fix phase6 regression coverage fallback
   - `1bd5cc3` Allow missing upstream fuzz seed fixture
   - `488dce4` Skip unsupported upstream fuzzer valgrind path
   - `566fc74` Clean upstream CLI bytecode before phase6 tests
+- Final proof and port-lock commit fields are generated from the repository HEAD at validator runtime. Verifier reruns can therefore record later report-only commits; the JSON artifacts under `safe/out/validator/artifacts/proof/` are authoritative for `generated_at`, `release_tag`, and the exact runtime safe commit.
 
 **Phase 6 Checks Executed**
 
@@ -359,7 +360,7 @@ git diff --check
 
 **Phase 6 Package Filenames And Hashes**
 
-The final validator override leaf is `safe/out/validator/override-debs/libzstd/`. The generated port lock was written at `safe/out/validator/artifacts/proof/port-04-test-debs-lock.json` with `generated_at=2026-04-28T23:34:08Z`, repository `local/port-libzstd`, tag ref `refs/tags/libzstd/04-test-local`, release tag `build-566fc7451eff`, and commit `566fc7451eff9c0b43b911218271b53d7585d811`.
+The final validator override leaf is `safe/out/validator/override-debs/libzstd/`. The generated port lock is written at `safe/out/validator/artifacts/proof/port-04-test-debs-lock.json`; it records repository `local/port-libzstd`, tag ref `refs/tags/libzstd/04-test-local`, and runtime-generated `generated_at`, `release_tag`, and safe commit fields. Read those generated fields from the lock/proof JSON produced by the exact validator rerun being reviewed.
 
 | package | filename | architecture | size | sha256 |
 | --- | --- | --- | --- | --- |
