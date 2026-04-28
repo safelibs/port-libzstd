@@ -30,6 +30,10 @@ PHASE6_REGRESSION_GROUP_TIMEOUT=${PHASE6_REGRESSION_GROUP_TIMEOUT:-900}
 install -d "$CACHE_DIR"
 install -d "$FRAGMENTS_DIR"
 
+if [[ ! -f $COVERAGE_BASELINE_FILE ]]; then
+    COVERAGE_BASELINE_FILE="$MEMOIZED_RESULTS_FIXTURE"
+fi
+
 compute_regression_source_digest() {
     python3 - "$REPO_ROOT" <<'PY'
 import hashlib

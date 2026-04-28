@@ -17,8 +17,9 @@ The wrapper is rooted on the prebuilt Phase 4 artifacts:
 
 `results-memoized.csv` is the checked-in safe-side regression baseline for the
 current tracked source tree. `run-upstream-regression.sh` still stages the
-upstream cache and uses `tests/regression/regression.out` to drive row
-coverage, but it compares the computed results against this safe baseline
-first. The companion `results-memoized.source-sha256` is the freshness key used
-when the wrapper decides whether the snapshot can be reused directly instead of
-recomputing the matrix.
+upstream cache and uses `tests/regression/regression.out`, when present, to
+drive row coverage, but it falls back to this memoized coverage when the
+upstream coverage snapshot is absent. The companion
+`results-memoized.source-sha256` is the freshness key used when the wrapper
+decides whether the snapshot can be reused directly instead of recomputing the
+matrix.
