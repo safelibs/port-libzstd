@@ -39,7 +39,7 @@ Data flow is intentionally narrow at the ABI edge:
 - Dictionary training and finalization enter through `safe/src/dict_builder/zdict.rs`, `safe/src/dict_builder/cover.rs`, and `safe/src/dict_builder/fastcover.rs`.
 - Legacy v0.5-v0.7 frame decode is not reimplemented in safe Rust; it is routed through the internal shim in `safe/src/decompress/legacy.rs` and `safe/src/ffi/legacy_shim.c`.
 
-`safe/build.rs` wires Cargo features into cfgs and build metadata. It emits `libzstd_threading` when threading is selected (`safe/build.rs:41-65`), sets `LIBZSTD_THREADING`, `LIBZSTD_VARIANT_SUFFIX`, and `LIBZSTD_DEFAULT_ARTIFACT` environment values (`safe/build.rs:83-89`), and gives the `cdylib` an ELF SONAME of `libzstd.so.1` (`safe/build.rs:87-89`). Its only C compilation job is the legacy decode bridge: it resolves upstream legacy sources from an optional in-tree source override or from `../original/libzstd-1.5.5+dfsg2/lib` (`safe/build.rs:18-24`, `safe/build.rs:91-101`) and compiles `xxhash.c`, `zstd_v05.c`, `zstd_v06.c`, `zstd_v07.c`, and `safe/src/ffi/legacy_shim.c` with `ZSTD_LEGACY_SUPPORT=5` (`safe/build.rs:111-123`).
+`safe/build.rs` wires Cargo features into cfgs and build metadata. It enables `libzstd_threading` by default unless the static/no-MT variant features request otherwise (`safe/build.rs:36-65`), sets `LIBZSTD_THREADING`, `LIBZSTD_VARIANT_SUFFIX`, and `LIBZSTD_DEFAULT_ARTIFACT` environment values (`safe/build.rs:83-88`), and gives the `cdylib` an ELF SONAME of `libzstd.so.1` (`safe/build.rs:89`). Its only C compilation job is the legacy decode bridge: it resolves upstream legacy sources from an optional in-tree source override or from `../original/libzstd-1.5.5+dfsg2/lib` (`safe/build.rs:18-24`, `safe/build.rs:91-101`) and compiles `xxhash.c`, `zstd_v05.c`, `zstd_v06.c`, `zstd_v07.c`, and `safe/src/ffi/legacy_shim.c` with `ZSTD_LEGACY_SUPPORT=5` (`safe/build.rs:95-123`).
 
 Cargo features are defined in `safe/Cargo.toml:23-30`: the default feature set is empty, `legacy` is a named but empty feature, and `threading`, `build-shared-default`, `build-static-default`, `variant-mt`, and `variant-nomt` drive build metadata and cfg selection. `safe/scripts/build-artifacts.sh` builds release shared and static artifacts with Cargo, installs `libzstd.so.1.5.5`, `libzstd.so.1`, `libzstd.so`, `libzstd.a`, and the checked-in headers, and generates pkg-config and CMake install files from `safe/pkgconfig/` and `safe/cmake/`.
 
@@ -133,15 +133,16 @@ No upstream dynamic fallback or plugin-loading surface remains. `rg -n 'SAFE_UPS
 
 ## Remaining issues
 
-- Custom memory allocators are not fully implemented. The ABI types for `ZSTD_allocFunction`, `ZSTD_freeFunction`, and `ZSTD_customMem` exist in `safe/src/ffi/types.rs`, but implementation helpers such as `safe/src/decompress/dctx.rs:14-15`, `safe/src/decompress/ddict.rs:14-15`, `safe/src/decompress/dstream.rs:27-28`, and `safe/src/ffi/compress.rs:3772-3773` accept only the default/null allocator configuration.
-- Legacy v0.5-v0.7 decode still relies on C sources through `safe/src/ffi/legacy_shim.c` and `safe/src/decompress/legacy.rs`. This preserves compatibility but leaves a small non-Rust decoder island.
-- The root crate advertises `rust-version = "1.82"` in `safe/Cargo.toml:5`, but the currently resolved dependency graph requires a newer toolchain: `cargo metadata` reports `oxiarc-core` and `oxiarc-zstd` with `rust_version` `1.85`, and the local `structured-zstd` manifest records `rust-version = "1.92"` in `safe/third_party/structured-zstd/Cargo.toml.orig:4`. The checked-in `safe/rust-toolchain.toml` selects `stable`, and this refresh used `rustc 1.94.0`; `safe/debian/control:7-18` does not pin a minimum Rust compiler version beyond `rustc`.
-- The local `structured-zstd` dependency has unfinished or invariant-heavy internals. Notable markers include `safe/third_party/structured-zstd/src/decoding/ringbuffer.rs:93`, `safe/third_party/structured-zstd/src/decoding/block_decoder.rs:27`, `safe/third_party/structured-zstd/src/encoding/frame_header.rs:44,74`, and `safe/third_party/structured-zstd/src/encoding/frame_compressor.rs:256,408`. The public compression adapter currently maps requested levels through `safe/src/ffi/compress.rs:1724-1728`, avoiding the unimplemented compression-level branches in normal ABI use.
-- Some upstream-suite gates are intentionally host-dependent. `safe/scripts/run-upstream-tests.sh` skips 32-bit and sanitizer variants when the required toolchains are unavailable, and it has a known valgrind fuzzer-smoke skip for unsupported worker-parameter behavior. `safe/scripts/run-pzstd-tests.sh` also has sanitizer-runtime skip handling, and `safe/scripts/run-zlibwrapper-tests.sh` documents known zlib wrapper expectation mismatches.
-- `safe/out/phase6/run-full-suite-final.log` is not a complete fresh success artifact for this documentation pass; it stops in the upstream valgrind fuzzer-smoke area that `safe/scripts/run-upstream-tests.sh` knows how to skip. This pass reran `cargo test --manifest-path safe/Cargo.toml --release --all-targets`, `bash safe/scripts/run-advanced-mt-tests.sh`, and `bash safe/scripts/verify-export-parity.sh`; `bash safe/scripts/verify-link-compat.sh`, `bash safe/scripts/run-build-variant-tests.sh`, `bash safe/scripts/verify-install-layout.sh`, `bash safe/scripts/verify-install-layout.sh --debian`, `bash safe/scripts/verify-deb-profiles.sh`, and `bash safe/scripts/run-debian-autopkgtests.sh` reported fresh coverage stamps and skipped reruns. The full upstream matrix was not rerun during this documentation refresh.
-- Dependent coverage is documented for 12 packages in `dependents.json` and `safe/tests/dependents/dependent_matrix.toml`. The checked-in logs `safe/out/dependents/logs/compile.log`, `safe/out/dependents/logs/runtime.log`, and `safe/out/dependents/logs/runtime-libarchive.log` record successful compile/runtime probes, but those Docker/image-style dependent gates were not rerun during this documentation refresh.
-- `relevant_cves.json` contains two relevant records, CVE-2021-24031 and CVE-2021-24032, both for zstd CLI output-file permissions rather than core library memory safety. `safe/scripts/check-cli-permissions.sh` audits the CLI behavior with `strace`; this documentation pass did not rerun that script.
-- No repository-level upgrade report file is present. No first-party `TODO` or `FIXME` markers were found under `safe/src` by `rg -n 'TODO|FIXME|todo!|unimplemented!|panic!' safe --glob '!target/**' --glob '!out/**'`; remaining markers are in build error paths, scripts, tests, or `safe/third_party/structured-zstd/`.
+- Custom memory allocators are not fully implemented. The ABI types for `ZSTD_allocFunction`, `ZSTD_freeFunction`, and `ZSTD_customMem` exist in `safe/src/ffi/types.rs:42-75`, but the implementation accepts only the default/null allocator configuration in `safe/src/decompress/dctx.rs:14-15`, `safe/src/decompress/ddict.rs:14-15`, `safe/src/decompress/dstream.rs:27-28`, and `safe/src/ffi/compress.rs:3772-3773`; non-null allocator callbacks make the advanced create/load functions return null or an error path, for example `safe/src/decompress/dctx.rs:355-359`, `safe/src/decompress/ddict.rs:143-152`, and `safe/src/compress/cctx.rs:354-357`.
+- Legacy v0.5-v0.7 decode still relies on C sources through `safe/src/ffi/legacy_shim.c` and `safe/src/decompress/legacy.rs`. This preserves compatibility, but it leaves a small non-Rust decoder island compiled by `safe/build.rs:96-117`.
+- The root crate advertises `rust-version = "1.82"` in `safe/Cargo.toml:5`, but the resolved dependency graph requires a newer toolchain: `cargo metadata` reports `oxiarc-core` and `oxiarc-zstd` with `rust_version = "1.85"` and the local `structured-zstd` manifest records `rust-version = "1.92"` in `safe/third_party/structured-zstd/Cargo.toml:13`. The checked-in `safe/rust-toolchain.toml` selects `stable`, and this refresh used `rustc 1.94.0`; `safe/debian/control:7-18` does not pin a minimum Rust compiler version beyond `rustc`.
+- The local `structured-zstd` dependency has unfinished or invariant-heavy internals. Notable markers include `safe/third_party/structured-zstd/src/decoding/ringbuffer.rs:93`, `safe/third_party/structured-zstd/src/decoding/block_decoder.rs:27`, `safe/third_party/structured-zstd/src/encoding/frame_header.rs:44,74`, and `safe/third_party/structured-zstd/src/encoding/frame_compressor.rs:256,408`. The public compression adapter currently maps requested levels through `safe/src/ffi/compress.rs:1724-1728`, avoiding the unimplemented compression-level branches in normal ABI use. No first-party `TODO`, `FIXME`, `todo!`, `unimplemented!`, or `panic!("TODO")` markers were found under `safe/src`, `safe/tests`, `safe/scripts`, or `safe/debian`; the actionable markers are in the vendored `safe/third_party/structured-zstd/` source.
+- `bash safe/scripts/run-full-suite.sh` passed during this documentation pass. That top-level gate requires the existing Phase 4 artifacts and dependent image (`safe/scripts/run-full-suite.sh:44-46`), runs Rust tests, ABI/header checks, C API checks, advanced MT checks, install/package checks, upstream black-box families, CLI permission checks, performance smoke, and downstream compile/runtime coverage (`safe/scripts/run-full-suite.sh:48-76`). Several expensive gates reported fresh stamps rather than recomputing, including upstream suites, Debian profile checks, install-layout variants, fuzz replay, dependent compile/runtime checks, and performance smoke.
+- Some release-gate coverage remains intentionally host-dependent. `safe/scripts/run-upstream-tests.sh:173-248` skips 32-bit, sanitizer, or valgrind subcases when the local host lacks support, and it has a known valgrind fuzzer-smoke skip for upstream fuzzer worker-parameter behavior. `safe/scripts/run-pzstd-tests.sh:190-197` has sanitizer-runtime skip handling, `safe/scripts/run-zlibwrapper-tests.sh:80-91` allows documented zlib 1.3 expectation mismatches, and `safe/scripts/run-upstream-fuzz-tests.sh:132-163` permits bounded fuzz-driver timeouts/failures as long as at least one driver passes. The stale log `safe/out/phase6/run-full-suite-final.log` still stops in the old upstream valgrind fuzzer-smoke area; use the current `bash safe/scripts/run-full-suite.sh` result and verification stamps instead of treating that file as the latest success artifact.
+- Performance coverage is a smoke threshold, not a full benchmark against upstream. `safe/scripts/run-performance-smoke.sh:49-53` builds a 16 MiB corpus from checked-in fixtures, and `safe/scripts/run-performance-smoke.sh:70-73` enforces default minimum throughput thresholds of 1.0 MiB/s compression and 2.0 MiB/s decompression with 15 second maximums. No checked-in report records bit-for-bit speed parity or compression-ratio parity across the full upstream benchmark matrix.
+- Dependent coverage is representative, not exhaustive. `dependents.json` lists 12 Ubuntu 24.04 packages, and `safe/tests/dependents/dependent_matrix.toml` plus `safe/out/dependents/logs/compile.log`, `safe/out/dependents/logs/runtime.log`, and `safe/out/dependents/logs/runtime-libarchive.log` record successful probes for those packages. `run-full-suite.sh` reran the dependent matrix entry points and they reused fresh compile/runtime stamps; packages outside this curated set are not covered by checked-in dependent evidence.
+- `relevant_cves.json` contains two relevant records, CVE-2021-24031 and CVE-2021-24032, both for zstd CLI output-file permissions rather than the core library. `safe/scripts/check-cli-permissions.sh:29-52` requires those two CVEs to be present, and `safe/scripts/check-cli-permissions.sh:73-132` audits atomic output-file creation with `strace`; the current `run-full-suite.sh` pass reused its fresh stamp. These CVEs are covered by the CLI gate, not by the Rust library implementation alone.
+- No repository-level upgrade report file is present.
 
 ## Dependencies and other libraries used
 
@@ -149,12 +150,12 @@ Direct Cargo dependencies from `safe/Cargo.toml:41-47`:
 
 | Dependency | Version | Kind | Purpose and safety notes |
 | --- | --- | --- | --- |
-| `oxiarc-core` | `=0.2.5` | normal | Provides shared OxiArc error/types used when mapping Rust zstd decode failures, including `OxiArcError` in `safe/src/decompress/frame.rs:10,367`. It is an external Rust dependency; `cargo geiger` was not available in this environment, so unsafe usage inside the crate was not independently measured here. |
-| `oxiarc-zstd` | `=0.2.5` | normal | Provides Rust zstd encode/decode helpers used for fallback dictionary/frame decode (`safe/src/decompress/frame.rs:497-500,596-598`) and dictionary-builder encoding (`safe/src/dict_builder/zdict.rs:1049`). It is an external Rust dependency and is covered here by integration/ABI tests rather than by a local unsafe inventory. |
-| `structured-zstd` | `=0.0.3`, path `third_party/structured-zstd` | normal | Local structured zstd encoder/decoder used for frame parsing, dictionary-aware decode, streaming/block compression, and frame emission (`safe/src/ffi/compress.rs:27-28`, `safe/src/ffi/decompress.rs:19`, `safe/src/decompress/frame.rs:12`). Its remaining unsafe sites are inventoried above because the source is vendored in this repository. |
-| `cc` | `1.2` in `Cargo.toml`, resolved to `1.2.58` in `safe/Cargo.lock:5-13` | build | Build-time helper used by `safe/build.rs:111-123` to compile the legacy C shim and upstream legacy decoder sources. |
+| `oxiarc-core` | `=0.2.5` | normal | Provides shared OxiArc error/types used when mapping Rust zstd decode failures, including `OxiArcError` in `safe/src/decompress/frame.rs:10,367`. The external crate does not declare `#![forbid(unsafe_code)]`; `rg` found unsafe CRC/SIMD and optional mmap implementation sites in the registry source, but this port enables only its default feature set through `cargo tree -e features` and relies on the local ABI/release gates for coverage. |
+| `oxiarc-zstd` | `=0.2.5` | normal | Provides Rust zstd encode/decode helpers used for fallback dictionary/frame decode (`safe/src/decompress/frame.rs:497-500,596-598`) and dictionary-builder encoding (`safe/src/dict_builder/zdict.rs:1049`). `rg -n '\bunsafe\b'` found no unsafe matches in the resolved `oxiarc-zstd-0.2.5/src` tree, but the crate does not declare `#![forbid(unsafe_code)]`. |
+| `structured-zstd` | `=0.0.3`, path `third_party/structured-zstd` | normal | Local structured zstd encoder/decoder used for frame parsing, dictionary-aware decode, streaming/block compression, and frame emission (`safe/src/ffi/compress.rs:27-28`, `safe/src/ffi/decompress.rs:19`, `safe/src/decompress/frame.rs:12`). Its remaining unsafe sites are inventoried above because the source is vendored in this repository; it also enables the `hash` feature, which pulls in `twox-hash`. |
+| `cc` | `1.2` in `Cargo.toml`, resolved to `1.2.58` in `safe/Cargo.lock:5-13` | build | Build-time helper used by `safe/build.rs:111-123` to compile the legacy C shim and upstream legacy decoder sources. Its own implementation contains unsafe code in the registry source, but it is a build tool and is not linked into `libzstd.so`. |
 
-`safe/Cargo.lock` resolves the normal transitive dependencies to `thiserror 2.0.18`, `thiserror-impl 2.0.18`, `proc-macro2 1.0.106`, `quote 1.0.45`, `syn 2.0.117`, `unicode-ident 1.0.24`, and `twox-hash 2.1.2`; the `cc` build dependency pulls in `find-msvc-tools 0.1.9` and `shlex 1.3.0` (`safe/Cargo.lock:49-121`). `cargo tree --manifest-path safe/Cargo.toml` shows no Rust dependency that links a third-party C/C++ compression library.
+`safe/Cargo.lock` resolves the normal transitive dependencies to `thiserror 2.0.18`, `thiserror-impl 2.0.18`, `proc-macro2 1.0.106`, `quote 1.0.45`, `syn 2.0.117`, `unicode-ident 1.0.24`, and `twox-hash 2.1.2`; the `cc` build dependency pulls in `find-msvc-tools 0.1.9` and `shlex 1.3.0` (`safe/Cargo.lock:49-121`). `twox-hash` contains unsafe fixed-buffer and SIMD/hash implementation code in the registry source, but it is a Rust hashing dependency reached only through `structured-zstd`'s `hash` feature; no direct dependency links a third-party C/C++ compression library according to `cargo tree --manifest-path safe/Cargo.toml`.
 
 Build behavior:
 
@@ -180,21 +181,29 @@ Commands run or consulted for this refresh:
 ```sh
 git status --short
 sed -n '1,260p' safe/PORT.md
-sed -n '1,240p' safe/Cargo.toml
-sed -n '1,260p' safe/build.rs
-sed -n '1,200p' safe/src/lib.rs
-sed -n '1,220p' safe/src/decompress/legacy.rs
-sed -n '1,180p' safe/src/ffi/legacy_shim.c
+sed -n '1,220p' safe/Cargo.toml
+sed -n '1,180p' safe/build.rs
+sed -n '1,80p' safe/src/lib.rs
+sed -n '1,260p' relevant_cves.json
+sed -n '1,260p' safe/scripts/run-full-suite.sh
+sed -n '1,280p' safe/scripts/run-upstream-tests.sh
+sed -n '1,220p' safe/scripts/run-performance-smoke.sh
+sed -n '1,180p' safe/scripts/check-cli-permissions.sh
 find safe/debian -maxdepth 3 -type f | sort
 sed -n '1,180p' safe/debian/control
+find safe/tests -maxdepth 4 -type f | sort
+grep -RIn 'TODO\|FIXME\|panic!("TODO\|unimplemented!\|todo!\|skip\|xfail' safe original dependents.json relevant_cves.json test-original.sh || true
+rg -n 'TODO|FIXME|todo!|unimplemented!|panic!\("TODO' safe/src safe/tests safe/scripts safe/debian safe/third_party/structured-zstd --glob '!target/**' --glob '!out/**'
 cargo metadata --manifest-path safe/Cargo.toml --format-version 1 --no-deps
 cargo metadata --manifest-path safe/Cargo.toml --format-version 1
+jq -r '.packages[] | select(.name=="libzstd-safe" or .name=="oxiarc-core" or .name=="oxiarc-zstd" or .name=="structured-zstd" or .name=="twox-hash" or .name=="cc") | "\(.name) \(.version) rust_version=\(.rust_version // "none") manifest=\(.manifest_path)"' < <(cargo metadata --manifest-path safe/Cargo.toml --format-version 1)
 cargo tree --manifest-path safe/Cargo.toml
+cargo tree --manifest-path safe/Cargo.toml -e features
 cargo geiger --manifest-path safe/Cargo.toml --all-targets
 rustc --version
 cargo --version
-sed -n '1,220p' safe/Cargo.lock
-sed -n '1,140p' safe/third_party/structured-zstd/Cargo.toml.orig
+sed -n '1,140p' safe/Cargo.lock
+sed -n '1,120p' safe/third_party/structured-zstd/Cargo.toml
 rg -n '\bunsafe\b' safe --glob '*.rs' --glob '!target/**' --glob '!out/**'
 rg -n 'unsafe fn|unsafe impl|unsafe extern' safe
 grep -RIn '\bunsafe\b' safe
@@ -203,29 +212,44 @@ grep -RIn 'extern "C"' safe
 rg -n 'extern "C"' safe/src safe/include safe/tests safe/build.rs --glob '!target/**' --glob '!out/**'
 grep -RIn 'libc::\|dlopen\|dlsym\|syscall\|pthread\|mmap\|malloc\|free' safe
 rg -n 'libc::|dlopen|dlsym|syscall|pthread_|mmap|malloc\(' safe/src safe/build.rs safe/Cargo.toml --glob '!target/**' --glob '!out/**'
+rg -n '\bunsafe\b|forbid\(unsafe_code\)' /home/yans/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/oxiarc-core-0.2.5/src /home/yans/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/oxiarc-zstd-0.2.5/src /home/yans/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/twox-hash-2.1.2/src /home/yans/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cc-1.2.58/src
 rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe --glob '!target/**' --glob '!out/**' --glob '!PORT.md'
 rg -n 'extern "C"|unsafe extern' safe/src/decompress/legacy.rs safe/src/ffi/legacy_shim.c safe/build.rs
-cargo build --manifest-path safe/Cargo.toml --release
 nm -D --defined-only safe/target/release/libzstd.so
 nm -D --undefined-only safe/target/release/libzstd.so
 objdump -p safe/target/release/libzstd.so
 ldd safe/target/release/libzstd.so
-bash safe/scripts/build-artifacts.sh --release
-bash safe/scripts/build-original-cli-against-safe.sh
-bash safe/scripts/build-deb.sh
-bash safe/scripts/run-advanced-mt-tests.sh
-bash safe/scripts/verify-link-compat.sh
-bash safe/scripts/verify-export-parity.sh
-bash safe/scripts/run-build-variant-tests.sh
-bash safe/scripts/verify-install-layout.sh
-bash safe/scripts/verify-install-layout.sh --debian
-bash safe/scripts/verify-deb-profiles.sh
-bash safe/scripts/run-debian-autopkgtests.sh
 cargo test --manifest-path safe/Cargo.toml --release --all-targets
+bash safe/scripts/verify-header-identity.sh
+bash safe/scripts/verify-baseline-contract.sh
+bash safe/scripts/verify-export-parity.sh
+bash safe/scripts/verify-link-compat.sh
+bash safe/scripts/run-upstream-tests.sh
+bash safe/scripts/run-original-playtests.sh
+bash safe/scripts/run-original-cli-tests.sh
+bash safe/scripts/run-original-gzip-tests.sh
+bash safe/scripts/run-zlibwrapper-tests.sh
+bash safe/scripts/run-educational-decoder-tests.sh
+bash safe/scripts/run-pzstd-tests.sh
+bash safe/scripts/run-seekable-tests.sh
+bash safe/scripts/run-version-compat-tests.sh
+bash safe/scripts/run-upstream-regression.sh
+bash safe/scripts/run-upstream-fuzz-tests.sh
+bash safe/scripts/run-original-examples.sh
+bash safe/scripts/check-cli-permissions.sh
+bash safe/scripts/run-performance-smoke.sh
+bash safe/scripts/run-dependent-matrix.sh --compile-only
+bash safe/scripts/run-dependent-matrix.sh --runtime-only
+bash safe/scripts/run-full-suite.sh
 jq -r '.packages | length' dependents.json
+jq -r '.packages[].binary_package' dependents.json
 jq -r '.relevant_cves[] | .cve_id' relevant_cves.json
-rg -n 'TODO|FIXME|todo!|unimplemented!|panic!' safe --glob '!target/**' --glob '!out/**'
+tail -120 safe/out/phase6/run-full-suite-final.log
+find safe/out/phase6/verification-stamps safe/out/dependents/stamps -maxdepth 1 -type f -printf '%TY-%Tm-%Td %TH:%TM:%TS %p\n' | sort
+tail -80 safe/out/dependents/logs/compile.log
+tail -80 safe/out/dependents/logs/runtime.log
+tail -80 safe/out/dependents/logs/runtime-libarchive.log
 git status --short
 ```
 
-`cargo geiger` was attempted but was not installed (`cargo` reported `no such command: geiger`). The packaging producer/verifier scripts above mostly reused checked freshness stamps rather than rebuilding every artifact from scratch. Files consulted in addition to the source tree include `safe/docs/unsafe-audit.md`, `safe/tests/upstream_test_matrix.toml`, `safe/tests/dependents/dependent_matrix.toml`, `dependents.json`, `relevant_cves.json`, `safe/out/dependents/logs/compile.log`, `safe/out/dependents/logs/runtime.log`, `safe/out/dependents/logs/runtime-libarchive.log`, and `safe/out/phase6/run-full-suite-final.log`.
+`cargo geiger` was attempted but was not installed (`cargo` reported `no such command: geiger`). `bash safe/scripts/run-full-suite.sh` completed successfully in this pass; several wrapper families reported fresh stamps instead of recomputing their expensive bodies. Files consulted in addition to the source tree include `safe/docs/unsafe-audit.md`, `safe/tests/upstream_test_matrix.toml`, `safe/tests/dependents/dependent_matrix.toml`, `dependents.json`, `relevant_cves.json`, `safe/out/dependents/logs/compile.log`, `safe/out/dependents/logs/runtime.log`, `safe/out/dependents/logs/runtime-libarchive.log`, `safe/out/phase6/run-full-suite-final.log`, and the verification stamps under `safe/out/phase6/verification-stamps/`.
