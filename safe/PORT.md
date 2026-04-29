@@ -122,16 +122,14 @@ Unsafe code that is not required merely by the original public C ABI/API boundar
 
 ## Remaining unsafe FFI beyond the original ABI/API boundary
 
-The port's intended public FFI boundary is the original libzstd C ABI/API exposed through the 185 `ZSTD_*` and `ZDICT_*` exports and the checked-in headers under `safe/include/`. Beyond that boundary, the current Rust code has one explicit foreign-function surface: the internal legacy decompression bridge.
+The port's intended public FFI boundary is the original libzstd C ABI/API exposed through the 185 `ZSTD_*` and `ZDICT_*` exports and the checked-in headers under `safe/include/`. Source-level evidence from `rg -n 'extern "C"' safe/src safe/include safe/tests safe/build.rs --glob '!target/**' --glob '!out/**'` shows that the first-party Rust sources contain public libzstd exports, the original ABI callback typedefs in `safe/src/ffi/types.rs:42,44,439`, and one non-public `unsafe extern "C"` block in `safe/src/decompress/legacy.rs:12`. `rg -n 'libc::|dlopen|dlsym|syscall|pthread_|mmap|malloc\(' safe/src safe/build.rs safe/Cargo.toml --glob '!target/**' --glob '!out/**'` found no direct Rust source calls to libc, OS syscalls, pthreads, mmap, malloc, or dynamic loading APIs.
 
 | Surface | Symbols | Provider | Why it remains | Plausible safe-Rust replacement |
 | --- | --- | --- | --- | --- |
-| Legacy frame decode shim | `libzstd_safe_legacy_support`, `libzstd_safe_is_legacy`, `libzstd_safe_get_decompressed_size_legacy`, `libzstd_safe_decompress_legacy`, `libzstd_safe_find_frame_compressed_size_legacy`, `libzstd_safe_find_decompressed_bound_legacy`, `libzstd_safe_free_legacy_stream`, `libzstd_safe_init_legacy_stream`, `libzstd_safe_decompress_legacy_stream` | `safe/src/ffi/legacy_shim.c`, compiled with upstream legacy sources selected in `safe/build.rs:95-123` | libzstd promises decode compatibility for older frame formats. The Rust port delegates v0.5-v0.7 details to the upstream legacy decoder through `safe/src/decompress/legacy.rs:12`. | A native Rust implementation of the v0.5-v0.7 legacy frame decoders would remove this C bridge. |
-| System runtime imports in the built shared object | glibc and runtime symbols visible in `nm -D --undefined-only safe/target/release/libzstd.so`, including allocation, memory, file-descriptor, thread-local, timing, and unwind support; `objdump -p` shows `NEEDED` entries for `libgcc_s.so.1`, `libm.so.6`, and `libc.so.6`. | Rust standard library/runtime, glibc, libm, libgcc unwinder, and the linked legacy C bridge object | The current crate uses `std`, builds an ELF shared object, and links the legacy decode bridge built from upstream legacy C decoder sources plus the Rust-facing shim. | A `no_std` design plus a native Rust legacy decoder and different panic/unwind strategy could reduce these imports, but that is outside the current drop-in Debian package goal. |
+| Legacy frame decode shim | Rust declares `libzstd_safe_legacy_support`, `libzstd_safe_is_legacy`, `libzstd_safe_get_decompressed_size_legacy`, `libzstd_safe_decompress_legacy`, `libzstd_safe_find_frame_compressed_size_legacy`, `libzstd_safe_find_decompressed_bound_legacy`, `libzstd_safe_free_legacy_stream`, `libzstd_safe_init_legacy_stream`, and `libzstd_safe_decompress_legacy_stream` in `safe/src/decompress/legacy.rs:12-40`. The C shim forwards to upstream legacy symbols such as `ZSTD_isLegacy`, `ZSTD_decompressLegacy`, and `ZSTD_decompressLegacyStream` in `safe/src/ffi/legacy_shim.c:3-55`. | `safe/src/ffi/legacy_shim.c`, plus upstream `xxhash.c`, `zstd_v05.c`, `zstd_v06.c`, and `zstd_v07.c` selected by `safe/build.rs:95-123` and compiled into the library through the `cc` crate. | libzstd preserves decode compatibility for v0.5-v0.7 legacy frames. The Rust port detects and delegates those frames through `safe/src/decompress/legacy.rs`, while modern frame decode stays in Rust. | A native Rust implementation of the v0.5-v0.7 legacy frame decoders and xxhash compatibility code would remove this C bridge. |
+| ELF/POSIX runtime imports in the built shared object | `nm -D --undefined-only safe/target/release/libzstd.so` shows weak ELF hooks `_ITM_deregisterTMCloneTable`, `_ITM_registerTMCloneTable`, `__cxa_finalize`, `__cxa_thread_atexit_impl`, and `__gmon_start__`; libc/glibc imports `__errno_location`, `__stack_chk_fail`, `__tls_get_addr`, `__xpg_strerror_r`, `abort`, `bcmp`, `calloc`, `close`, `dl_iterate_phdr`, `free`, `fstat64`, `getcwd`, `getenv`, weak `getrandom`, weak `gettid`, `lseek64`, `malloc`, `memcmp`, `memcpy`, `memmove`, `memset`, `mmap64`, `munmap`, `nanosleep`, `open64`, `poll`, `posix_memalign`, `pthread_key_create`, `pthread_key_delete`, `pthread_setspecific`, `read`, `readlink`, `realloc`, `realpath`, `stat64`, weak `statx`, `strlen`, `syscall`, `write`, and `writev`; libm import `log2`; libgcc unwinder imports `_Unwind_Backtrace`, `_Unwind_DeleteException`, `_Unwind_GetDataRelBase`, `_Unwind_GetIP`, `_Unwind_GetIPInfo`, `_Unwind_GetLanguageSpecificData`, `_Unwind_GetRegionStart`, `_Unwind_GetTextRelBase`, `_Unwind_RaiseException`, `_Unwind_Resume`, `_Unwind_SetGR`, and `_Unwind_SetIP`. `objdump -p safe/target/release/libzstd.so` records `NEEDED` entries for `libgcc_s.so.1`, `libm.so.6`, `libc.so.6`, and `ld-linux-x86-64.so.2`. | Rust `std` and allocator/runtime support, glibc/POSIX, libm, libgcc unwinding support, the dynamic loader, compiler stack-protector/runtime hooks, and the statically linked legacy C bridge. | The crate builds a normal Linux ELF `cdylib`/`staticlib`, uses `std`, and links a small C legacy decoder island. These are runtime/library imports, not hand-written Rust calls to extra C libraries. | A `no_std` or `panic = "abort"` design, a different allocator/runtime strategy, and a native Rust legacy decoder could reduce these imports, but that would be a separate portability/package-design effort. |
 
-Evidence that no upstream dynamic fallback remains in decompression: `rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym' safe/src/decompress safe/src/ffi/decompress.rs safe/scripts/run-capi-decompression.sh` produced no matches, and `safe/scripts/run-capi-decompression.sh`, `safe/scripts/verify-export-parity.sh`, and `safe/scripts/verify-baseline-contract.sh` passed in this documentation pass. The only `unsafe extern "C"` block found in the Rust sources is the legacy shim declaration at `safe/src/decompress/legacy.rs:12`; the other `extern "C"` functions are the intended public libzstd ABI exports.
-
-The callback types in `safe/src/ffi/types.rs:42,44,439` are part of the original ABI surface, not extra FFI. Custom allocation callbacks are currently accepted only in the upstream-compatible type definitions; the implementation supports the default/null allocator path. The sequence-producer callback can be invoked through the original advanced compression API at `safe/src/ffi/compress.rs:3435`.
+No upstream dynamic fallback or plugin-loading surface remains. `rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe --glob '!target/**' --glob '!out/**' --glob '!PORT.md'` produced no matches, and `cargo tree --manifest-path safe/Cargo.toml` shows no direct dependency that links a third-party C/C++ compression library. The callback types in `safe/src/ffi/types.rs:42,44,439` are part of the original ABI surface, not extra FFI. Custom allocation callbacks are currently accepted only in the upstream-compatible type definitions; the implementation supports the default/null allocator path. The sequence-producer callback can be invoked through the original advanced compression API at `safe/src/ffi/compress.rs:3435`.
 
 ## Remaining issues
 
@@ -139,7 +137,7 @@ The callback types in `safe/src/ffi/types.rs:42,44,439` are part of the original
 - Legacy v0.5-v0.7 decode still relies on C sources through `safe/src/ffi/legacy_shim.c` and `safe/src/decompress/legacy.rs`. This preserves compatibility but leaves a small non-Rust decoder island.
 - The local `structured-zstd` dependency has unfinished or invariant-heavy internals. Notable markers include `safe/third_party/structured-zstd/src/decoding/ringbuffer.rs:93`, `safe/third_party/structured-zstd/src/decoding/block_decoder.rs:27`, `safe/third_party/structured-zstd/src/encoding/frame_header.rs:44,74`, and `safe/third_party/structured-zstd/src/encoding/frame_compressor.rs:256,408`. The public compression adapter currently maps requested levels through `safe/src/ffi/compress.rs:1724-1728`, avoiding the unimplemented compression-level branches in normal ABI use.
 - Some upstream-suite gates are intentionally host-dependent. `safe/scripts/run-upstream-tests.sh` skips 32-bit and sanitizer variants when the required toolchains are unavailable, and it has a known valgrind fuzzer-smoke skip for unsupported worker-parameter behavior. `safe/scripts/run-pzstd-tests.sh` also has sanitizer-runtime skip handling, and `safe/scripts/run-zlibwrapper-tests.sh` documents known zlib wrapper expectation mismatches.
-- `safe/out/phase6/run-full-suite-final.log` is not a complete fresh success artifact for this documentation pass; it stops in the upstream valgrind fuzzer-smoke area that `safe/scripts/run-upstream-tests.sh` knows how to skip. This pass reran the Rust compression and decompression tests, C API round-trip and decompression harnesses, upstream-example freshness check, export parity check, and baseline contract check rather than the full upstream matrix.
+- `safe/out/phase6/run-full-suite-final.log` is not a complete fresh success artifact for this documentation pass; it stops in the upstream valgrind fuzzer-smoke area that `safe/scripts/run-upstream-tests.sh` knows how to skip. This pass reran `cargo test --manifest-path safe/Cargo.toml --release --all-targets`, `bash safe/scripts/run-advanced-mt-tests.sh`, and `bash safe/scripts/verify-export-parity.sh`; `bash safe/scripts/verify-link-compat.sh` reported its coverage stamp was already fresh and skipped a rerun. The full upstream matrix was not rerun during this documentation refresh.
 - Dependent coverage is documented for 12 packages in `dependents.json` and `safe/tests/dependents/dependent_matrix.toml`. The checked-in logs `safe/out/dependents/logs/compile.log`, `safe/out/dependents/logs/runtime.log`, and `safe/out/dependents/logs/runtime-libarchive.log` record successful compile/runtime probes, but those Docker/image-style dependent gates were not rerun during this documentation refresh.
 - `relevant_cves.json` contains two relevant records, CVE-2021-24031 and CVE-2021-24032, both for zstd CLI output-file permissions rather than core library memory safety. `safe/scripts/check-cli-permissions.sh` audits the CLI behavior with `strace`; this documentation pass did not rerun that script.
 - No repository-level upgrade report file is present. No first-party `TODO` or `FIXME` markers were found under `safe/src` by `rg -n 'TODO|FIXME|todo!|unimplemented!|panic!' safe --glob '!target/**' --glob '!out/**'`; remaining markers are in build error paths, scripts, tests, or `safe/third_party/structured-zstd/`.
@@ -155,7 +153,7 @@ Direct Cargo dependencies from `safe/Cargo.toml`:
 | `structured-zstd` | `=0.0.3`, path `third_party/structured-zstd` | normal | Local structured zstd encoder/decoder used for frame parsing, dictionary-aware decode, streaming/block compression, and frame emission. Its remaining unsafe sites are inventoried above because the source is vendored in this repository. |
 | `cc` | `1.2` | build | Build-time helper used by `safe/build.rs` to compile the legacy C shim and upstream legacy decoder sources. |
 
-`cargo tree --manifest-path safe/Cargo.toml --edges normal,build` also shows transitive Rust dependencies including `thiserror`, procedural macro support crates, `twox-hash`, `find-msvc-tools`, and `shlex`. They are not direct dependencies of `libzstd-safe`.
+`cargo tree --manifest-path safe/Cargo.toml` also shows transitive Rust dependencies including `thiserror`, procedural macro support crates, `twox-hash`, `find-msvc-tools`, and `shlex`. They are not direct dependencies of `libzstd-safe`.
 
 Build-time tools and packaging dependencies are declared in `safe/debian/control` and used by `safe/debian/rules`: `cargo`, `rustc`, a C compiler through the `cc` crate, `cmake`, `debhelper (>> 13.3.2~)` with compatibility level `14` in `safe/debian/compat`, `dh-package-notes`, `dpkg-build-api`, `help2man`, `less`, `python3`, `liblz4-dev`, `liblzma-dev`, and `zlib1g-dev`. The original zstd CLI and pzstd support are built from `original/libzstd-1.5.5+dfsg2/` against the safe library by `safe/scripts/build-original-cli-against-safe.sh`. The installed pkg-config and CMake metadata are generated from checked-in templates under `safe/pkgconfig/` and `safe/cmake/`.
 
@@ -166,34 +164,37 @@ The Rust library build does not use `bindgen`, `cbindgen`, `pkg-config`, or a th
 Commands run or consulted for this refresh:
 
 ```sh
-find safe -maxdepth 3 -type f | sort
+git status --short
+sed -n '1,260p' safe/PORT.md
 sed -n '1,240p' safe/Cargo.toml
 sed -n '1,260p' safe/build.rs
 sed -n '1,200p' safe/src/lib.rs
+sed -n '1,220p' safe/src/decompress/legacy.rs
+sed -n '1,180p' safe/src/ffi/legacy_shim.c
 find safe/debian -maxdepth 3 -type f | sort
+sed -n '1,180p' safe/debian/control
 cargo metadata --manifest-path safe/Cargo.toml --format-version 1 --no-deps
-cargo tree --manifest-path safe/Cargo.toml --edges normal,build
+cargo tree --manifest-path safe/Cargo.toml
 cargo geiger --manifest-path safe/Cargo.toml --all-targets
 rg -n '\bunsafe\b' safe --glob '*.rs' --glob '!target/**' --glob '!out/**'
 rg -n 'unsafe fn|unsafe impl|unsafe extern' safe
 grep -RIn '\bunsafe\b' safe
 grep -RIn 'unsafe fn\|unsafe impl\|unsafe extern' safe
-grep -RIn 'unsafe' safe/src safe/build.rs safe/tests safe/scripts || true
 grep -RIn 'extern "C"' safe
-rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym' safe/src/decompress safe/src/ffi/decompress.rs safe/scripts/run-capi-decompression.sh
-rg -n 'load_upstream!' safe/src/compress/block.rs safe/src/compress/cctx.rs safe/src/compress/cstream.rs safe/src/compress/params.rs
+rg -n 'extern "C"' safe/src safe/include safe/tests safe/build.rs --glob '!target/**' --glob '!out/**'
+grep -RIn 'libc::\|dlopen\|dlsym\|syscall\|pthread\|mmap\|malloc\|free' safe
+rg -n 'libc::|dlopen|dlsym|syscall|pthread_|mmap|malloc\(' safe/src safe/build.rs safe/Cargo.toml --glob '!target/**' --glob '!out/**'
+rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe --glob '!target/**' --glob '!out/**' --glob '!PORT.md'
 rg -n 'extern "C"|unsafe extern' safe/src/decompress/legacy.rs safe/src/ffi/legacy_shim.c safe/build.rs
+cargo build --manifest-path safe/Cargo.toml --release
 nm -D --defined-only safe/target/release/libzstd.so
 nm -D --undefined-only safe/target/release/libzstd.so
 objdump -p safe/target/release/libzstd.so
 ldd safe/target/release/libzstd.so
-cargo test --manifest-path safe/Cargo.toml --release --test compress
-cargo test --manifest-path safe/Cargo.toml --release --test decompress
-bash safe/scripts/run-capi-roundtrip.sh
-bash safe/scripts/run-capi-decompression.sh
-bash safe/scripts/run-original-examples.sh
+bash safe/scripts/run-advanced-mt-tests.sh
+bash safe/scripts/verify-link-compat.sh
 bash safe/scripts/verify-export-parity.sh
-bash safe/scripts/verify-baseline-contract.sh
+cargo test --manifest-path safe/Cargo.toml --release --all-targets
 jq -r '.packages | length' dependents.json
 jq -r '.relevant_cves[] | .cve_id' relevant_cves.json
 rg -n 'TODO|FIXME|todo!|unimplemented!|panic!' safe --glob '!target/**' --glob '!out/**'
