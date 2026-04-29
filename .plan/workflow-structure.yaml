@@ -3,297 +3,830 @@ yaml_source_mode: inline-only
 verifier_encoding: explicit-phases
 phases:
   - order: 1
-    id: impl_validator_setup_initial_run
+    id: impl_safe_decompression_independence
     type: implement
     bounce_target: null
     required_preexisting_inputs:
       - .plan/goal.md
-      - safe/
-      - original/libzstd-1.5.5+dfsg2/
+      - .plan/phases/01-safe-decompression-independence.md
+      - .plan/phases/02-safe-compression-core.md
+      - .plan/phases/03-safe-advanced-abi-completion.md
+      - .plan/phases/04-safe-packaging-install.md
+      - .plan/phases/05-upstream-release-gates.md
+      - .plan/phases/06-dependent-image-matrix.md
+      - .plan/phases/07-compat-regressions-and-fixes.md
+      - .plan/phases/08-final-release-burn-down.md
+      - .plan/workflow-structure.yaml
+      - workflow.yaml
+      - safe/src/decompress/
+      - safe/src/ffi/decompress.rs
+      - safe/tests/rust/decompress.rs
+      - safe/tests/capi/
+      - safe/scripts/run-capi-decompression.sh
+      - safe/scripts/capture-upstream-abi.sh
+      - safe/scripts/verify-baseline-contract.sh
+      - safe/docs/unsafe-audit.md
+      - safe/Cargo.toml
+      - safe/build.rs
+      - safe/include/zstd.h
+      - safe/include/zdict.h
+      - safe/include/zstd_errors.h
+      - original/libzstd-1.5.5+dfsg2/lib/zstd.h
+      - original/libzstd-1.5.5+dfsg2/lib/zdict.h
+      - original/libzstd-1.5.5+dfsg2/lib/zstd_errors.h
       - safe/abi/original.exports.txt
       - safe/abi/original.soname.txt
       - safe/abi/export_map.toml
       - safe/tests/upstream_test_matrix.toml
-      - safe/tests/dependents/dependent_matrix.toml
-      - safe/tests/fixtures/versions/
-      - safe/tests/fixtures/regression/
-      - safe/tests/fixtures/fuzz-corpora/
-      - dependents.json
-      - all_cves.json
-      - relevant_cves.json
-      - test-original.sh
-      - safe/docker/dependents/
-      - safe/scripts/build-artifacts.sh
-      - safe/scripts/build-original-cli-against-safe.sh
-      - safe/scripts/build-deb.sh
-      - safe/debian/control
-      - safe/debian/rules
-      - safe/debian/*.install
-      - safe/scripts/run-full-suite.sh
-      - safe/scripts/verify-export-parity.sh
-      - safe/scripts/verify-install-layout.sh
-      - .gitignore
+      - safe/src/decompress/dctx.rs
+      - safe/src/decompress/ddict.rs
+      - safe/src/decompress/dstream.rs
+      - safe/src/decompress/frame.rs
+      - safe/src/decompress/huf.rs
+      - safe/src/decompress/fse.rs
+      - safe/src/decompress/legacy.rs
+      - safe/src/ffi/decompress.rs
+      - safe/src/ffi/legacy_shim.c
+      - safe/tests/rust/decompress.rs
+      - safe/tests/capi/decompress_smoke.c
+      - safe/tests/capi/frame_probe.c
+      - safe/tests/capi/legacy_decode.c
+      - safe/scripts/run-capi-decompression.sh
+      - safe/scripts/capture-upstream-abi.sh
+      - safe/scripts/verify-baseline-contract.sh
+      - safe/docs/unsafe-audit.md
+      - original/libzstd-1.5.5+dfsg2/
   - order: 2
-    id: check_validator_setup_software_tester
+    id: script_safe_decompression_independence
     type: check
-    bounce_target: impl_validator_setup_initial_run
+    bounce_target: impl_safe_decompression_independence
     required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - .gitignore
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/scripts/run-validator-regressions.sh
-      - safe/out/validator/override-debs/libzstd/
-      - safe/out/validator/artifacts/proof/port-04-test-debs-lock.json
-      - safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json
+      - workflow.yaml
+      - safe/abi/original.exports.txt
+      - safe/abi/original.soname.txt
+      - safe/abi/export_map.toml
+      - safe/tests/upstream_test_matrix.toml
+      - safe/src/decompress/dctx.rs
+      - safe/src/decompress/ddict.rs
+      - safe/src/decompress/dstream.rs
+      - safe/src/decompress/frame.rs
+      - safe/src/decompress/huf.rs
+      - safe/src/decompress/fse.rs
+      - safe/src/ffi/decompress.rs
+      - safe/tests/rust/decompress.rs
+      - safe/tests/capi/decompress_smoke.c
+      - safe/tests/capi/frame_probe.c
+      - safe/tests/capi/legacy_decode.c
+      - safe/scripts/run-capi-decompression.sh
+      - safe/scripts/verify-export-parity.sh
+      - safe/scripts/verify-baseline-contract.sh
   - order: 3
-    id: check_validator_setup_senior_tester
+    id: check_safe_decompression_software_tester
     type: check
-    bounce_target: impl_validator_setup_initial_run
+    bounce_target: impl_safe_decompression_independence
     required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - .gitignore
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/scripts/run-validator-regressions.sh
-      - safe/out/validator/override-debs/libzstd/
-      - safe/out/validator/artifacts/proof/port-04-test-debs-lock.json
-      - safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json
+      - safe/src/decompress/dctx.rs
+      - safe/src/decompress/ddict.rs
+      - safe/src/decompress/dstream.rs
+      - safe/src/decompress/frame.rs
+      - safe/src/ffi/decompress.rs
+      - safe/tests/rust/decompress.rs
+      - safe/tests/capi/decompress_smoke.c
+      - safe/tests/capi/frame_probe.c
+      - safe/tests/capi/legacy_decode.c
+      - safe/docs/unsafe-audit.md
   - order: 4
-    id: impl_validator_source_cli_regressions
+    id: check_safe_decompression_senior_tester
+    type: check
+    bounce_target: impl_safe_decompression_independence
+    required_preexisting_inputs:
+      - .plan/phases/01-safe-decompression-independence.md
+      - .plan/workflow-structure.yaml
+      - workflow.yaml
+      - safe/abi/original.exports.txt
+      - safe/abi/original.soname.txt
+      - safe/abi/export_map.toml
+      - safe/tests/upstream_test_matrix.toml
+      - safe/scripts/verify-baseline-contract.sh
+      - safe/docs/unsafe-audit.md
+  - order: 5
+    id: impl_safe_compression_core
     type: implement
     bounce_target: null
     required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/scripts/run-validator-regressions.sh
+      - workflow.yaml
+      - .plan/phases/
+      - .plan/workflow-structure.yaml
+      - safe/src/decompress/
+      - safe/src/ffi/decompress.rs
+      - safe/tests/rust/decompress.rs
+      - safe/tests/capi/
+      - safe/scripts/run-capi-decompression.sh
+      - safe/scripts/capture-upstream-abi.sh
+      - safe/scripts/verify-baseline-contract.sh
+      - safe/docs/unsafe-audit.md
+      - safe/Cargo.toml
+      - safe/include/zstd.h
+      - safe/include/zdict.h
+      - safe/include/zstd_errors.h
+      - safe/abi/export_map.toml
+      - safe/tests/upstream_test_matrix.toml
+      - safe/src/common/error.rs
+      - safe/src/common/frame.rs
+      - safe/src/compress/block.rs
+      - safe/src/compress/cctx.rs
+      - safe/src/compress/cstream.rs
+      - safe/src/compress/frame.rs
+      - safe/src/compress/literals.rs
+      - safe/src/compress/ldm.rs
+      - safe/src/compress/match_state.rs
+      - safe/src/compress/params.rs
+      - safe/src/compress/sequences.rs
+      - safe/src/compress/strategies/double_fast.rs
+      - safe/src/compress/strategies/fast.rs
+      - safe/src/compress/strategies/lazy.rs
+      - safe/src/compress/strategies/opt.rs
+      - safe/src/decompress/dctx.rs
+      - safe/src/decompress/ddict.rs
+      - safe/src/decompress/frame.rs
+      - safe/src/ffi/compress.rs
+      - safe/src/ffi/decompress.rs
+      - safe/tests/rust/compress.rs
+      - safe/tests/capi/roundtrip_smoke.c
+      - safe/tests/capi/bigdict_driver.c
+      - safe/tests/capi/invalid_dictionaries_driver.c
+      - safe/tests/capi/zstream_driver.c
+      - safe/tests/capi/paramgrill_driver.c
+      - safe/tests/capi/external_matchfinder_driver.c
+      - safe/scripts/run-capi-roundtrip.sh
+      - safe/scripts/run-original-examples.sh
+      - original/libzstd-1.5.5+dfsg2/lib/compress/
+      - original/libzstd-1.5.5+dfsg2/tests/bigdict.c
+      - original/libzstd-1.5.5+dfsg2/tests/invalidDictionaries.c
+      - original/libzstd-1.5.5+dfsg2/tests/roundTripCrash.c
+      - original/libzstd-1.5.5+dfsg2/tests/paramgrill.c
+      - original/libzstd-1.5.5+dfsg2/tests/external_matchfinder.c
+      - original/libzstd-1.5.5+dfsg2/examples/
+  - order: 6
+    id: script_safe_compression_core
+    type: check
+    bounce_target: impl_safe_compression_core
+    required_preexisting_inputs:
+      - safe/src/compress/block.rs
+      - safe/src/compress/cctx.rs
+      - safe/src/compress/cstream.rs
+      - safe/src/compress/params.rs
+      - safe/src/compress/frame.rs
+      - safe/src/compress/literals.rs
+      - safe/src/compress/ldm.rs
+      - safe/src/compress/match_state.rs
+      - safe/src/compress/sequences.rs
+      - safe/src/ffi/compress.rs
+      - safe/tests/rust/compress.rs
+      - safe/tests/capi/roundtrip_smoke.c
+      - safe/scripts/run-capi-roundtrip.sh
+      - safe/scripts/run-original-examples.sh
+  - order: 7
+    id: check_safe_compression_core_software_tester
+    type: check
+    bounce_target: impl_safe_compression_core
+    required_preexisting_inputs:
+      - safe/src/compress/block.rs
+      - safe/src/compress/cctx.rs
+      - safe/src/compress/cstream.rs
+      - safe/src/compress/params.rs
+      - safe/tests/rust/compress.rs
+      - safe/tests/capi/roundtrip_smoke.c
+      - safe/tests/capi/bigdict_driver.c
+      - safe/tests/capi/invalid_dictionaries_driver.c
+      - safe/tests/capi/zstream_driver.c
+      - safe/tests/capi/paramgrill_driver.c
+      - safe/tests/capi/external_matchfinder_driver.c
+  - order: 8
+    id: check_safe_compression_core_senior_tester
+    type: check
+    bounce_target: impl_safe_compression_core
+    required_preexisting_inputs:
+      - safe/src/compress/block.rs
+      - safe/src/compress/cctx.rs
+      - safe/src/compress/cstream.rs
+      - safe/src/ffi/compress.rs
+      - safe/abi/export_map.toml
+      - safe/tests/upstream_test_matrix.toml
+  - order: 9
+    id: impl_safe_advanced_abi_completion
+    type: implement
+    bounce_target: null
+    required_preexisting_inputs:
+      - safe/abi/export_map.toml
+      - safe/tests/upstream_test_matrix.toml
+      - safe/src/compress/
+      - safe/src/ffi/compress.rs
+      - safe/tests/rust/compress.rs
+      - safe/tests/capi/
+      - safe/scripts/run-capi-roundtrip.sh
+      - safe/build.rs
+      - safe/include/zstd.h
+      - safe/include/zdict.h
+      - safe/include/zstd_errors.h
+      - safe/abi/export_map.toml
+      - safe/tests/upstream_test_matrix.toml
+      - safe/src/ffi/compress.rs
+      - safe/src/ffi/advanced.rs
+      - safe/src/ffi/legacy_shim.c
+      - safe/src/compress/cctx_params.rs
+      - safe/src/compress/cdict.rs
+      - safe/src/compress/sequence_api.rs
+      - safe/src/compress/static_ctx.rs
+      - safe/src/threading/job_queue.rs
+      - safe/src/threading/pool.rs
+      - safe/src/threading/zstdmt.rs
+      - safe/src/dict_builder/cover.rs
+      - safe/src/dict_builder/divsufsort.rs
+      - safe/src/dict_builder/fastcover.rs
+      - safe/src/dict_builder/zdict.rs
+      - safe/tests/capi/dict_builder_driver.c
+      - safe/tests/capi/sequence_api_driver.c
+      - safe/tests/capi/thread_pool_driver.c
+      - safe/tests/link-compat/Makefile
+      - safe/tests/link-compat/run_pooltests.c
+      - safe/tests/link-compat/run_zstreamtest.c
+      - safe/scripts/run-advanced-mt-tests.sh
+      - safe/scripts/verify-link-compat.sh
+      - safe/docs/unsafe-audit.md
+      - original/libzstd-1.5.5+dfsg2/lib/dictBuilder/
+      - original/libzstd-1.5.5+dfsg2/lib/common/pool.c
+      - original/libzstd-1.5.5+dfsg2/lib/common/threading.c
+      - original/libzstd-1.5.5+dfsg2/lib/compress/zstdmt_compress.c
+      - original/libzstd-1.5.5+dfsg2/tests/poolTests.c
+      - original/libzstd-1.5.5+dfsg2/tests/zstreamtest.c
+      - original/libzstd-1.5.5+dfsg2/tests/fuzz/sequence_compression_api.c
+  - order: 10
+    id: script_safe_advanced_abi_completion
+    type: check
+    bounce_target: impl_safe_advanced_abi_completion
+    required_preexisting_inputs:
+      - safe/build.rs
+      - safe/src/ffi/compress.rs
+      - safe/src/ffi/advanced.rs
+      - safe/src/compress/cctx_params.rs
+      - safe/src/compress/cdict.rs
+      - safe/src/compress/sequence_api.rs
+      - safe/src/compress/static_ctx.rs
+      - safe/src/threading/job_queue.rs
+      - safe/src/threading/pool.rs
+      - safe/src/threading/zstdmt.rs
+      - safe/src/dict_builder/cover.rs
+      - safe/src/dict_builder/divsufsort.rs
+      - safe/src/dict_builder/fastcover.rs
+      - safe/src/dict_builder/zdict.rs
+      - safe/scripts/run-advanced-mt-tests.sh
+      - safe/scripts/verify-link-compat.sh
+      - safe/scripts/verify-export-parity.sh
+  - order: 11
+    id: check_safe_advanced_abi_software_tester
+    type: check
+    bounce_target: impl_safe_advanced_abi_completion
+    required_preexisting_inputs:
+      - safe/src/ffi/advanced.rs
+      - safe/src/compress/cctx_params.rs
+      - safe/src/compress/cdict.rs
+      - safe/src/compress/sequence_api.rs
+      - safe/src/compress/static_ctx.rs
+      - safe/src/threading/job_queue.rs
+      - safe/src/threading/pool.rs
+      - safe/src/threading/zstdmt.rs
+      - safe/src/dict_builder/cover.rs
+      - safe/src/dict_builder/divsufsort.rs
+      - safe/src/dict_builder/fastcover.rs
+      - safe/src/dict_builder/zdict.rs
+      - safe/tests/capi/dict_builder_driver.c
+      - safe/tests/capi/sequence_api_driver.c
+      - safe/tests/capi/thread_pool_driver.c
+  - order: 12
+    id: check_safe_advanced_abi_senior_tester
+    type: check
+    bounce_target: impl_safe_advanced_abi_completion
+    required_preexisting_inputs:
+      - safe/build.rs
+      - safe/src/ffi/compress.rs
+      - safe/src/ffi/advanced.rs
+      - safe/abi/export_map.toml
+      - safe/scripts/verify-link-compat.sh
+      - safe/docs/unsafe-audit.md
+  - order: 13
+    id: impl_safe_packaging_install
+    type: implement
+    bounce_target: null
+    required_preexisting_inputs:
+      - safe/build.rs
+      - safe/abi/export_map.toml
+      - safe/tests/upstream_test_matrix.toml
+      - safe/src/ffi/
+      - safe/src/compress/
+      - safe/src/threading/
+      - safe/src/dict_builder/
+      - safe/tests/capi/
+      - safe/tests/link-compat/
+      - safe/scripts/run-advanced-mt-tests.sh
+      - safe/scripts/verify-link-compat.sh
+      - safe/docs/unsafe-audit.md
+      - safe/Cargo.toml
+      - safe/build.rs
+      - safe/include/zstd.h
+      - safe/include/zdict.h
+      - safe/include/zstd_errors.h
+      - safe/scripts/build-artifacts.sh
+      - safe/scripts/build-deb.sh
+      - safe/scripts/build-original-cli-against-safe.sh
+      - safe/scripts/install-safe-debs.sh
+      - safe/scripts/verify-install-layout.sh
+      - safe/scripts/verify-deb-profiles.sh
+      - safe/scripts/run-debian-autopkgtests.sh
+      - safe/scripts/run-build-variant-tests.sh
+      - safe/debian/changelog
+      - safe/debian/clean
+      - safe/debian/control
+      - safe/debian/compat
+      - safe/debian/copyright
+      - safe/debian/rules
+      - safe/debian/source/format
+      - safe/debian/libzstd-dev.examples
+      - safe/debian/libzstd-dev.install
+      - safe/debian/libzstd1.install
+      - safe/debian/zstd.install
+      - safe/debian/zstd.docs
+      - safe/debian/zstd.manpages
+      - safe/debian/tests/control
+      - safe/debian/tests/python/check_build/__main__.py
+      - safe/debian/tests/requirements/install.txt
+      - safe/debian/tests/requirements/tests.txt
+      - safe/debian/tests/ztest/programs.toml
+      - safe/debian/tests/ztest/cmake/CMakeLists.txt
+      - safe/debian/tests/ztest/cmake/ztest.c
+      - safe/debian/tests/ztest/pkg-make/Makefile
+      - safe/debian/tests/ztest/pkg-make/ztest.c
+      - original/libzstd-1.5.5+dfsg2/programs/
+      - original/libzstd-1.5.5+dfsg2/zlibWrapper/
+      - original/libzstd-1.5.5+dfsg2/examples/
+      - original/libzstd-1.5.5+dfsg2/doc/educational_decoder/
+      - original/libzstd-1.5.5+dfsg2/contrib/pzstd/
+      - original/libzstd-1.5.5+dfsg2/CHANGELOG
+      - original/libzstd-1.5.5+dfsg2/LICENSE
+      - original/libzstd-1.5.5+dfsg2/README.md
+      - original/libzstd-1.5.5+dfsg2/TESTING.md
+  - order: 14
+    id: script_safe_packaging_install
+    type: check
+    bounce_target: impl_safe_packaging_install
+    required_preexisting_inputs:
+      - safe/scripts/build-artifacts.sh
+      - safe/scripts/build-original-cli-against-safe.sh
+      - safe/scripts/build-deb.sh
+      - safe/scripts/run-build-variant-tests.sh
+      - safe/scripts/verify-install-layout.sh
+      - safe/scripts/verify-deb-profiles.sh
+      - safe/scripts/run-debian-autopkgtests.sh
+      - safe/debian/control
+      - safe/debian/rules
+      - safe/debian/tests/control
+  - order: 15
+    id: check_safe_packaging_software_tester
+    type: check
+    bounce_target: impl_safe_packaging_install
+    required_preexisting_inputs:
+      - safe/scripts/build-artifacts.sh
+      - safe/scripts/build-deb.sh
+      - safe/scripts/build-original-cli-against-safe.sh
+      - safe/debian/control
+      - safe/debian/rules
+      - safe/debian/tests/control
+      - safe/out/install/release-default/
+      - safe/out/original-cli/lib/
+      - safe/out/deb/default/metadata.env
+      - safe/out/deb/default/packages/
+      - safe/out/deb/default/stage-root/
+  - order: 16
+    id: check_safe_packaging_senior_tester
+    type: check
+    bounce_target: impl_safe_packaging_install
+    required_preexisting_inputs:
+      - safe/include/zstd.h
+      - safe/include/zdict.h
+      - safe/include/zstd_errors.h
+      - safe/debian/control
+      - safe/debian/rules
+      - safe/out/install/release-default/
+      - safe/out/original-cli/lib/
+      - safe/out/debian-src/default/libzstd-1.5.5+dfsg2/
+      - safe/out/deb/default/metadata.env
+      - safe/out/deb/default/packages/
+  - order: 17
+    id: impl_upstream_release_gates
+    type: implement
+    bounce_target: null
+    required_preexisting_inputs:
+      - safe/out/install/release-default/
+      - safe/out/original-cli/lib/
+      - safe/out/debian-src/default/libzstd-1.5.5+dfsg2/
+      - safe/out/deb/default/metadata.env
+      - safe/out/deb/default/packages/
+      - safe/out/deb/default/stage-root/
+      - safe/debian/
+      - safe/include/zstd.h
+      - safe/include/zdict.h
+      - safe/include/zstd_errors.h
+      - original/libzstd-1.5.5+dfsg2/lib/zstd.h
+      - original/libzstd-1.5.5+dfsg2/lib/zdict.h
+      - original/libzstd-1.5.5+dfsg2/lib/zstd_errors.h
+      - safe/abi/original.exports.txt
+      - safe/abi/original.soname.txt
+      - safe/abi/export_map.toml
+      - safe/tests/upstream_test_matrix.toml
+      - safe/scripts/build-artifacts.sh
+      - safe/scripts/build-original-cli-against-safe.sh
+      - safe/scripts/build-deb.sh
+      - safe/scripts/verify-header-identity.sh
+      - safe/scripts/verify-baseline-contract.sh
+      - safe/scripts/run-upstream-tests.sh
+      - safe/scripts/run-original-playtests.sh
+      - safe/scripts/run-original-cli-tests.sh
+      - safe/scripts/run-original-gzip-tests.sh
+      - safe/scripts/run-zlibwrapper-tests.sh
+      - safe/scripts/run-educational-decoder-tests.sh
+      - safe/scripts/run-pzstd-tests.sh
+      - safe/scripts/run-seekable-tests.sh
+      - safe/scripts/run-version-compat-tests.sh
+      - safe/scripts/run-upstream-regression.sh
+      - safe/scripts/run-upstream-fuzz-tests.sh
+      - safe/scripts/run-original-examples.sh
+      - safe/scripts/phase6-common.sh
+      - safe/scripts/check-cli-permissions.sh
+      - safe/scripts/run-performance-smoke.sh
+      - safe/scripts/run-full-suite.sh
+      - safe/tests/fixtures/versions/manifest.toml
+      - safe/tests/fixtures/regression/README.md
+      - safe/tests/fixtures/fuzz-corpora/manifest.toml
+      - safe/tests/ported/whitebox/Makefile
+      - safe/tests/ported/whitebox/offline_regression_data.c
+      - relevant_cves.json
+      - original/libzstd-1.5.5+dfsg2/tests/Makefile
+      - original/libzstd-1.5.5+dfsg2/tests/fuzz/
+      - original/libzstd-1.5.5+dfsg2/tests/regression/
+      - original/libzstd-1.5.5+dfsg2/tests/gzip/
+      - original/libzstd-1.5.5+dfsg2/zlibWrapper/
+      - original/libzstd-1.5.5+dfsg2/doc/educational_decoder/
+      - original/libzstd-1.5.5+dfsg2/contrib/pzstd/
+      - original/libzstd-1.5.5+dfsg2/contrib/seekable_format/
+  - order: 18
+    id: script_upstream_release_gates
+    type: check
+    bounce_target: impl_upstream_release_gates
+    required_preexisting_inputs:
+      - safe/out/install/release-default/
+      - safe/out/original-cli/lib/
+      - safe/out/deb/default/metadata.env
+      - safe/include/zstd.h
+      - safe/include/zdict.h
+      - safe/include/zstd_errors.h
+      - original/libzstd-1.5.5+dfsg2/lib/zstd.h
+      - original/libzstd-1.5.5+dfsg2/lib/zdict.h
+      - original/libzstd-1.5.5+dfsg2/lib/zstd_errors.h
+      - safe/scripts/verify-header-identity.sh
+      - safe/scripts/verify-baseline-contract.sh
+      - safe/scripts/run-upstream-tests.sh
+      - safe/scripts/run-original-playtests.sh
+      - safe/scripts/run-original-cli-tests.sh
+      - safe/scripts/run-original-gzip-tests.sh
+      - safe/scripts/run-zlibwrapper-tests.sh
+      - safe/scripts/run-educational-decoder-tests.sh
+      - safe/scripts/run-pzstd-tests.sh
+      - safe/scripts/run-seekable-tests.sh
+      - safe/scripts/run-version-compat-tests.sh
+      - safe/scripts/run-upstream-regression.sh
+      - safe/scripts/run-upstream-fuzz-tests.sh
+      - safe/scripts/run-original-examples.sh
+      - safe/scripts/check-cli-permissions.sh
+      - safe/scripts/run-performance-smoke.sh
+  - order: 19
+    id: check_upstream_release_gates_software_tester
+    type: check
+    bounce_target: impl_upstream_release_gates
+    required_preexisting_inputs:
+      - safe/tests/upstream_test_matrix.toml
+      - safe/include/zstd.h
+      - safe/include/zdict.h
+      - safe/include/zstd_errors.h
+      - safe/tests/fixtures/versions/manifest.toml
+      - safe/tests/fixtures/regression/README.md
+      - safe/tests/fixtures/fuzz-corpora/manifest.toml
+      - safe/scripts/run-full-suite.sh
+  - order: 20
+    id: check_upstream_release_gates_senior_tester
+    type: check
+    bounce_target: impl_upstream_release_gates
+    required_preexisting_inputs:
+      - safe/out/install/release-default/
+      - safe/out/original-cli/lib/
+      - safe/out/deb/default/metadata.env
+      - safe/scripts/phase6-common.sh
+      - safe/scripts/run-full-suite.sh
+      - safe/scripts/verify-header-identity.sh
+      - safe/scripts/verify-baseline-contract.sh
+  - order: 21
+    id: impl_dependent_image_matrix
+    type: implement
+    bounce_target: null
+    required_preexisting_inputs:
+      - safe/tests/upstream_test_matrix.toml
+      - safe/scripts/phase6-common.sh
+      - safe/scripts/run-upstream-tests.sh
+      - safe/scripts/run-original-playtests.sh
+      - safe/scripts/run-original-cli-tests.sh
+      - safe/scripts/run-original-gzip-tests.sh
+      - safe/scripts/run-zlibwrapper-tests.sh
+      - safe/scripts/run-educational-decoder-tests.sh
+      - safe/scripts/run-pzstd-tests.sh
+      - safe/scripts/run-seekable-tests.sh
+      - safe/scripts/run-version-compat-tests.sh
+      - safe/scripts/run-upstream-regression.sh
+      - safe/scripts/run-upstream-fuzz-tests.sh
+      - safe/scripts/run-original-examples.sh
+      - safe/scripts/check-cli-permissions.sh
+      - safe/scripts/run-performance-smoke.sh
+      - safe/scripts/run-full-suite.sh
+      - safe/tests/fixtures/versions/
+      - safe/tests/fixtures/regression/
+      - safe/tests/fixtures/fuzz-corpora/
+      - safe/scripts/build-artifacts.sh
+      - safe/scripts/build-original-cli-against-safe.sh
+      - safe/scripts/build-deb.sh
+      - safe/out/install/release-default/
+      - safe/out/original-cli/lib/
+      - safe/out/debian-src/default/libzstd-1.5.5+dfsg2/
+      - safe/out/deb/default/metadata.env
+      - safe/out/deb/default/packages/
+      - safe/out/deb/default/stage-root/
+      - dependents.json
+      - safe/tests/dependents/dependent_matrix.toml
+      - safe/tests/dependents/src/apt_probe.c
+      - safe/tests/dependents/src/btrfs-progs_probe.c
+      - safe/tests/dependents/src/curl_probe.c
+      - safe/tests/dependents/src/dpkg_probe.c
+      - safe/tests/dependents/src/libarchive_probe.c
+      - safe/tests/dependents/src/qemu_probe.c
+      - safe/tests/dependents/src/rsync_probe.c
+      - safe/tests/dependents/src/squashfs-tools_probe.c
+      - safe/tests/dependents/src/systemd_probe.c
+      - safe/tests/dependents/src/tiff_probe.c
+      - safe/scripts/check-dependent-compile-compat.sh
+      - safe/scripts/verify-baseline-contract.sh
+      - test-original.sh
+  - order: 22
+    id: script_dependent_image_matrix
+    type: check
+    bounce_target: impl_dependent_image_matrix
+    required_preexisting_inputs:
+      - safe/out/deb/default/metadata.env
+      - safe/out/deb/default/packages/
+      - dependents.json
+      - safe/tests/dependents/dependent_matrix.toml
+      - safe/tests/dependents/src/rpm_probe.c
+      - safe/tests/dependents/src/zarchive_probe.c
+      - safe/tests/dependents/fixtures/rpm/hello.spec
+      - safe/tests/dependents/fixtures/rpm/hello.txt
+      - safe/tests/dependents/fixtures/zarchive/input/a.txt
+      - safe/tests/dependents/fixtures/zarchive/input/sub/b.txt
+      - safe/docker/dependents/Dockerfile
+      - safe/docker/dependents/entrypoint.sh
+      - safe/scripts/build-dependent-image.sh
+      - safe/scripts/run-dependent-matrix.sh
+      - safe/scripts/check-dependent-compile-compat.sh
+      - safe/scripts/verify-baseline-contract.sh
+      - test-original.sh
+      - safe/out/dependents/image-context/metadata.env
+  - order: 23
+    id: check_dependent_image_matrix_software_tester
+    type: check
+    bounce_target: impl_dependent_image_matrix
+    required_preexisting_inputs:
+      - dependents.json
+      - safe/tests/dependents/dependent_matrix.toml
+      - safe/tests/dependents/src/rpm_probe.c
+      - safe/tests/dependents/src/zarchive_probe.c
+      - safe/tests/dependents/fixtures/rpm/hello.spec
+      - safe/tests/dependents/fixtures/rpm/hello.txt
+      - safe/tests/dependents/fixtures/zarchive/input/a.txt
+      - safe/tests/dependents/fixtures/zarchive/input/sub/b.txt
+      - safe/docker/dependents/entrypoint.sh
+      - safe/scripts/check-dependent-compile-compat.sh
+      - safe/out/dependents/compile-compat/
+      - safe/out/dependents/logs/
+  - order: 24
+    id: check_dependent_image_matrix_senior_tester
+    type: check
+    bounce_target: impl_dependent_image_matrix
+    required_preexisting_inputs:
+      - safe/docker/dependents/Dockerfile
+      - safe/docker/dependents/entrypoint.sh
+      - safe/scripts/build-dependent-image.sh
+      - safe/scripts/run-dependent-matrix.sh
+      - safe/out/dependents/image-context/metadata.env
+      - safe/out/dependents/compile-compat/
+      - safe/out/dependents/logs/
+      - test-original.sh
+  - order: 25
+    id: impl_compat_regressions_and_fixes
+    type: implement
+    bounce_target: null
+    required_preexisting_inputs:
+      - safe/out/install/release-default/
+      - safe/out/original-cli/lib/
+      - safe/out/debian-src/default/libzstd-1.5.5+dfsg2/
+      - safe/out/deb/default/metadata.env
+      - safe/out/deb/default/packages/
+      - safe/out/deb/default/stage-root/
+      - safe/out/dependents/image-context/metadata.env
+      - safe/out/dependents/compile-compat/
+      - safe/out/dependents/logs/
+      - safe/abi/export_map.toml
+      - safe/tests/upstream_test_matrix.toml
+      - safe/tests/dependents/dependent_matrix.toml
+      - safe/src/
+      - safe/tests/
+      - dependents.json
+      - test-original.sh
+      - safe/src/decompress/dctx.rs
+      - safe/src/decompress/ddict.rs
+      - safe/src/decompress/dstream.rs
+      - safe/src/decompress/frame.rs
+      - safe/src/compress/block.rs
+      - safe/src/compress/cctx.rs
+      - safe/src/compress/cstream.rs
+      - safe/src/compress/params.rs
+      - safe/src/compress/cctx_params.rs
+      - safe/src/compress/cdict.rs
+      - safe/src/compress/sequence_api.rs
+      - safe/src/ffi/compress.rs
+      - safe/src/ffi/decompress.rs
+      - safe/src/ffi/advanced.rs
       - safe/tests/rust/compress.rs
       - safe/tests/rust/decompress.rs
       - safe/tests/capi/roundtrip_smoke.c
       - safe/tests/capi/decompress_smoke.c
-      - safe/tests/capi/frame_probe.c
-      - safe/tests/capi/invalid_dictionaries_driver.c
-      - safe/tests/capi/bigdict_driver.c
-      - safe/scripts/run-capi-roundtrip.sh
-      - safe/scripts/run-capi-decompression.sh
-      - safe/src/compress/
-      - safe/src/decompress/
-      - safe/src/dict_builder/
-      - safe/src/common/error.rs
-      - safe/src/common/frame.rs
-      - safe/src/ffi/compress.rs
-      - safe/src/ffi/decompress.rs
-      - safe/out/validator/artifacts/port-04-test/results/libzstd/
-      - safe/out/validator/artifacts/port-04-test/logs/libzstd/
-  - order: 5
-    id: check_validator_source_software_tester
-    type: check
-    bounce_target: impl_validator_source_cli_regressions
-    required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/scripts/run-validator-regressions.sh
-      - safe/out/validator/artifacts/port-04-test/results/libzstd/
-      - safe/out/validator/artifacts/proof/port-04-test-debs-lock.json
-  - order: 6
-    id: check_validator_source_senior_tester
-    type: check
-    bounce_target: impl_validator_source_cli_regressions
-    required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/out/validator/artifacts/port-04-test/results/libzstd/
-  - order: 7
-    id: impl_validator_streaming_capi_regressions
-    type: implement
-    bounce_target: null
-    required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/scripts/run-validator-regressions.sh
-      - safe/src/compress/cstream.rs
-      - safe/src/compress/cctx.rs
-      - safe/src/compress/cctx_params.rs
-      - safe/src/compress/params.rs
-      - safe/src/ffi/compress.rs
-      - safe/src/decompress/dstream.rs
-      - safe/src/decompress/dctx.rs
-      - safe/src/ffi/decompress.rs
-      - safe/src/ffi/types.rs
-      - safe/tests/capi/zstream_driver.c
-      - safe/tests/capi/roundtrip_smoke.c
-      - safe/tests/capi/paramgrill_driver.c
-      - safe/scripts/run-capi-roundtrip.sh
-      - safe/out/validator/artifacts/port-04-test/results/libzstd/
-      - safe/out/validator/artifacts/port-04-test/logs/libzstd/
-  - order: 8
-    id: check_validator_capi_software_tester
-    type: check
-    bounce_target: impl_validator_streaming_capi_regressions
-    required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/scripts/run-validator-regressions.sh
-      - safe/out/validator/artifacts/port-04-test/results/libzstd/
-      - safe/out/validator/artifacts/proof/port-04-test-debs-lock.json
-  - order: 9
-    id: check_validator_capi_senior_tester
-    type: check
-    bounce_target: impl_validator_streaming_capi_regressions
-    required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/out/validator/artifacts/port-04-test/results/libzstd/
-  - order: 10
-    id: impl_validator_libarchive_usage_regressions
-    type: implement
-    bounce_target: null
-    required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/scripts/run-validator-regressions.sh
-      - safe/out/validator/artifacts/port-04-test/results/libzstd/
-      - safe/out/validator/artifacts/port-04-test/logs/libzstd/
-      - dependents.json
-      - test-original.sh
-      - safe/docker/dependents/
+      - safe/tests/dependents/src/rpm_probe.c
+      - safe/tests/dependents/src/zarchive_probe.c
+      - safe/tests/dependents/fixtures/rpm/
+      - safe/tests/dependents/fixtures/zarchive/
+      - safe/docker/dependents/Dockerfile
       - safe/docker/dependents/entrypoint.sh
-      - safe/tests/dependents/dependent_matrix.toml
-      - safe/tests/dependents/src/libarchive_probe.c
-      - safe/scripts/run-dependent-matrix.sh
       - safe/scripts/build-dependent-image.sh
-      - safe/src/compress/
-      - safe/src/decompress/
-      - safe/src/common/frame.rs
-      - safe/src/ffi/compress.rs
-      - safe/src/ffi/decompress.rs
+      - safe/scripts/run-dependent-matrix.sh
+      - safe/scripts/run-full-suite.sh
+      - safe/docs/unsafe-audit.md
+  - order: 26
+    id: script_compat_regressions_and_fixes
+    type: check
+    bounce_target: impl_compat_regressions_and_fixes
+    required_preexisting_inputs:
+      - safe/out/deb/default/metadata.env
+      - safe/out/deb/default/packages/
+      - safe/out/dependents/image-context/metadata.env
+      - safe/out/dependents/compile-compat/
+      - safe/out/dependents/logs/
       - safe/scripts/build-artifacts.sh
       - safe/scripts/build-original-cli-against-safe.sh
       - safe/scripts/build-deb.sh
-  - order: 11
-    id: check_validator_usage_software_tester
-    type: check
-    bounce_target: impl_validator_libarchive_usage_regressions
-    required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/scripts/run-validator-regressions.sh
-      - safe/out/validator/artifacts/port-04-test/results/libzstd/
-      - safe/out/validator/artifacts/proof/port-04-test-debs-lock.json
       - safe/scripts/build-dependent-image.sh
       - safe/scripts/run-dependent-matrix.sh
       - test-original.sh
-  - order: 12
-    id: check_validator_usage_senior_tester
+  - order: 27
+    id: check_compat_regressions_software_tester
     type: check
-    bounce_target: impl_validator_libarchive_usage_regressions
+    bounce_target: impl_compat_regressions_and_fixes
     required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/out/validator/artifacts/port-04-test/results/libzstd/
-      - safe/scripts/verify-install-layout.sh
-      - safe/scripts/verify-link-compat.sh
-  - order: 13
-    id: impl_validator_remaining_burn_down
-    type: implement
-    bounce_target: null
-    required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/scripts/run-validator-regressions.sh
-      - safe/out/validator/artifacts/
-  - order: 14
-    id: check_validator_remaining_software_tester
+      - safe/out/dependents/logs/
+      - safe/tests/rust/compress.rs
+      - safe/tests/rust/decompress.rs
+      - safe/tests/capi/roundtrip_smoke.c
+      - safe/tests/capi/decompress_smoke.c
+      - safe/tests/dependents/dependent_matrix.toml
+      - safe/tests/dependents/src/rpm_probe.c
+      - safe/tests/dependents/src/zarchive_probe.c
+      - safe/docs/unsafe-audit.md
+  - order: 28
+    id: check_compat_regressions_senior_tester
     type: check
-    bounce_target: impl_validator_remaining_burn_down
+    bounce_target: impl_compat_regressions_and_fixes
     required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/scripts/run-validator-regressions.sh
-      - safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json
-  - order: 15
-    id: check_validator_remaining_senior_tester
-    type: check
-    bounce_target: impl_validator_remaining_burn_down
-    required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/out/validator/
-  - order: 16
-    id: impl_validator_final_clean_run
-    type: implement
-    bounce_target: null
-    required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/scripts/run-validator-regressions.sh
+      - safe/abi/export_map.toml
+      - safe/tests/upstream_test_matrix.toml
+      - safe/tests/dependents/dependent_matrix.toml
+      - safe/scripts/run-dependent-matrix.sh
       - safe/scripts/run-full-suite.sh
-      - safe/scripts/build-dependent-image.sh
+      - safe/docs/unsafe-audit.md
+  - order: 29
+    id: impl_final_release_burn_down
+    type: implement
+    bounce_target: null
+    required_preexisting_inputs:
+      - safe/out/install/release-default/
+      - safe/out/original-cli/lib/
+      - safe/out/debian-src/default/libzstd-1.5.5+dfsg2/
+      - safe/out/deb/default/metadata.env
+      - safe/out/deb/default/packages/
+      - safe/out/deb/default/stage-root/
+      - safe/out/dependents/image-context/metadata.env
+      - safe/out/dependents/compile-compat/
+      - safe/out/dependents/logs/
+      - safe/include/zstd.h
+      - safe/include/zdict.h
+      - safe/include/zstd_errors.h
+      - original/libzstd-1.5.5+dfsg2/lib/zstd.h
+      - original/libzstd-1.5.5+dfsg2/lib/zdict.h
+      - original/libzstd-1.5.5+dfsg2/lib/zstd_errors.h
       - safe/abi/original.exports.txt
       - safe/abi/original.soname.txt
       - safe/abi/export_map.toml
       - safe/tests/upstream_test_matrix.toml
       - safe/tests/dependents/dependent_matrix.toml
-      - safe/tests/fixtures/versions/
-      - safe/tests/fixtures/regression/
-      - safe/tests/fixtures/fuzz-corpora/
       - dependents.json
-      - all_cves.json
       - relevant_cves.json
       - test-original.sh
-      - safe/docker/dependents/
-      - safe/out/validator/artifacts/
-  - order: 17
-    id: check_validator_final_software_tester
-    type: check
-    bounce_target: impl_validator_final_clean_run
-    required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/scripts/run-validator-regressions.sh
-      - safe/scripts/run-full-suite.sh
+      - safe/scripts/build-artifacts.sh
+      - safe/scripts/build-original-cli-against-safe.sh
+      - safe/scripts/build-deb.sh
       - safe/scripts/build-dependent-image.sh
-      - safe/out/validator/artifacts/proof/port-04-test-debs-lock.json
-      - safe/out/validator/artifacts/port-04-test/results/libzstd/summary.json
-      - safe/out/validator/artifacts/proof/port-04-test-validation-proof.json
-  - order: 18
-    id: check_validator_final_senior_tester
+      - safe/scripts/run-full-suite.sh
+      - safe/scripts/verify-header-identity.sh
+      - safe/scripts/verify-export-parity.sh
+      - safe/scripts/verify-link-compat.sh
+      - safe/scripts/verify-baseline-contract.sh
+      - safe/scripts/run-capi-decompression.sh
+      - safe/scripts/run-capi-roundtrip.sh
+      - safe/scripts/run-advanced-mt-tests.sh
+      - safe/scripts/run-build-variant-tests.sh
+      - safe/scripts/verify-install-layout.sh
+      - safe/scripts/verify-deb-profiles.sh
+      - safe/scripts/run-debian-autopkgtests.sh
+      - safe/scripts/run-upstream-tests.sh
+      - safe/scripts/run-original-playtests.sh
+      - safe/scripts/run-original-cli-tests.sh
+      - safe/scripts/run-original-gzip-tests.sh
+      - safe/scripts/run-zlibwrapper-tests.sh
+      - safe/scripts/run-educational-decoder-tests.sh
+      - safe/scripts/run-pzstd-tests.sh
+      - safe/scripts/run-seekable-tests.sh
+      - safe/scripts/run-version-compat-tests.sh
+      - safe/scripts/run-upstream-regression.sh
+      - safe/scripts/run-upstream-fuzz-tests.sh
+      - safe/scripts/check-cli-permissions.sh
+      - safe/scripts/run-performance-smoke.sh
+      - safe/scripts/run-dependent-matrix.sh
+      - safe/docs/unsafe-audit.md
+  - order: 30
+    id: script_final_release_burn_down
     type: check
-    bounce_target: impl_validator_final_clean_run
+    bounce_target: impl_final_release_burn_down
     required_preexisting_inputs:
-      - validator/
-      - validator-report.md
-      - safe/scripts/run-validator-libzstd.sh
-      - safe/scripts/check-validator-phase-results.py
-      - safe/out/validator/artifacts/port-04-test/results/libzstd/
-      - safe/out/validator/artifacts/proof/port-04-test-validation-proof.json
+      - safe/out/install/release-default/
+      - safe/out/original-cli/lib/
+      - safe/out/deb/default/metadata.env
+      - safe/out/deb/default/packages/
+      - safe/out/dependents/image-context/metadata.env
+      - safe/out/dependents/compile-compat/
+      - safe/out/dependents/logs/
+      - safe/scripts/run-full-suite.sh
+      - safe/scripts/verify-header-identity.sh
+      - safe/scripts/verify-export-parity.sh
+      - safe/scripts/verify-link-compat.sh
+      - safe/scripts/verify-baseline-contract.sh
+      - safe/scripts/run-dependent-matrix.sh
+      - test-original.sh
+  - order: 31
+    id: check_final_release_software_tester
+    type: check
+    bounce_target: impl_final_release_burn_down
+    required_preexisting_inputs:
+      - safe/scripts/run-full-suite.sh
+      - safe/scripts/verify-header-identity.sh
+      - safe/scripts/verify-baseline-contract.sh
+      - safe/tests/upstream_test_matrix.toml
+      - safe/tests/dependents/dependent_matrix.toml
+      - safe/out/dependents/logs/
+      - test-original.sh
+  - order: 32
+    id: check_final_release_senior_tester
+    type: check
+    bounce_target: impl_final_release_burn_down
+    required_preexisting_inputs:
+      - .plan/workflow-structure.yaml
+      - workflow.yaml
+      - safe/abi/original.exports.txt
+      - safe/abi/original.soname.txt
+      - safe/abi/export_map.toml
+      - safe/include/zstd.h
+      - safe/include/zdict.h
+      - safe/include/zstd_errors.h
+      - safe/scripts/run-full-suite.sh
+      - safe/docs/unsafe-audit.md
