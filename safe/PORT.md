@@ -47,7 +47,7 @@ Debian packaging lives under `safe/debian/`. `safe/debian/control:1-68` declares
 
 ## Where the unsafe Rust lives
 
-The current inventory was produced with `rg -n '\bunsafe\b' safe --glob '*.rs' --glob '!target/**' --glob '!out/**'`, plus `rg -n 'unsafe fn|unsafe impl|unsafe extern' safe`. It includes first-party library code, Rust integration tests, and the local path dependency `safe/third_party/structured-zstd/`; generated artifacts under `safe/target/`, verification output under `safe/out/`, and documentation/comment-only matches are excluded. The lint attribute `#![deny(unsafe_op_in_unsafe_fn)]` at `safe/src/lib.rs:1` contains the word "unsafe" but is not an unsafe block, function, impl, or extern declaration.
+The maintained-source inventory was produced with `rg -n '\bunsafe\b' safe --glob '*.rs' --glob '!target/**' --glob '!out/**'`, plus `rg -n 'unsafe fn|unsafe impl|unsafe extern' safe --glob '*.rs' --glob '!target/**' --glob '!out/**'`. It includes first-party library code, Rust integration tests, and the local path dependency `safe/third_party/structured-zstd/`. Generated artifacts under `safe/target/` and `safe/out/` are excluded from the table because `safe/out/debian-src/` contains staged copies of the same Rust sources and upstream C test/source comments rather than independently maintained Rust code. A plain `grep -RIn '\bunsafe\b' safe` was still run as a cross-check; its additional matches were generated `safe/out/` copies, `safe/docs/unsafe-audit.md`, this document, upstream C comments, or the lint attribute `#![deny(unsafe_op_in_unsafe_fn)]` at `safe/src/lib.rs:1`, not separate unsafe blocks, functions, impls, or extern declarations.
 
 ### Public ABI adapters and raw C buffers
 
@@ -137,7 +137,7 @@ No upstream dynamic fallback or plugin-loading surface remains. `rg -n 'SAFE_UPS
 - Legacy v0.5-v0.7 decode still relies on C sources through `safe/src/ffi/legacy_shim.c` and `safe/src/decompress/legacy.rs`. This preserves compatibility, but it leaves a small non-Rust decoder island compiled by `safe/build.rs:96-117`.
 - The root crate advertises `rust-version = "1.82"` in `safe/Cargo.toml:5`, but the resolved dependency graph requires a newer toolchain: `cargo metadata` reports `oxiarc-core` and `oxiarc-zstd` with `rust_version = "1.85"` and the local `structured-zstd` manifest records `rust-version = "1.92"` in `safe/third_party/structured-zstd/Cargo.toml:14`. The checked-in `safe/rust-toolchain.toml` selects `stable`, and this refresh used `rustc 1.94.0`; `safe/debian/control:7-18` does not pin a minimum Rust compiler version beyond `rustc`.
 - The local `structured-zstd` dependency has unfinished or invariant-heavy internals. Notable markers include `safe/third_party/structured-zstd/src/decoding/ringbuffer.rs:93`, `safe/third_party/structured-zstd/src/decoding/block_decoder.rs:27`, `safe/third_party/structured-zstd/src/encoding/frame_header.rs:44,74`, and `safe/third_party/structured-zstd/src/encoding/frame_compressor.rs:256,408`. The public compression adapter currently maps requested levels through `safe/src/ffi/compress.rs:1724-1728`, avoiding the unimplemented compression-level branches in normal ABI use. No first-party `TODO`, `FIXME`, `todo!`, `unimplemented!`, or `panic!("TODO")` markers were found under `safe/src`, `safe/tests`, `safe/scripts`, or `safe/debian`; the actionable markers are in the vendored `safe/third_party/structured-zstd/` source.
-- The current dependent-focused refresh did not rerun the whole `safe/scripts/run-full-suite.sh`; it rechecked `safe/scripts/verify-baseline-contract.sh` and the dependent matrix entry points. `bash safe/scripts/run-dependent-matrix.sh --compile-only` and `bash safe/scripts/run-dependent-matrix.sh --runtime-only` reported fresh stamps, while `bash safe/scripts/run-dependent-matrix.sh --runtime-only --apps rpm,zarchive` reran those two runtime tests successfully and wrote `safe/out/dependents/logs/runtime-rpm-zarchive.log`. The top-level gate still includes downstream compile/runtime coverage through `safe/scripts/run-full-suite.sh:48-76`.
+- This documentation refresh did not rerun the whole `safe/scripts/run-full-suite.sh`. It reran `cargo test --manifest-path safe/Cargo.toml --release --all-targets`, `safe/scripts/verify-baseline-contract.sh`, `safe/scripts/verify-export-parity.sh`, and both dependent matrix entry points. `bash safe/scripts/run-dependent-matrix.sh --compile-only` compiled all 12 probes, and `bash safe/scripts/run-dependent-matrix.sh --runtime-only` reported all 12 dependent runtime tests passing in `safe/out/dependents/logs/runtime.log`. The top-level gate still includes broader upstream, packaging, CLI-permission, performance, and downstream coverage through `safe/scripts/run-full-suite.sh:48-76`.
 - Some release-gate coverage remains intentionally host-dependent. `safe/scripts/run-upstream-tests.sh:173-248` skips 32-bit, sanitizer, or valgrind subcases when the local host lacks support, and it has a known valgrind fuzzer-smoke skip for upstream fuzzer worker-parameter behavior. `safe/scripts/run-pzstd-tests.sh:190-197` has sanitizer-runtime skip handling, `safe/scripts/run-zlibwrapper-tests.sh:80-91` allows documented zlib 1.3 expectation mismatches, and `safe/scripts/run-upstream-fuzz-tests.sh:132-163` permits bounded fuzz-driver timeouts/failures as long as at least one driver passes. The stale log `safe/out/phase6/run-full-suite-final.log` still stops in the old upstream valgrind fuzzer-smoke area; run `bash safe/scripts/run-full-suite.sh` for a fresh full-release signal instead of treating that file as the latest success artifact.
 - Performance coverage is a smoke threshold, not a full benchmark against upstream. `safe/scripts/run-performance-smoke.sh:49-53` builds a 16 MiB corpus from checked-in fixtures, and `safe/scripts/run-performance-smoke.sh:70-73` enforces default minimum throughput thresholds of 1.0 MiB/s compression and 2.0 MiB/s decompression with 15 second maximums. No checked-in report records bit-for-bit speed parity or compression-ratio parity across the full upstream benchmark matrix.
 - Dependent coverage is representative, not exhaustive. `dependents.json:1-260` lists a curated Ubuntu 24.04 set of 12 packages; `safe/tests/dependents/dependent_matrix.toml:19-113` maps each source package to a C compile probe and one runtime test. `safe/docker/dependents/entrypoint.sh:48-113` checks inventory consistency, `safe/docker/dependents/entrypoint.sh:116-147` verifies that the safe `libzstd1`, `libzstd-dev`, and `zstd` packages are installed, and `safe/docker/dependents/entrypoint.sh:149-164` checks that each exercised runtime binary resolves `libzstd.so.1` to the installed safe library. The host-side runner requires the checked image metadata (`safe/scripts/run-dependent-matrix.sh:66-83`), uses only log and compile-output bind mounts (`safe/scripts/run-dependent-matrix.sh:122-130`), and adds `--privileged --tmpfs /run --tmpfs /run/lock` for runtime tests (`safe/scripts/run-dependent-matrix.sh:133-135`). The image is built from `ubuntu:24.04` (`safe/docker/dependents/Dockerfile:1-2`) and installs the downstream tool set in `safe/docker/dependents/Dockerfile:9-41`; `safe/scripts/build-dependent-image.sh:38-52` stages `dependents.json`, the matrix fixtures, helper scripts, safe Debian packages, and `safe/out/dependents/image-context/metadata.env`.
@@ -159,8 +159,8 @@ Downstream coverage and caveats:
 | `rpm` | `rpm`, `rpmbuild`, and `rpm2cpio` | `safe/tests/dependents/src/rpm_probe.c` | `test_rpm` in `safe/docker/dependents/entrypoint.sh:523-565` uses checked fixtures under `safe/tests/dependents/fixtures/rpm/`, builds a `w19.zstdio` RPM, checks `%{PAYLOADCOMPRESSOR}` is `zstd`, extracts with `rpm2cpio`, and compares the payload. | Covers a tiny noarch RPM payload and the Ubuntu Noble `librpmio9t64 -> libzstd1` path, not full RPM database operations. |
 | `zarchive` | `zarchive-tools` via `zarchive` | `safe/tests/dependents/src/zarchive_probe.c` | `test_zarchive` in `safe/docker/dependents/entrypoint.sh:567-580` uses checked fixtures under `safe/tests/dependents/fixtures/zarchive/`, creates a `.za` archive, extracts it, and diffs the tree. | Covers a small directory round trip through `libzarchive0.1`, not large archives or every zarchive mode. |
 
-`safe/out/dependents/logs/compile.log` records all 12 probes compiled against `libzstd-dev 1.5.5+dfsg2-2build1.1+safelibs1`; `safe/out/dependents/logs/runtime.log` records all 12 runtime tests passing; and `safe/out/dependents/logs/runtime-rpm-zarchive.log` records the fresh rerun of the two newly added fixed consumers. Packages outside this curated set are not covered by checked-in dependent evidence.
-- `relevant_cves.json` contains two relevant records, CVE-2021-24031 and CVE-2021-24032, both for zstd CLI output-file permissions rather than the core library. `safe/scripts/check-cli-permissions.sh:29-52` requires those two CVEs to be present, and `safe/scripts/check-cli-permissions.sh:73-132` audits atomic output-file creation with `strace`. That CLI-permission gate was not rerun in this dependent-focused refresh; these CVEs are covered by the CLI gate, not by the Rust library implementation alone.
+`safe/out/dependents/logs/compile.log` records all 12 probes compiled against `libzstd-dev 1.5.5+dfsg2-2build1.1+safelibs1`; `safe/out/dependents/logs/runtime.log` records all 12 runtime tests passing. Packages outside this curated set are not covered by checked-in dependent evidence.
+- `relevant_cves.json` contains two relevant records, CVE-2021-24031 and CVE-2021-24032, both for zstd CLI output-file permissions rather than the core library. `safe/scripts/check-cli-permissions.sh:29-52` requires those two CVEs to be present, and `safe/scripts/check-cli-permissions.sh:73-132` audits atomic output-file creation with `strace`. That CLI-permission gate was not rerun for this documentation-only change; these CVEs are covered by the CLI gate, not by the Rust library implementation alone.
 - No repository-level upgrade report file is present.
 
 ## Dependencies and other libraries used
@@ -196,11 +196,13 @@ The Rust library build does not use `bindgen`, `cbindgen`, `pkg-config`, or a th
 
 ## How this document was produced
 
-Commands run or consulted for this dependent-focused refresh:
+Commands run or consulted for this documentation refresh:
 
 ```sh
 git status --short
-sed -n '1,260p' safe/PORT.md
+test -f safe/PORT.md
+sed -n '1,320p' safe/PORT.md
+nl -ba safe/PORT.md | sed -n '45,290p'
 sed -n '1,260p' dependents.json
 sed -n '1,260p' safe/tests/dependents/dependent_matrix.toml
 find safe/tests/dependents -maxdepth 4 -type f | sort
@@ -215,6 +217,8 @@ sed -n '1,220p' safe/Cargo.toml
 sed -n '1,180p' safe/build.rs
 sed -n '1,80p' safe/src/lib.rs
 sed -n '1,260p' relevant_cves.json
+nl -ba safe/src/decompress/legacy.rs | sed -n '1,180p'
+nl -ba safe/src/ffi/legacy_shim.c | sed -n '1,80p'
 sed -n '1,280p' safe/scripts/run-upstream-tests.sh
 sed -n '1,220p' safe/scripts/run-performance-smoke.sh
 sed -n '1,180p' safe/scripts/check-cli-permissions.sh
@@ -233,33 +237,37 @@ cargo --version
 sed -n '1,140p' safe/Cargo.lock
 sed -n '1,120p' safe/third_party/structured-zstd/Cargo.toml
 rg -n '\bunsafe\b' safe --glob '*.rs' --glob '!target/**' --glob '!out/**'
-rg -n 'unsafe fn|unsafe impl|unsafe extern' safe
+rg -n 'unsafe fn|unsafe impl|unsafe extern' safe --glob '*.rs' --glob '!target/**' --glob '!out/**'
 grep -RIn '\bunsafe\b' safe
 grep -RIn 'unsafe fn\|unsafe impl\|unsafe extern' safe
 grep -RIn 'extern "C"' safe
+find safe/out -type f -name '*.rs' -print
 rg -n 'extern "C"' safe/src safe/include safe/tests safe/build.rs --glob '!target/**' --glob '!out/**'
 grep -RIn 'libc::\|dlopen\|dlsym\|syscall\|pthread\|mmap\|malloc\|free' safe
 rg -n 'libc::|dlopen|dlsym|syscall|pthread_|mmap|malloc\(' safe/src safe/build.rs safe/Cargo.toml --glob '!target/**' --glob '!out/**'
 rg -n '\bunsafe\b|forbid\(unsafe_code\)' /home/yans/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/oxiarc-core-0.2.5/src /home/yans/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/oxiarc-zstd-0.2.5/src /home/yans/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/twox-hash-2.1.2/src /home/yans/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cc-1.2.58/src
 rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe --glob '!target/**' --glob '!out/**' --glob '!PORT.md'
+rg -n 'oxiarc|OxiArc|structured_zstd|structured-zstd|twox|cc::|cc::Build|Build::new' safe/src safe/build.rs safe/third_party/structured-zstd/Cargo.toml --glob '!target/**' --glob '!out/**'
+rg -n 'bindgen|cbindgen|pkg-config|pkgconf' safe --glob '!target/**' --glob '!out/**' --glob '!PORT.md'
 rg -n 'extern "C"|unsafe extern' safe/src/decompress/legacy.rs safe/src/ffi/legacy_shim.c safe/build.rs
 nm -D --defined-only safe/target/release/libzstd.so
 nm -D --undefined-only safe/target/release/libzstd.so
+nm -D --defined-only safe/target/release/libzstd.so | awk '{print $3}' | sed 's/@@.*//' | sort | wc -l
+diff -u <(sed '1,2d' safe/abi/original.exports.txt | awk '{print $1}' | sort) <(nm -D --defined-only safe/target/release/libzstd.so | awk '{print $3}' | sed 's/@@.*//' | sort)
 objdump -p safe/target/release/libzstd.so
 ldd safe/target/release/libzstd.so
+cargo test --manifest-path safe/Cargo.toml --release --all-targets
 bash safe/scripts/verify-baseline-contract.sh
+bash safe/scripts/verify-export-parity.sh
 bash safe/scripts/run-dependent-matrix.sh --compile-only
 bash safe/scripts/run-dependent-matrix.sh --runtime-only
-bash safe/scripts/run-dependent-matrix.sh --runtime-only --apps rpm,zarchive
 jq -r '.packages | length' dependents.json
-jq -r '.packages[].binary_package' dependents.json
+jq -r '.packages[] | [.source_package,.binary_package] | @tsv' dependents.json
 jq -r '.relevant_cves[] | .cve_id' relevant_cves.json
 find safe/out/dependents/stamps safe/out/dependents/logs -maxdepth 1 -type f -printf '%TY-%Tm-%Td %TH:%TM:%TS %p\n' | sort
 tail -80 safe/out/dependents/logs/compile.log
 tail -80 safe/out/dependents/logs/runtime.log
-tail -80 safe/out/dependents/logs/runtime-libarchive.log
-tail -80 safe/out/dependents/logs/runtime-rpm-zarchive.log
 git status --short
 ```
 
-`cargo geiger` was attempted but was not installed (`cargo` reported `no such command: geiger`). `test-original.sh` was read and documented as the top-level downstream wrapper; it was not rerun in this dependent-focused refresh because `safe/scripts/build-dependent-image.sh` would rebuild artifacts and the dependent image from scratch. Files consulted in addition to the source tree include `safe/docs/unsafe-audit.md`, `safe/tests/upstream_test_matrix.toml`, `safe/tests/dependents/dependent_matrix.toml`, `dependents.json`, `relevant_cves.json`, `safe/out/dependents/image-context/metadata.env`, `safe/out/dependents/logs/compile.log`, `safe/out/dependents/logs/runtime.log`, `safe/out/dependents/logs/runtime-libarchive.log`, `safe/out/dependents/logs/runtime-rpm-zarchive.log`, and the dependent verification stamps under `safe/out/dependents/stamps/`.
+Final sanity checks included the prompt's backtick-token scan, parsed the path/line citations in this file, compared the unsafe inventory against the maintained-source `rg` output, confirmed direct dependencies against `safe/Cargo.toml`, and grepped the cited legacy/allocator/sequence symbols. `cargo geiger` was attempted but was not installed (`cargo` reported `no such command: geiger`). `test-original.sh` was read and documented as the top-level downstream wrapper; it was not rerun for this documentation-only change because it rebuilds the dependent image before invoking the dependent matrix. `safe/scripts/run-full-suite.sh` was not rerun because no source, packaging, ABI, or test harness code changed. Files consulted in addition to the source tree include `safe/docs/unsafe-audit.md`, `safe/tests/upstream_test_matrix.toml`, `safe/tests/dependents/dependent_matrix.toml`, `dependents.json`, `relevant_cves.json`, `safe/out/dependents/image-context/metadata.env`, `safe/out/dependents/logs/compile.log`, `safe/out/dependents/logs/runtime.log`, and the dependent verification stamps under `safe/out/dependents/stamps/`.
