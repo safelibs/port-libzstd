@@ -135,13 +135,32 @@ No upstream dynamic fallback or plugin-loading surface remains. `rg -n 'SAFE_UPS
 
 - Custom memory allocators are not fully implemented. The ABI types for `ZSTD_allocFunction`, `ZSTD_freeFunction`, and `ZSTD_customMem` exist in `safe/src/ffi/types.rs:42-75`, but the implementation accepts only the default/null allocator configuration in `safe/src/decompress/dctx.rs:14-15`, `safe/src/decompress/ddict.rs:14-15`, `safe/src/decompress/dstream.rs:27-28`, and `safe/src/ffi/compress.rs:3772-3773`; non-null allocator callbacks make the advanced create/load functions return null or an error path, for example `safe/src/decompress/dctx.rs:355-359`, `safe/src/decompress/ddict.rs:143-152`, and `safe/src/compress/cctx.rs:354-357`.
 - Legacy v0.5-v0.7 decode still relies on C sources through `safe/src/ffi/legacy_shim.c` and `safe/src/decompress/legacy.rs`. This preserves compatibility, but it leaves a small non-Rust decoder island compiled by `safe/build.rs:96-117`.
-- The root crate advertises `rust-version = "1.82"` in `safe/Cargo.toml:5`, but the resolved dependency graph requires a newer toolchain: `cargo metadata` reports `oxiarc-core` and `oxiarc-zstd` with `rust_version = "1.85"` and the local `structured-zstd` manifest records `rust-version = "1.92"` in `safe/third_party/structured-zstd/Cargo.toml:13`. The checked-in `safe/rust-toolchain.toml` selects `stable`, and this refresh used `rustc 1.94.0`; `safe/debian/control:7-18` does not pin a minimum Rust compiler version beyond `rustc`.
+- The root crate advertises `rust-version = "1.82"` in `safe/Cargo.toml:5`, but the resolved dependency graph requires a newer toolchain: `cargo metadata` reports `oxiarc-core` and `oxiarc-zstd` with `rust_version = "1.85"` and the local `structured-zstd` manifest records `rust-version = "1.92"` in `safe/third_party/structured-zstd/Cargo.toml:14`. The checked-in `safe/rust-toolchain.toml` selects `stable`, and this refresh used `rustc 1.94.0`; `safe/debian/control:7-18` does not pin a minimum Rust compiler version beyond `rustc`.
 - The local `structured-zstd` dependency has unfinished or invariant-heavy internals. Notable markers include `safe/third_party/structured-zstd/src/decoding/ringbuffer.rs:93`, `safe/third_party/structured-zstd/src/decoding/block_decoder.rs:27`, `safe/third_party/structured-zstd/src/encoding/frame_header.rs:44,74`, and `safe/third_party/structured-zstd/src/encoding/frame_compressor.rs:256,408`. The public compression adapter currently maps requested levels through `safe/src/ffi/compress.rs:1724-1728`, avoiding the unimplemented compression-level branches in normal ABI use. No first-party `TODO`, `FIXME`, `todo!`, `unimplemented!`, or `panic!("TODO")` markers were found under `safe/src`, `safe/tests`, `safe/scripts`, or `safe/debian`; the actionable markers are in the vendored `safe/third_party/structured-zstd/` source.
-- `bash safe/scripts/run-full-suite.sh` passed during this documentation pass. That top-level gate requires the existing Phase 4 artifacts and dependent image (`safe/scripts/run-full-suite.sh:44-46`), runs Rust tests, ABI/header checks, C API checks, advanced MT checks, install/package checks, upstream black-box families, CLI permission checks, performance smoke, and downstream compile/runtime coverage (`safe/scripts/run-full-suite.sh:48-76`). Several expensive gates reported fresh stamps rather than recomputing, including upstream suites, Debian profile checks, install-layout variants, fuzz replay, dependent compile/runtime checks, and performance smoke.
-- Some release-gate coverage remains intentionally host-dependent. `safe/scripts/run-upstream-tests.sh:173-248` skips 32-bit, sanitizer, or valgrind subcases when the local host lacks support, and it has a known valgrind fuzzer-smoke skip for upstream fuzzer worker-parameter behavior. `safe/scripts/run-pzstd-tests.sh:190-197` has sanitizer-runtime skip handling, `safe/scripts/run-zlibwrapper-tests.sh:80-91` allows documented zlib 1.3 expectation mismatches, and `safe/scripts/run-upstream-fuzz-tests.sh:132-163` permits bounded fuzz-driver timeouts/failures as long as at least one driver passes. The stale log `safe/out/phase6/run-full-suite-final.log` still stops in the old upstream valgrind fuzzer-smoke area; use the current `bash safe/scripts/run-full-suite.sh` result and verification stamps instead of treating that file as the latest success artifact.
+- The current dependent-focused refresh did not rerun the whole `safe/scripts/run-full-suite.sh`; it rechecked `safe/scripts/verify-baseline-contract.sh` and the dependent matrix entry points. `bash safe/scripts/run-dependent-matrix.sh --compile-only` and `bash safe/scripts/run-dependent-matrix.sh --runtime-only` reported fresh stamps, while `bash safe/scripts/run-dependent-matrix.sh --runtime-only --apps rpm,zarchive` reran those two runtime tests successfully and wrote `safe/out/dependents/logs/runtime-rpm-zarchive.log`. The top-level gate still includes downstream compile/runtime coverage through `safe/scripts/run-full-suite.sh:48-76`.
+- Some release-gate coverage remains intentionally host-dependent. `safe/scripts/run-upstream-tests.sh:173-248` skips 32-bit, sanitizer, or valgrind subcases when the local host lacks support, and it has a known valgrind fuzzer-smoke skip for upstream fuzzer worker-parameter behavior. `safe/scripts/run-pzstd-tests.sh:190-197` has sanitizer-runtime skip handling, `safe/scripts/run-zlibwrapper-tests.sh:80-91` allows documented zlib 1.3 expectation mismatches, and `safe/scripts/run-upstream-fuzz-tests.sh:132-163` permits bounded fuzz-driver timeouts/failures as long as at least one driver passes. The stale log `safe/out/phase6/run-full-suite-final.log` still stops in the old upstream valgrind fuzzer-smoke area; run `bash safe/scripts/run-full-suite.sh` for a fresh full-release signal instead of treating that file as the latest success artifact.
 - Performance coverage is a smoke threshold, not a full benchmark against upstream. `safe/scripts/run-performance-smoke.sh:49-53` builds a 16 MiB corpus from checked-in fixtures, and `safe/scripts/run-performance-smoke.sh:70-73` enforces default minimum throughput thresholds of 1.0 MiB/s compression and 2.0 MiB/s decompression with 15 second maximums. No checked-in report records bit-for-bit speed parity or compression-ratio parity across the full upstream benchmark matrix.
-- Dependent coverage is representative, not exhaustive. `dependents.json` lists 12 Ubuntu 24.04 packages, and `safe/tests/dependents/dependent_matrix.toml` plus `safe/out/dependents/logs/compile.log`, `safe/out/dependents/logs/runtime.log`, and `safe/out/dependents/logs/runtime-libarchive.log` record successful probes for those packages. `run-full-suite.sh` reran the dependent matrix entry points and they reused fresh compile/runtime stamps; packages outside this curated set are not covered by checked-in dependent evidence.
-- `relevant_cves.json` contains two relevant records, CVE-2021-24031 and CVE-2021-24032, both for zstd CLI output-file permissions rather than the core library. `safe/scripts/check-cli-permissions.sh:29-52` requires those two CVEs to be present, and `safe/scripts/check-cli-permissions.sh:73-132` audits atomic output-file creation with `strace`; the current `run-full-suite.sh` pass reused its fresh stamp. These CVEs are covered by the CLI gate, not by the Rust library implementation alone.
+- Dependent coverage is representative, not exhaustive. `dependents.json:1-260` lists a curated Ubuntu 24.04 set of 12 packages; `safe/tests/dependents/dependent_matrix.toml:19-113` maps each source package to a C compile probe and one runtime test. `safe/docker/dependents/entrypoint.sh:48-113` checks inventory consistency, `safe/docker/dependents/entrypoint.sh:116-147` verifies that the safe `libzstd1`, `libzstd-dev`, and `zstd` packages are installed, and `safe/docker/dependents/entrypoint.sh:149-164` checks that each exercised runtime binary resolves `libzstd.so.1` to the installed safe library. The host-side runner requires the checked image metadata (`safe/scripts/run-dependent-matrix.sh:66-83`), uses only log and compile-output bind mounts (`safe/scripts/run-dependent-matrix.sh:122-130`), and adds `--privileged --tmpfs /run --tmpfs /run/lock` for runtime tests (`safe/scripts/run-dependent-matrix.sh:133-135`). The image is built from `ubuntu:24.04` (`safe/docker/dependents/Dockerfile:1-2`) and installs the downstream tool set in `safe/docker/dependents/Dockerfile:9-41`; `safe/scripts/build-dependent-image.sh:38-52` stages `dependents.json`, the matrix fixtures, helper scripts, safe Debian packages, and `safe/out/dependents/image-context/metadata.env`.
+
+Downstream coverage and caveats:
+
+| Source package | Binary/runtime surface | Compile probe | Runtime coverage | Caveat |
+| --- | --- | --- | --- | --- |
+| `apt` | `libapt-pkg6.0t64` via `apt` | `safe/tests/dependents/src/apt_probe.c` | `test_apt` in `safe/docker/dependents/entrypoint.sh:176-249` builds a zstd-compressed `.deb`, serves `Packages.zst`, runs `apt-get update`, and checks that APT fetched the `.zst` metadata. | Exercises a local unsigned test repository, not mirror authentication, proxying, or all apt compression settings. |
+| `dpkg` | `dpkg`/`dpkg-deb` | `safe/tests/dependents/src/dpkg_probe.c` | `test_dpkg` in `safe/docker/dependents/entrypoint.sh:251-274` builds, inspects, extracts, and compares a `.deb` with zstd members. | Covers `dpkg-deb` package-member handling, not a full package install transaction. |
+| `rsync` | `rsync` | `safe/tests/dependents/src/rsync_probe.c` | `test_rsync` in `safe/docker/dependents/entrypoint.sh:276-304` starts a local daemon and transfers a file with `--compress-choice=zstd`. | Covers a loopback daemon/client transfer, not WAN behavior or protocol-version negotiation breadth. |
+| `systemd` | `libsystemd-shared` via `systemd-journald` | `safe/tests/dependents/src/systemd_probe.c` | `test_systemd` in `safe/docker/dependents/entrypoint.sh:306-363` starts journald, writes a large field through `systemd-cat`, verifies journal readback, and checks for zstd frame magic in the journal file. | Requires the privileged runtime container and writable `/run`; it does not exercise coredump compression. |
+| `libarchive` | `libarchive13t64` via `bsdtar` | `safe/tests/dependents/src/libarchive_probe.c` | `test_libarchive` in `safe/docker/dependents/entrypoint.sh:365-395` creates/extracts `.tar.zst` archives and checks selective extraction. | Uses `bsdtar`; applications embedding libarchive are represented only through this CLI path. |
+| `btrfs-progs` | `btrfs-progs` | `safe/tests/dependents/src/btrfs-progs_probe.c` | `test_btrfs` in `safe/docker/dependents/entrypoint.sh:397-428` creates loopback filesystems, mounts with `compress=zstd`, sends compressed extents, receives with force-decompress, and compares data. | Requires privileged container access, loop devices, and mounts; it is a smoke test rather than broad filesystem coverage. |
+| `squashfs-tools` | `squashfs-tools` | `safe/tests/dependents/src/squashfs-tools_probe.c` | `test_squashfs` in `safe/docker/dependents/entrypoint.sh:430-446` creates a zstd Squashfs image and extracts it with `unsquashfs`. | Covers a tiny image only, not large dictionaries, fragments, or all Squashfs compressor options. |
+| `qemu` | `qemu-utils` via `qemu-img` | `safe/tests/dependents/src/qemu_probe.c` | `test_qemu` in `safe/docker/dependents/entrypoint.sh:448-462` converts raw data to compressed qcow2 with `compression_type=zstd`, checks image metadata, and round-trips back to raw. | Exercises `qemu-img` utilities, not running virtual machines or block backends under guest I/O. |
+| `curl` | `libcurl4t64` via `curl` | `safe/tests/dependents/src/curl_probe.c` | `test_curl` in `safe/docker/dependents/entrypoint.sh:464-503` serves a `Content-Encoding: zstd` response and checks `curl --compressed` decodes it. | Uses the curl CLI against a local HTTP server; embedders of libcurl are represented through the CLI path. |
+| `tiff` | `libtiff6` via `tiffcp`/`tiffinfo`/`tiffcmp` | `safe/tests/dependents/src/tiff_probe.c` | `test_tiff` in `safe/docker/dependents/entrypoint.sh:505-521` writes a zstd-compressed TIFF and verifies metadata plus pixel equality. | Covers a small RGB image, not tiled/striped variants or every TIFF zstd option. |
+| `rpm` | `rpm`, `rpmbuild`, and `rpm2cpio` | `safe/tests/dependents/src/rpm_probe.c` | `test_rpm` in `safe/docker/dependents/entrypoint.sh:523-565` uses checked fixtures under `safe/tests/dependents/fixtures/rpm/`, builds a `w19.zstdio` RPM, checks `%{PAYLOADCOMPRESSOR}` is `zstd`, extracts with `rpm2cpio`, and compares the payload. | Covers a tiny noarch RPM payload and the Ubuntu Noble `librpmio9t64 -> libzstd1` path, not full RPM database operations. |
+| `zarchive` | `zarchive-tools` via `zarchive` | `safe/tests/dependents/src/zarchive_probe.c` | `test_zarchive` in `safe/docker/dependents/entrypoint.sh:567-580` uses checked fixtures under `safe/tests/dependents/fixtures/zarchive/`, creates a `.za` archive, extracts it, and diffs the tree. | Covers a small directory round trip through `libzarchive0.1`, not large archives or every zarchive mode. |
+
+`safe/out/dependents/logs/compile.log` records all 12 probes compiled against `libzstd-dev 1.5.5+dfsg2-2build1.1+safelibs1`; `safe/out/dependents/logs/runtime.log` records all 12 runtime tests passing; and `safe/out/dependents/logs/runtime-rpm-zarchive.log` records the fresh rerun of the two newly added fixed consumers. Packages outside this curated set are not covered by checked-in dependent evidence.
+- `relevant_cves.json` contains two relevant records, CVE-2021-24031 and CVE-2021-24032, both for zstd CLI output-file permissions rather than the core library. `safe/scripts/check-cli-permissions.sh:29-52` requires those two CVEs to be present, and `safe/scripts/check-cli-permissions.sh:73-132` audits atomic output-file creation with `strace`. That CLI-permission gate was not rerun in this dependent-focused refresh; these CVEs are covered by the CLI gate, not by the Rust library implementation alone.
 - No repository-level upgrade report file is present.
 
 ## Dependencies and other libraries used
@@ -170,29 +189,38 @@ Build-time tools and packaging dependencies:
 - Debian source Build-Depends are `cargo`, `cmake (>= 3.24~)`, `debhelper (>> 13.3.2~)`, `dh-package-notes`, `dpkg-build-api (= 1)`, `help2man`, `liblz4-dev`, `liblzma-dev`, `rustc`, `zlib1g-dev`, `less <!nocheck>`, and `python3 <!nocheck>` (`safe/debian/control:7-18`); debhelper compatibility level is `14` in `safe/debian/compat`.
 - `safe/debian/rules:46-66` delegates library and CLI builds to the safe scripts. `safe/debian/rules:97-137` runs the shlibs/debhelper steps and generates `zstdmt.1` and `pzstd.1` when docs are enabled.
 - Autopkgtests require the built packages plus `build-essential`, `pkgconf`, `cmake`, `python3`, `python3-click`, and `python3-typedload` as declared in `safe/debian/tests/control:1-24`. The checked-in Python helper requirement files also list `click`, `typedload`, `tomli` for older Python, and `pytest` under `safe/debian/tests/requirements/`.
+- Downstream dependent validation is image-based. `safe/docker/dependents/Dockerfile:1-2` pins the default base image to `ubuntu:24.04`; `safe/docker/dependents/Dockerfile:9-41` installs `apt`, `apt-utils`, `btrfs-progs`, `build-essential`, `ca-certificates`, `cmake`, `cpio`, `curl`, `debhelper`, `devscripts`, `dh-package-notes`, `dpkg-dev`, `fakeroot`, `file`, `help2man`, `jq`, `libarchive-tools`, `liblz4-dev`, `liblzma-dev`, `libtiff-tools`, `less`, `pkgconf`, `python3`, `python3-pil`, `qemu-utils`, `rpm`, `rsync`, `squashfs-tools`, `systemd`, `zarchive-tools`, `zlib1g-dev`, and `zstd`. Those packages are validation dependencies only; they are not linked into the Rust `libzstd` library.
 - The shell scripts also invoke normal Debian/build tools such as `bash`, `python3`, `rsync`, `make`, `dpkg-architecture`, `dpkg-buildpackage`, `fakeroot`, `dpkg-deb`, `ldd`, `nm`, and `objdump`. Some of these are implicit in the Debian build environment rather than explicit `Build-Depends`.
 
 The Rust library build does not use `bindgen`, `cbindgen`, `pkg-config`, or a third-party C/C++ compression library. The built shared object currently links to normal system runtime libraries (`libgcc_s.so.1`, `libm.so.6`, `libc.so.6`, and the dynamic loader as shown by `ldd` and `objdump -p safe/target/release/libzstd.so`). The only C code intentionally compiled into the Rust library is the legacy decode bridge listed in `safe/build.rs:95-101`: upstream `xxhash.c`, `zstd_v05.c`, `zstd_v06.c`, `zstd_v07.c`, and `safe/src/ffi/legacy_shim.c`.
 
 ## How this document was produced
 
-Commands run or consulted for this refresh:
+Commands run or consulted for this dependent-focused refresh:
 
 ```sh
 git status --short
 sed -n '1,260p' safe/PORT.md
+sed -n '1,260p' dependents.json
+sed -n '1,260p' safe/tests/dependents/dependent_matrix.toml
+find safe/tests/dependents -maxdepth 4 -type f | sort
+sed -n '1,260p' test-original.sh
+sed -n '1,260p' safe/scripts/build-dependent-image.sh
+sed -n '1,320p' safe/scripts/run-dependent-matrix.sh
+sed -n '1,760p' safe/docker/dependents/entrypoint.sh
+sed -n '1,260p' safe/docker/dependents/Dockerfile
+sed -n '1,260p' safe/scripts/check-dependent-compile-compat.sh
+sed -n '1,560p' safe/scripts/verify-baseline-contract.sh
 sed -n '1,220p' safe/Cargo.toml
 sed -n '1,180p' safe/build.rs
 sed -n '1,80p' safe/src/lib.rs
 sed -n '1,260p' relevant_cves.json
-sed -n '1,260p' safe/scripts/run-full-suite.sh
 sed -n '1,280p' safe/scripts/run-upstream-tests.sh
 sed -n '1,220p' safe/scripts/run-performance-smoke.sh
 sed -n '1,180p' safe/scripts/check-cli-permissions.sh
 find safe/debian -maxdepth 3 -type f | sort
 sed -n '1,180p' safe/debian/control
 find safe/tests -maxdepth 4 -type f | sort
-grep -RIn 'TODO\|FIXME\|panic!("TODO\|unimplemented!\|todo!\|skip\|xfail' safe original dependents.json relevant_cves.json test-original.sh || true
 rg -n 'TODO|FIXME|todo!|unimplemented!|panic!\("TODO' safe/src safe/tests safe/scripts safe/debian safe/third_party/structured-zstd --glob '!target/**' --glob '!out/**'
 cargo metadata --manifest-path safe/Cargo.toml --format-version 1 --no-deps
 cargo metadata --manifest-path safe/Cargo.toml --format-version 1
@@ -219,37 +247,19 @@ nm -D --defined-only safe/target/release/libzstd.so
 nm -D --undefined-only safe/target/release/libzstd.so
 objdump -p safe/target/release/libzstd.so
 ldd safe/target/release/libzstd.so
-cargo test --manifest-path safe/Cargo.toml --release --all-targets
-bash safe/scripts/verify-header-identity.sh
 bash safe/scripts/verify-baseline-contract.sh
-bash safe/scripts/verify-export-parity.sh
-bash safe/scripts/verify-link-compat.sh
-bash safe/scripts/run-upstream-tests.sh
-bash safe/scripts/run-original-playtests.sh
-bash safe/scripts/run-original-cli-tests.sh
-bash safe/scripts/run-original-gzip-tests.sh
-bash safe/scripts/run-zlibwrapper-tests.sh
-bash safe/scripts/run-educational-decoder-tests.sh
-bash safe/scripts/run-pzstd-tests.sh
-bash safe/scripts/run-seekable-tests.sh
-bash safe/scripts/run-version-compat-tests.sh
-bash safe/scripts/run-upstream-regression.sh
-bash safe/scripts/run-upstream-fuzz-tests.sh
-bash safe/scripts/run-original-examples.sh
-bash safe/scripts/check-cli-permissions.sh
-bash safe/scripts/run-performance-smoke.sh
 bash safe/scripts/run-dependent-matrix.sh --compile-only
 bash safe/scripts/run-dependent-matrix.sh --runtime-only
-bash safe/scripts/run-full-suite.sh
+bash safe/scripts/run-dependent-matrix.sh --runtime-only --apps rpm,zarchive
 jq -r '.packages | length' dependents.json
 jq -r '.packages[].binary_package' dependents.json
 jq -r '.relevant_cves[] | .cve_id' relevant_cves.json
-tail -120 safe/out/phase6/run-full-suite-final.log
-find safe/out/phase6/verification-stamps safe/out/dependents/stamps -maxdepth 1 -type f -printf '%TY-%Tm-%Td %TH:%TM:%TS %p\n' | sort
+find safe/out/dependents/stamps safe/out/dependents/logs -maxdepth 1 -type f -printf '%TY-%Tm-%Td %TH:%TM:%TS %p\n' | sort
 tail -80 safe/out/dependents/logs/compile.log
 tail -80 safe/out/dependents/logs/runtime.log
 tail -80 safe/out/dependents/logs/runtime-libarchive.log
+tail -80 safe/out/dependents/logs/runtime-rpm-zarchive.log
 git status --short
 ```
 
-`cargo geiger` was attempted but was not installed (`cargo` reported `no such command: geiger`). `bash safe/scripts/run-full-suite.sh` completed successfully in this pass; several wrapper families reported fresh stamps instead of recomputing their expensive bodies. Files consulted in addition to the source tree include `safe/docs/unsafe-audit.md`, `safe/tests/upstream_test_matrix.toml`, `safe/tests/dependents/dependent_matrix.toml`, `dependents.json`, `relevant_cves.json`, `safe/out/dependents/logs/compile.log`, `safe/out/dependents/logs/runtime.log`, `safe/out/dependents/logs/runtime-libarchive.log`, `safe/out/phase6/run-full-suite-final.log`, and the verification stamps under `safe/out/phase6/verification-stamps/`.
+`cargo geiger` was attempted but was not installed (`cargo` reported `no such command: geiger`). `test-original.sh` was read and documented as the top-level downstream wrapper; it was not rerun in this dependent-focused refresh because `safe/scripts/build-dependent-image.sh` would rebuild artifacts and the dependent image from scratch. Files consulted in addition to the source tree include `safe/docs/unsafe-audit.md`, `safe/tests/upstream_test_matrix.toml`, `safe/tests/dependents/dependent_matrix.toml`, `dependents.json`, `relevant_cves.json`, `safe/out/dependents/image-context/metadata.env`, `safe/out/dependents/logs/compile.log`, `safe/out/dependents/logs/runtime.log`, `safe/out/dependents/logs/runtime-libarchive.log`, `safe/out/dependents/logs/runtime-rpm-zarchive.log`, and the dependent verification stamps under `safe/out/dependents/stamps/`.
