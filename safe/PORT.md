@@ -43,7 +43,7 @@ Data flow is intentionally narrow at the ABI edge:
 
 Cargo features are defined in `safe/Cargo.toml:23-30`: the default feature set is empty, `legacy` is a named but empty feature, and `threading`, `build-shared-default`, `build-static-default`, `variant-mt`, and `variant-nomt` drive build metadata and cfg selection. `safe/scripts/build-artifacts.sh` builds release shared and static artifacts with Cargo, installs `libzstd.so.1.5.5`, `libzstd.so.1`, `libzstd.so`, `libzstd.a`, and the checked-in headers, and generates pkg-config and CMake install files from `safe/pkgconfig/` and `safe/cmake/`.
 
-Debian packaging lives under `safe/debian/`. `safe/debian/control` declares source package `libzstd`, binary packages `libzstd-dev`, `libzstd1`, `zstd`, and `libzstd1-udeb`, and build dependencies including `cargo`, `rustc`, `cmake`, `debhelper (>> 13.3.2~)`, `dh-package-notes`, `help2man`, `liblz4-dev`, `liblzma-dev`, and `zlib1g-dev`; the debhelper compatibility level is recorded separately as `14` in `safe/debian/compat`. `safe/debian/rules` drives `safe/scripts/build-artifacts.sh` and `safe/scripts/build-original-cli-against-safe.sh`, then installs the Rust-built library together with the upstream CLI built against that library. `safe/debian/tests/control` registers autopkgtest coverage for the zstd self-test and pkg-config/CMake consumer builds.
+Debian packaging lives under `safe/debian/`. `safe/debian/control:1-68` declares source package `libzstd`, binary packages `libzstd-dev`, `libzstd1`, `zstd`, and `libzstd1-udeb`, and build dependencies including `cargo`, `rustc`, `cmake`, `debhelper (>> 13.3.2~)`, `dh-package-notes`, `dpkg-build-api (= 1)`, `help2man`, `liblz4-dev`, `liblzma-dev`, `zlib1g-dev`, `less <!nocheck>`, and `python3 <!nocheck>`; the debhelper compatibility level is `14` in `safe/debian/compat`. `safe/debian/rules:46-66` drives `safe/scripts/build-artifacts.sh` and `safe/scripts/build-original-cli-against-safe.sh`, then installs the Rust-built library together with the upstream CLI built against that library. `safe/debian/tests/control:1-24` registers autopkgtest coverage for the zstd self-test and pkg-config/CMake consumer builds.
 
 ## Where the unsafe Rust lives
 
@@ -135,27 +135,41 @@ No upstream dynamic fallback or plugin-loading surface remains. `rg -n 'SAFE_UPS
 
 - Custom memory allocators are not fully implemented. The ABI types for `ZSTD_allocFunction`, `ZSTD_freeFunction`, and `ZSTD_customMem` exist in `safe/src/ffi/types.rs`, but implementation helpers such as `safe/src/decompress/dctx.rs:14-15`, `safe/src/decompress/ddict.rs:14-15`, `safe/src/decompress/dstream.rs:27-28`, and `safe/src/ffi/compress.rs:3772-3773` accept only the default/null allocator configuration.
 - Legacy v0.5-v0.7 decode still relies on C sources through `safe/src/ffi/legacy_shim.c` and `safe/src/decompress/legacy.rs`. This preserves compatibility but leaves a small non-Rust decoder island.
+- The root crate advertises `rust-version = "1.82"` in `safe/Cargo.toml:5`, but the currently resolved dependency graph requires a newer toolchain: `cargo metadata` reports `oxiarc-core` and `oxiarc-zstd` with `rust_version` `1.85`, and the local `structured-zstd` manifest records `rust-version = "1.92"` in `safe/third_party/structured-zstd/Cargo.toml.orig:4`. The checked-in `safe/rust-toolchain.toml` selects `stable`, and this refresh used `rustc 1.94.0`; `safe/debian/control:7-18` does not pin a minimum Rust compiler version beyond `rustc`.
 - The local `structured-zstd` dependency has unfinished or invariant-heavy internals. Notable markers include `safe/third_party/structured-zstd/src/decoding/ringbuffer.rs:93`, `safe/third_party/structured-zstd/src/decoding/block_decoder.rs:27`, `safe/third_party/structured-zstd/src/encoding/frame_header.rs:44,74`, and `safe/third_party/structured-zstd/src/encoding/frame_compressor.rs:256,408`. The public compression adapter currently maps requested levels through `safe/src/ffi/compress.rs:1724-1728`, avoiding the unimplemented compression-level branches in normal ABI use.
 - Some upstream-suite gates are intentionally host-dependent. `safe/scripts/run-upstream-tests.sh` skips 32-bit and sanitizer variants when the required toolchains are unavailable, and it has a known valgrind fuzzer-smoke skip for unsupported worker-parameter behavior. `safe/scripts/run-pzstd-tests.sh` also has sanitizer-runtime skip handling, and `safe/scripts/run-zlibwrapper-tests.sh` documents known zlib wrapper expectation mismatches.
-- `safe/out/phase6/run-full-suite-final.log` is not a complete fresh success artifact for this documentation pass; it stops in the upstream valgrind fuzzer-smoke area that `safe/scripts/run-upstream-tests.sh` knows how to skip. This pass reran `cargo test --manifest-path safe/Cargo.toml --release --all-targets`, `bash safe/scripts/run-advanced-mt-tests.sh`, and `bash safe/scripts/verify-export-parity.sh`; `bash safe/scripts/verify-link-compat.sh` reported its coverage stamp was already fresh and skipped a rerun. The full upstream matrix was not rerun during this documentation refresh.
+- `safe/out/phase6/run-full-suite-final.log` is not a complete fresh success artifact for this documentation pass; it stops in the upstream valgrind fuzzer-smoke area that `safe/scripts/run-upstream-tests.sh` knows how to skip. This pass reran `cargo test --manifest-path safe/Cargo.toml --release --all-targets`, `bash safe/scripts/run-advanced-mt-tests.sh`, and `bash safe/scripts/verify-export-parity.sh`; `bash safe/scripts/verify-link-compat.sh`, `bash safe/scripts/run-build-variant-tests.sh`, `bash safe/scripts/verify-install-layout.sh`, `bash safe/scripts/verify-install-layout.sh --debian`, `bash safe/scripts/verify-deb-profiles.sh`, and `bash safe/scripts/run-debian-autopkgtests.sh` reported fresh coverage stamps and skipped reruns. The full upstream matrix was not rerun during this documentation refresh.
 - Dependent coverage is documented for 12 packages in `dependents.json` and `safe/tests/dependents/dependent_matrix.toml`. The checked-in logs `safe/out/dependents/logs/compile.log`, `safe/out/dependents/logs/runtime.log`, and `safe/out/dependents/logs/runtime-libarchive.log` record successful compile/runtime probes, but those Docker/image-style dependent gates were not rerun during this documentation refresh.
 - `relevant_cves.json` contains two relevant records, CVE-2021-24031 and CVE-2021-24032, both for zstd CLI output-file permissions rather than core library memory safety. `safe/scripts/check-cli-permissions.sh` audits the CLI behavior with `strace`; this documentation pass did not rerun that script.
 - No repository-level upgrade report file is present. No first-party `TODO` or `FIXME` markers were found under `safe/src` by `rg -n 'TODO|FIXME|todo!|unimplemented!|panic!' safe --glob '!target/**' --glob '!out/**'`; remaining markers are in build error paths, scripts, tests, or `safe/third_party/structured-zstd/`.
 
 ## Dependencies and other libraries used
 
-Direct Cargo dependencies from `safe/Cargo.toml`:
+Direct Cargo dependencies from `safe/Cargo.toml:41-47`:
 
 | Dependency | Version | Kind | Purpose and safety notes |
 | --- | --- | --- | --- |
-| `oxiarc-core` | `=0.2.5` | normal | Provides shared OxiArc error/types used when mapping Rust zstd decode failures, including in `safe/src/decompress/frame.rs`. It is an external Rust dependency; `cargo geiger` was not available in this environment, so unsafe usage inside the crate was not independently measured here. |
-| `oxiarc-zstd` | `=0.2.5` | normal | Provides Rust zstd encode/decode helpers used for fallback decode behavior, dictionary handling, and dictionary-builder scoring paths. It is an external Rust dependency and is covered here by integration/ABI tests rather than by a local unsafe inventory. |
-| `structured-zstd` | `=0.0.3`, path `third_party/structured-zstd` | normal | Local structured zstd encoder/decoder used for frame parsing, dictionary-aware decode, streaming/block compression, and frame emission. Its remaining unsafe sites are inventoried above because the source is vendored in this repository. |
-| `cc` | `1.2` | build | Build-time helper used by `safe/build.rs` to compile the legacy C shim and upstream legacy decoder sources. |
+| `oxiarc-core` | `=0.2.5` | normal | Provides shared OxiArc error/types used when mapping Rust zstd decode failures, including `OxiArcError` in `safe/src/decompress/frame.rs:10,367`. It is an external Rust dependency; `cargo geiger` was not available in this environment, so unsafe usage inside the crate was not independently measured here. |
+| `oxiarc-zstd` | `=0.2.5` | normal | Provides Rust zstd encode/decode helpers used for fallback dictionary/frame decode (`safe/src/decompress/frame.rs:497-500,596-598`) and dictionary-builder encoding (`safe/src/dict_builder/zdict.rs:1049`). It is an external Rust dependency and is covered here by integration/ABI tests rather than by a local unsafe inventory. |
+| `structured-zstd` | `=0.0.3`, path `third_party/structured-zstd` | normal | Local structured zstd encoder/decoder used for frame parsing, dictionary-aware decode, streaming/block compression, and frame emission (`safe/src/ffi/compress.rs:27-28`, `safe/src/ffi/decompress.rs:19`, `safe/src/decompress/frame.rs:12`). Its remaining unsafe sites are inventoried above because the source is vendored in this repository. |
+| `cc` | `1.2` in `Cargo.toml`, resolved to `1.2.58` in `safe/Cargo.lock:5-13` | build | Build-time helper used by `safe/build.rs:111-123` to compile the legacy C shim and upstream legacy decoder sources. |
 
-`cargo tree --manifest-path safe/Cargo.toml` also shows transitive Rust dependencies including `thiserror`, procedural macro support crates, `twox-hash`, `find-msvc-tools`, and `shlex`. They are not direct dependencies of `libzstd-safe`.
+`safe/Cargo.lock` resolves the normal transitive dependencies to `thiserror 2.0.18`, `thiserror-impl 2.0.18`, `proc-macro2 1.0.106`, `quote 1.0.45`, `syn 2.0.117`, `unicode-ident 1.0.24`, and `twox-hash 2.1.2`; the `cc` build dependency pulls in `find-msvc-tools 0.1.9` and `shlex 1.3.0` (`safe/Cargo.lock:49-121`). `cargo tree --manifest-path safe/Cargo.toml` shows no Rust dependency that links a third-party C/C++ compression library.
 
-Build-time tools and packaging dependencies are declared in `safe/debian/control` and used by `safe/debian/rules`: `cargo`, `rustc`, a C compiler through the `cc` crate, `cmake`, `debhelper (>> 13.3.2~)` with compatibility level `14` in `safe/debian/compat`, `dh-package-notes`, `dpkg-build-api`, `help2man`, `less`, `python3`, `liblz4-dev`, `liblzma-dev`, and `zlib1g-dev`. The original zstd CLI and pzstd support are built from `original/libzstd-1.5.5+dfsg2/` against the safe library by `safe/scripts/build-original-cli-against-safe.sh`. The installed pkg-config and CMake metadata are generated from checked-in templates under `safe/pkgconfig/` and `safe/cmake/`.
+Build behavior:
+
+- `safe/Cargo.toml:11-13` builds library target `zstd` as `cdylib`, `staticlib`, and `rlib`; `safe/Cargo.toml:23-30` defines feature flags for threaded/default/variant builds.
+- `safe/build.rs:41-65` maps features to `libzstd_threading` and artifact cfgs, `safe/build.rs:83-89` emits `LIBZSTD_*` metadata and `-Wl,-soname,libzstd.so.1`, and `safe/build.rs:91-123` compiles the legacy C bridge.
+- `safe/scripts/build-artifacts.sh:262-281` builds shared and static artifacts with `cargo rustc`, installs `libzstd.so.1.5.5`, `libzstd.so.1`, `libzstd.so`, and `libzstd.a`, and `safe/scripts/build-artifacts.sh:283-363` installs the checked-in headers plus generated pkg-config and CMake metadata from `safe/pkgconfig/` and `safe/cmake/`.
+- `safe/scripts/build-original-cli-against-safe.sh:324-356` installs safe headers/libraries into the helper tree, writes `libzstd.a` as an `INPUT ( libzstd.so )` linker indirection, builds upstream `programs/` and `contrib/pzstd/`, and verifies that `zstd` and `pzstd` resolve libzstd from the helper root.
+- `safe/scripts/build-deb.sh:227-246` stages the safe Rust sources, `third_party/`, scripts, pkg-config/CMake templates, Debian metadata, `Cargo.toml`, `build.rs`, `Cargo.lock`, and `rust-toolchain.toml`; `safe/scripts/build-deb.sh:248-296` stages upstream helper source trees and docs needed by Debian metadata; `safe/scripts/build-deb.sh:298-365` runs `dpkg-buildpackage`, optionally assembles the udeb, extracts `.deb` contents into the profile-specific stage root under `safe/out/deb/`, and writes `metadata.env`.
+
+Build-time tools and packaging dependencies:
+
+- Debian source Build-Depends are `cargo`, `cmake (>= 3.24~)`, `debhelper (>> 13.3.2~)`, `dh-package-notes`, `dpkg-build-api (= 1)`, `help2man`, `liblz4-dev`, `liblzma-dev`, `rustc`, `zlib1g-dev`, `less <!nocheck>`, and `python3 <!nocheck>` (`safe/debian/control:7-18`); debhelper compatibility level is `14` in `safe/debian/compat`.
+- `safe/debian/rules:46-66` delegates library and CLI builds to the safe scripts. `safe/debian/rules:97-137` runs the shlibs/debhelper steps and generates `zstdmt.1` and `pzstd.1` when docs are enabled.
+- Autopkgtests require the built packages plus `build-essential`, `pkgconf`, `cmake`, `python3`, `python3-click`, and `python3-typedload` as declared in `safe/debian/tests/control:1-24`. The checked-in Python helper requirement files also list `click`, `typedload`, `tomli` for older Python, and `pytest` under `safe/debian/tests/requirements/`.
+- The shell scripts also invoke normal Debian/build tools such as `bash`, `python3`, `rsync`, `make`, `dpkg-architecture`, `dpkg-buildpackage`, `fakeroot`, `dpkg-deb`, `ldd`, `nm`, and `objdump`. Some of these are implicit in the Debian build environment rather than explicit `Build-Depends`.
 
 The Rust library build does not use `bindgen`, `cbindgen`, `pkg-config`, or a third-party C/C++ compression library. The built shared object currently links to normal system runtime libraries (`libgcc_s.so.1`, `libm.so.6`, `libc.so.6`, and the dynamic loader as shown by `ldd` and `objdump -p safe/target/release/libzstd.so`). The only C code intentionally compiled into the Rust library is the legacy decode bridge listed in `safe/build.rs:95-101`: upstream `xxhash.c`, `zstd_v05.c`, `zstd_v06.c`, `zstd_v07.c`, and `safe/src/ffi/legacy_shim.c`.
 
@@ -174,8 +188,13 @@ sed -n '1,180p' safe/src/ffi/legacy_shim.c
 find safe/debian -maxdepth 3 -type f | sort
 sed -n '1,180p' safe/debian/control
 cargo metadata --manifest-path safe/Cargo.toml --format-version 1 --no-deps
+cargo metadata --manifest-path safe/Cargo.toml --format-version 1
 cargo tree --manifest-path safe/Cargo.toml
 cargo geiger --manifest-path safe/Cargo.toml --all-targets
+rustc --version
+cargo --version
+sed -n '1,220p' safe/Cargo.lock
+sed -n '1,140p' safe/third_party/structured-zstd/Cargo.toml.orig
 rg -n '\bunsafe\b' safe --glob '*.rs' --glob '!target/**' --glob '!out/**'
 rg -n 'unsafe fn|unsafe impl|unsafe extern' safe
 grep -RIn '\bunsafe\b' safe
@@ -191,9 +210,17 @@ nm -D --defined-only safe/target/release/libzstd.so
 nm -D --undefined-only safe/target/release/libzstd.so
 objdump -p safe/target/release/libzstd.so
 ldd safe/target/release/libzstd.so
+bash safe/scripts/build-artifacts.sh --release
+bash safe/scripts/build-original-cli-against-safe.sh
+bash safe/scripts/build-deb.sh
 bash safe/scripts/run-advanced-mt-tests.sh
 bash safe/scripts/verify-link-compat.sh
 bash safe/scripts/verify-export-parity.sh
+bash safe/scripts/run-build-variant-tests.sh
+bash safe/scripts/verify-install-layout.sh
+bash safe/scripts/verify-install-layout.sh --debian
+bash safe/scripts/verify-deb-profiles.sh
+bash safe/scripts/run-debian-autopkgtests.sh
 cargo test --manifest-path safe/Cargo.toml --release --all-targets
 jq -r '.packages | length' dependents.json
 jq -r '.relevant_cves[] | .cve_id' relevant_cves.json
@@ -201,4 +228,4 @@ rg -n 'TODO|FIXME|todo!|unimplemented!|panic!' safe --glob '!target/**' --glob '
 git status --short
 ```
 
-`cargo geiger` was attempted but was not installed (`cargo` reported `no such command: geiger`). Files consulted in addition to the source tree include `safe/docs/unsafe-audit.md`, `safe/tests/upstream_test_matrix.toml`, `safe/tests/dependents/dependent_matrix.toml`, `dependents.json`, `relevant_cves.json`, `safe/out/dependents/logs/compile.log`, `safe/out/dependents/logs/runtime.log`, `safe/out/dependents/logs/runtime-libarchive.log`, and `safe/out/phase6/run-full-suite-final.log`.
+`cargo geiger` was attempted but was not installed (`cargo` reported `no such command: geiger`). The packaging producer/verifier scripts above mostly reused checked freshness stamps rather than rebuilding every artifact from scratch. Files consulted in addition to the source tree include `safe/docs/unsafe-audit.md`, `safe/tests/upstream_test_matrix.toml`, `safe/tests/dependents/dependent_matrix.toml`, `dependents.json`, `relevant_cves.json`, `safe/out/dependents/logs/compile.log`, `safe/out/dependents/logs/runtime.log`, `safe/out/dependents/logs/runtime-libarchive.log`, and `safe/out/phase6/run-full-suite-final.log`.
