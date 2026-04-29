@@ -47,19 +47,78 @@ Debian packaging lives under `safe/debian/`. `safe/debian/control` declares sour
 
 ## Where the unsafe Rust lives
 
-The current inventory was produced with `rg -n '\bunsafe\b' safe --glob '*.rs' --glob '!target/**' --glob '!out/**'`, then reviewed modulo comments and strings. It includes first-party library code, Rust integration tests, and the local path dependency `safe/third_party/structured-zstd/`. Generated build artifacts under `safe/target/` and verification outputs under `safe/out/` are intentionally excluded.
+The current inventory was produced with `rg -n '\bunsafe\b' safe --glob '*.rs' --glob '!target/**' --glob '!out/**'`, plus `rg -n 'unsafe fn|unsafe impl|unsafe extern' safe`. It includes first-party library code, Rust integration tests, and the local path dependency `safe/third_party/structured-zstd/`; generated artifacts under `safe/target/`, verification output under `safe/out/`, and documentation/comment-only matches are excluded. The lint attribute `#![deny(unsafe_op_in_unsafe_fn)]` at `safe/src/lib.rs:1` contains the word "unsafe" but is not an unsafe block, function, impl, or extern declaration.
 
-| Purpose | Sites | Justification |
-| --- | --- | --- |
-| C ABI buffer conversion, by-reference dictionary buffers, output copies, optional pointer handling, and C struct out-parameters | `safe/src/common/frame.rs:90`; `safe/src/common/skippable.rs:36,42,72,77`; `safe/src/ffi/decompress.rs:46,265,650,1010,1127`; `safe/src/ffi/compress.rs:70,958,965,972,979,986,3012,3024,3058,3069,3076,3515,3566`; `safe/src/decompress/dctx.rs:304`; `safe/src/decompress/dstream.rs:75,169,175,179`; `safe/src/compress/cctx.rs:135`; `safe/src/compress/cstream.rs:253,258,261,264`; `safe/src/dict_builder/zdict.rs:106,117,232`; `safe/src/dict_builder/cover.rs:108`; `safe/src/dict_builder/fastcover.rs:138` | These are the expected raw-pointer operations at the libzstd ABI boundary: converting nullable C buffers to Rust slices, keeping by-reference dictionary buffers as slices under the caller's lifetime contract, copying encoded/decoded bytes into caller-owned buffers, and filling caller-provided structs. |
-| Opaque handle ownership, static workspace APIs, and pointer casts for contexts/dictionaries | `safe/src/ffi/decompress.rs:658,666,674,705,723,761,762,774,788`; `safe/src/ffi/compress.rs:1025,1039,1163,1164,1203,1216`; `safe/src/compress/cctx_params.rs:153,160,195,262`; `safe/src/threading/pool.rs:31,58` | The C ABI represents contexts, dictionaries, and thread pools as opaque pointers or caller-provided workspaces; these sites cast back to Rust state, initialize in-place storage, or drop boxed state. |
-| C callback ABI types and callback invocation | `safe/src/ffi/types.rs:42,44,439`; `safe/src/ffi/compress.rs:3435` | The original libzstd API exposes allocator callbacks and the sequence-producer callback as `unsafe extern "C" fn` types. The callback call is necessarily unsafe because Rust cannot validate the caller's function pointer contract. |
-| Legacy decompression C bridge | `safe/src/decompress/legacy.rs:12,48,52,61,67,76,88,113,131,154` | These are declarations and calls into the internal C shim for zstd legacy frame versions. This is FFI beyond pure Rust, but it is isolated to legacy decode compatibility. |
-| Internal compression match-state, match-finder, sequence, literal, compatibility, and strategy code | `safe/src/compress/frame.rs:15`; `safe/src/compress/ldm.rs:32,46,56,59,60,100,108,113,137,143,153,159,181,184`; `safe/src/compress/literals.rs:28,29,56,57,82`; `safe/src/compress/match_state.rs:77,92,98,106,116,232,246,258,306,311,319,326,342`; `safe/src/compress/sequence_api.rs:73`; `safe/src/compress/sequences.rs:59,70,113,114,131,136`; `safe/src/compress/compat.rs:73,77,102,119,122,142`; `safe/src/compress/strategies/double_fast.rs:14,27,34,37,44,47,54`; `safe/src/compress/strategies/fast.rs:14,28,35,38,45,48,55`; `safe/src/compress/strategies/lazy.rs:8,15,32,39,56,63,80,87,104,111,128,135,152,159,176,183,200,207,224,231,248,255,272,279`; `safe/src/compress/strategies/opt.rs:9,17,24,41,48,65,72,89,96,113,120,137,144,161,168`; `safe/src/decompress/frame.rs:982` | These sites are not merely thin C ABI shims. They implement performance-oriented compression/decompression internals, upstream-compatible raw structures, function-pointer strategy dispatch, unchecked slice indexing, or pointer arithmetic where the surrounding code maintains zstd invariants. They are the main remaining first-party unsafe code not required solely by raw C API parameter conversion. |
-| Local Rust dependency internals | `safe/third_party/structured-zstd/src/decoding/decode_buffer.rs:90,122`; `safe/third_party/structured-zstd/src/decoding/ringbuffer.rs:23,26,74,94,104,129,142,169,217,225,259,281,292,313,320,327,345,357,379,386,393,412,419,426,450,457,472,475,538,540,560,579,613,623,639,649,673,683,778,985,1020,1035,1047` | `structured-zstd` is a local path dependency, not the public C ABI boundary. Its ring-buffer and decode-buffer internals use unsafe ownership and pointer operations for decoder buffering. |
-| Rust integration tests | `safe/tests/rust/compress.rs:277,296`; `safe/tests/rust/decompress.rs:39,57,119` | Test code uses unsafe to call exported C ABI functions and to read or write through C-style buffers. |
+### Public ABI adapters and raw C buffers
 
-Unsafe code that is not required by the public C ABI/API boundary is concentrated in the compression strategy/match-state modules and the local `structured-zstd` dependency. Those areas are internal algorithmic implementations and should remain the primary targets for future unsafe reduction after ABI shims and legacy compatibility are accounted for.
+| Sites | Justification |
+| --- | --- |
+| `safe/src/common/frame.rs:90` | Writes a parsed `ZSTD_frameHeader` into the caller-provided `zfhPtr` out-parameter after a null check. |
+| `safe/src/common/skippable.rs:36,42,72,77` | Writes the optional skippable-frame magic variant, copies payload bytes, and converts validated C source/destination buffers to Rust slices for the skippable-frame API. |
+| `safe/src/compress/cctx.rs:135` | Stores a queried compression parameter through the caller's optional `int*` output pointer. |
+| `safe/src/compress/cctx_params.rs:262` | Stores a queried `ZSTD_CCtx_params` value through the caller's optional `int*` output pointer. |
+| `safe/src/compress/cstream.rs:253,258,261,264` | Reads and writes `srcPos`/`dstPos` pointers for `ZSTD_compressStream2_simpleArgs`. |
+| `safe/src/decompress/dctx.rs:304` | Stores a queried decompression parameter through the caller's validated `int*` output pointer. |
+| `safe/src/decompress/dstream.rs:75,169,175,179` | Reborrows caller-provided `ZSTD_inBuffer`/`ZSTD_outBuffer` pointers and reads/writes simple-args position pointers. |
+| `safe/src/dict_builder/cover.rs:108`; `safe/src/dict_builder/fastcover.rs:138` | Mutably borrows caller-provided dictionary-training parameter structs so optimization results can be returned through the C API. |
+| `safe/src/dict_builder/zdict.rs:106,117,232` | Converts checked sample buffers and sample-size arrays into Rust slices for `ZDICT_*` training/finalization APIs. |
+| `safe/src/ffi/compress.rs:70,958,965,3012,3024,3058,3069,3076,3515,3566` | Converts by-reference dictionaries, input/output buffers, external-sequence arrays, and streaming buffers between C pointers and Rust slices or element writes. |
+| `safe/src/ffi/decompress.rs:46,265,650,1010,1127` | Converts by-reference dictionaries and input buffers to slices, copies staged decoded output to caller memory, and computes an in-bounds streaming output pointer. |
+
+### Opaque handles, static workspaces, and ownership casts
+
+| Sites | Justification |
+| --- | --- |
+| `safe/src/compress/cctx_params.rs:153,160,195` | Casts opaque `ZSTD_CCtx_params` pointers back to `CCtxParamsState` and drops boxed state allocated by the Rust constructor. |
+| `safe/src/ffi/compress.rs:972,979,986,1025,1039,1163,1164,1203,1216` | Casts `ZSTD_CCtx`/`ZSTD_CDict` handles to Rust state, initializes static workspaces in place, copies static dictionary bytes into caller workspace, and drops heap-owned handles. |
+| `safe/src/ffi/decompress.rs:658,666,674,705,723,761,762,774,788` | Casts `ZSTD_DCtx`/`ZSTD_DDict` handles to Rust state, initializes static workspaces in place, copies static dictionary bytes into caller workspace, and drops heap-owned handles. |
+| `safe/src/threading/pool.rs:31,58` | Casts the opaque thread-pool handle back to `ThreadPoolState` and drops the boxed pool allocated by `ZSTD_createThreadPool`. |
+
+### Callback and external function ABI
+
+| Sites | Justification |
+| --- | --- |
+| `safe/src/ffi/types.rs:42,44` | Defines upstream-compatible custom allocator callback types as `unsafe extern "C" fn` because Rust cannot verify arbitrary C callback contracts. |
+| `safe/src/ffi/types.rs:439` | Defines the upstream sequence-producer callback type as `unsafe extern "C" fn` to match the published advanced compression ABI. |
+| `safe/src/ffi/compress.rs:3435` | Calls the registered sequence-producer callback after building the C argument list from the current compression context. |
+| `safe/src/decompress/legacy.rs:12,48,52,61,67,76,88,113,131,154` | Declares and calls the internal C legacy-decode shim for v0.5-v0.7 frame compatibility, passing only slice-backed pointers or shim-owned stream contexts. |
+
+### First-party compression/decompression internals
+
+These sites are not just nullable C parameter conversion. They maintain zstd algorithm state, emit compatibility structures, dispatch through unsafe function pointers, or perform raw buffer work where surrounding code enforces bounds and lifetime invariants.
+
+| Sites | Justification |
+| --- | --- |
+| `safe/src/compress/frame.rs:15` | Converts a validated destination pointer to a slice before writing the final empty block marker. |
+| `safe/src/compress/literals.rs:28,29,56,57,82` | Converts literal-block input/output pointers to slices after capacity/null validation in the literal-copy/RLE helpers. |
+| `safe/src/compress/ldm.rs:32,46,56,59,60,100,108,113,137,143,153,159,181,184` | Reborrows long-distance-match state, sequence stores, parameter structs, source bytes, and repcode arrays from upstream-compatible raw structures. |
+| `safe/src/compress/match_state.rs:77,92,98,106,116,232,246,258,306,311,319,326,342` | Stores unsafe block-compressor function pointers and analyzes raw block input/repcodes through pointer-derived slices while updating match and sequence state. |
+| `safe/src/compress/sequence_api.rs:73` | Converts an external sequence array to a mutable slice for in-place delimiter merging after null/length checks. |
+| `safe/src/compress/sequences.rs:59,70,113,114,131,136` | Reborrows repeat-mode, frequency, destination, sequence, and sequence-store pointers for upstream-compatible sequence encoding helpers. |
+| `safe/src/compress/compat.rs:73,77,102,119,122,142` | Converts FSE/HUF compatibility buffers and count tables to slices before filling normalized counters and placeholder tables. |
+| `safe/src/compress/strategies/fast.rs:14,28,35,38,45,48,55`; `safe/src/compress/strategies/double_fast.rs:14,27,34,37,44,47,54` | Reborrows match state for hash-table updates and exposes unsafe strategy entry points that delegate to the shared block analyzer. |
+| `safe/src/compress/strategies/lazy.rs:8,15,32,39,56,63,80,87,104,111,128,135,152,159,176,183,200,207,224,231,248,255,272,279` | Exposes lazy/greedy strategy entry points whose callers must provide valid match-state, sequence-store, repcode, and source pointers. |
+| `safe/src/compress/strategies/opt.rs:9,17,24,41,48,65,72,89,96,113,120,137,144,161,168` | Reborrows binary-tree strategy state and exposes optimal-strategy entry points with the same raw-pointer contract as the other block compressors. |
+| `safe/src/decompress/frame.rs:982` | Copies decoded frame bytes into the caller's destination pointer after size and null checks. |
+
+### Local path dependency unsafe
+
+`structured-zstd` is vendored under `safe/third_party/structured-zstd/`, so its unsafe code is part of this source tree even though it is not the public libzstd C ABI adapter.
+
+| Sites | Justification |
+| --- | --- |
+| `safe/third_party/structured-zstd/src/decoding/decode_buffer.rs:90,122` | Calls the ring buffer's unchecked repeat-copy primitive after validating match ranges and reserving capacity. |
+| `safe/third_party/structured-zstd/src/decoding/ringbuffer.rs:23,26` | Marks `RingBuffer` as `Send` and `Sync` based on its ownership model and absence of unsynchronized interior mutability. |
+| `safe/third_party/structured-zstd/src/decoding/ringbuffer.rs:74,94,104,129,142,169,217,225,259,281,292,313,320,327,345,357,379,386,393,412,419,426,450,457,472,475,538,540,560,579,613,623,639,649,673,683,778,985,1020,1035,1047` | Implements manual allocation, deallocation, pointer arithmetic, wraparound copying, unchecked internal repeat-copy functions, and raw slice views for the decoder ring buffer. |
+
+### Rust integration tests
+
+| Sites | Justification |
+| --- | --- |
+| `safe/tests/rust/compress.rs:277,296` | Converts C error-name pointers returned by exported ABI functions into `CStr` for assertion messages. |
+| `safe/tests/rust/decompress.rs:39,57,119` | Converts C error-name and version-string pointers returned by exported ABI functions into `CStr` for assertions. |
+
+Unsafe code that is not required merely by the original public C ABI/API boundary is concentrated in `safe/src/compress/frame.rs`, `safe/src/compress/literals.rs`, `safe/src/compress/ldm.rs`, `safe/src/compress/match_state.rs`, `safe/src/compress/sequence_api.rs`, `safe/src/compress/sequences.rs`, `safe/src/compress/compat.rs`, the files under `safe/src/compress/strategies/`, `safe/src/decompress/frame.rs:982`, and the vendored `structured-zstd` decoder buffer/ring buffer. The legacy bridge in `safe/src/decompress/legacy.rs` is required for compatibility with legacy frame formats, but it is also the only remaining first-party foreign-function bridge beyond a pure Rust implementation.
 
 ## Remaining unsafe FFI beyond the original ABI/API boundary
 
@@ -80,7 +139,7 @@ The callback types in `safe/src/ffi/types.rs:42,44,439` are part of the original
 - Legacy v0.5-v0.7 decode still relies on C sources through `safe/src/ffi/legacy_shim.c` and `safe/src/decompress/legacy.rs`. This preserves compatibility but leaves a small non-Rust decoder island.
 - The local `structured-zstd` dependency has unfinished or invariant-heavy internals. Notable markers include `safe/third_party/structured-zstd/src/decoding/ringbuffer.rs:93`, `safe/third_party/structured-zstd/src/decoding/block_decoder.rs:27`, `safe/third_party/structured-zstd/src/encoding/frame_header.rs:44,74`, and `safe/third_party/structured-zstd/src/encoding/frame_compressor.rs:256,408`. The public compression adapter currently maps requested levels through `safe/src/ffi/compress.rs:1724-1728`, avoiding the unimplemented compression-level branches in normal ABI use.
 - Some upstream-suite gates are intentionally host-dependent. `safe/scripts/run-upstream-tests.sh` skips 32-bit and sanitizer variants when the required toolchains are unavailable, and it has a known valgrind fuzzer-smoke skip for unsupported worker-parameter behavior. `safe/scripts/run-pzstd-tests.sh` also has sanitizer-runtime skip handling, and `safe/scripts/run-zlibwrapper-tests.sh` documents known zlib wrapper expectation mismatches.
-- `safe/out/phase6/run-full-suite-final.log` is not a complete fresh success artifact for this documentation pass; it stops in the upstream valgrind fuzzer-smoke area that `safe/scripts/run-upstream-tests.sh` knows how to skip. This pass reran the decompression Rust test, C API decompression harness, export parity check, and baseline contract check rather than the full upstream matrix.
+- `safe/out/phase6/run-full-suite-final.log` is not a complete fresh success artifact for this documentation pass; it stops in the upstream valgrind fuzzer-smoke area that `safe/scripts/run-upstream-tests.sh` knows how to skip. This pass reran the Rust compression and decompression tests, C API round-trip and decompression harnesses, upstream-example freshness check, export parity check, and baseline contract check rather than the full upstream matrix.
 - Dependent coverage is documented for 12 packages in `dependents.json` and `safe/tests/dependents/dependent_matrix.toml`. The checked-in logs `safe/out/dependents/logs/compile.log`, `safe/out/dependents/logs/runtime.log`, and `safe/out/dependents/logs/runtime-libarchive.log` record successful compile/runtime probes, but those Docker/image-style dependent gates were not rerun during this documentation refresh.
 - `relevant_cves.json` contains two relevant records, CVE-2021-24031 and CVE-2021-24032, both for zstd CLI output-file permissions rather than core library memory safety. `safe/scripts/check-cli-permissions.sh` audits the CLI behavior with `strace`; this documentation pass did not rerun that script.
 - No repository-level upgrade report file is present. No first-party `TODO` or `FIXME` markers were found under `safe/src` by `rg -n 'TODO|FIXME|todo!|unimplemented!|panic!' safe --glob '!target/**' --glob '!out/**'`; remaining markers are in build error paths, scripts, tests, or `safe/third_party/structured-zstd/`.
@@ -116,16 +175,23 @@ cargo metadata --manifest-path safe/Cargo.toml --format-version 1 --no-deps
 cargo tree --manifest-path safe/Cargo.toml --edges normal,build
 cargo geiger --manifest-path safe/Cargo.toml --all-targets
 rg -n '\bunsafe\b' safe --glob '*.rs' --glob '!target/**' --glob '!out/**'
+rg -n 'unsafe fn|unsafe impl|unsafe extern' safe
 grep -RIn '\bunsafe\b' safe
+grep -RIn 'unsafe fn\|unsafe impl\|unsafe extern' safe
+grep -RIn 'unsafe' safe/src safe/build.rs safe/tests safe/scripts || true
 grep -RIn 'extern "C"' safe
 rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym' safe/src/decompress safe/src/ffi/decompress.rs safe/scripts/run-capi-decompression.sh
+rg -n 'load_upstream!' safe/src/compress/block.rs safe/src/compress/cctx.rs safe/src/compress/cstream.rs safe/src/compress/params.rs
 rg -n 'extern "C"|unsafe extern' safe/src/decompress/legacy.rs safe/src/ffi/legacy_shim.c safe/build.rs
 nm -D --defined-only safe/target/release/libzstd.so
 nm -D --undefined-only safe/target/release/libzstd.so
 objdump -p safe/target/release/libzstd.so
 ldd safe/target/release/libzstd.so
+cargo test --manifest-path safe/Cargo.toml --release --test compress
 cargo test --manifest-path safe/Cargo.toml --release --test decompress
+bash safe/scripts/run-capi-roundtrip.sh
 bash safe/scripts/run-capi-decompression.sh
+bash safe/scripts/run-original-examples.sh
 bash safe/scripts/verify-export-parity.sh
 bash safe/scripts/verify-baseline-contract.sh
 jq -r '.packages | length' dependents.json
