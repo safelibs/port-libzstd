@@ -124,3 +124,38 @@ Proof generation was not run because the matrix has 1 failed testcase
 **Skip List**
 
 - Empty. No validator checks were skipped in Phase 1.
+
+Phase 2 Base Commit: 7ea254369326f67f316f4f860010c83714f17e77
+
+**Phase 2 — Source CLI, Dictionary, Multi-Frame, and Corruption Regressions**
+
+- Validator commit: 87b321fe728340d6fc6dd2f638583cca82c667c3
+- Source cases inspected: 5 (`zstd-compress-decompress`, `dictionary-train-use`, `multi-frame-behavior`, `corrupted-frame-rejection`, `streaming-c-api-smoke`)
+- Source cases assigned to `impl_validator_source_cli_regressions`: 0
+- No source-case failures assigned to impl_validator_source_cli_regressions
+
+The Phase 1 failure table contains a single open row
+(`usage-libarchive-tools-zstd-cli-test-integrity-flag`) assigned to
+`impl_validator_libarchive_usage_regressions`. No rows are assigned to
+`impl_validator_source_cli_regressions`, so this phase makes no source-side
+code change and adds no regression test. The failure table is unchanged.
+
+**Phase 2 Commands Run**
+
+```bash
+git rev-parse HEAD
+git -C validator rev-parse HEAD
+git -C validator status --porcelain --untracked-files=no
+ls validator/tests/libzstd/tests/cases/source/
+set +e
+bash safe/scripts/run-validator-libzstd.sh
+status=$?
+set -e
+VALIDATOR_RUNNER_STATUS=$status python3 safe/scripts/check-validator-phase-results.py \
+    --results-root safe/out/validator/artifacts/port/results/libzstd \
+    --report validator-report.md \
+    --completed-phase impl_validator_source_cli_regressions \
+    --allow-remaining-phase impl_validator_streaming_capi_regressions \
+    --allow-remaining-phase impl_validator_libarchive_usage_regressions \
+    --allow-remaining-phase impl_validator_remaining_burn_down
+```
