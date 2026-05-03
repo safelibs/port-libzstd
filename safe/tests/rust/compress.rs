@@ -2146,6 +2146,103 @@ fn compress_streaming_libarchive_tar_chunks_roundtrip_for_listing_usage() {
 }
 
 #[test]
+fn streaming_decompress_rejects_corrupted_frame_for_libarchive_integrity_flag() {
+    // Mirrors the validator's libarchive-tools usage case
+    // (`usage-libarchive-tools-zstd-cli-test-integrity-flag`) and the zstd CLI
+    // `-t` flow: a single-segment, content-checksum frame is corrupted in the
+    // raw block payload, and streaming decompression must surface that as a
+    // checksum mismatch instead of silently completing.
+    let src = b"integrity-flag payload\n".to_vec();
+
+    let zcs = cstream::ZSTD_createCStream();
+    assert!(!zcs.is_null());
+    check_result(cstream::ZSTD_initCStream(zcs, 3), "ZSTD_initCStream");
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(zcs.cast(), ZSTD_cParameter::ZSTD_c_checksumFlag, 1),
+        "ZSTD_c_checksumFlag(integrity-flag fixture)",
+    );
+    let mut compressed = vec![0u8; cstream::ZSTD_CStreamOutSize()];
+    let mut input = ZSTD_inBuffer {
+        src: src.as_ptr().cast(),
+        size: src.len(),
+        pos: 0,
+    };
+    let mut output = ZSTD_outBuffer {
+        dst: compressed.as_mut_ptr().cast(),
+        size: compressed.len(),
+        pos: 0,
+    };
+    check_result(
+        cstream::ZSTD_compressStream(zcs, &mut output, &mut input),
+        "ZSTD_compressStream(integrity-flag fixture)",
+    );
+    assert_eq!(input.pos, input.size);
+    loop {
+        let remaining = cstream::ZSTD_endStream(zcs, &mut output);
+        check_result(remaining, "ZSTD_endStream(integrity-flag fixture)");
+        if remaining == 0 {
+            break;
+        }
+    }
+    compressed.truncate(output.pos);
+    cstream::ZSTD_freeCStream(zcs);
+
+    // Magic bytes match the zstd1 frame; content_checksum must be set so the
+    // CLI test can detect bit-flips inside the raw block payload.
+    assert_eq!(&compressed[..4], &[0x28, 0xb5, 0x2f, 0xfd]);
+    assert!((compressed[4] >> 2) & 1 == 1, "expected checksum flag set");
+
+    // Validates round-trip on the unmodified frame.
+    decompress_exact(&compressed, &src);
+
+    // Flips one byte well inside the raw block payload (matches the validator
+    // testcase corrupting offset 10).
+    let mut bad = compressed.clone();
+    assert!(bad.len() > 12);
+    bad[10] ^= 0xff;
+
+    let zds = dstream::ZSTD_createDStream();
+    assert!(!zds.is_null());
+    check_result(dstream::ZSTD_initDStream(zds), "ZSTD_initDStream");
+    let mut decoded = vec![0u8; src.len() + 64];
+    let mut in_buf = ZSTD_inBuffer {
+        src: bad.as_ptr().cast(),
+        size: bad.len(),
+        pos: 0,
+    };
+    let mut out_buf = ZSTD_outBuffer {
+        dst: decoded.as_mut_ptr().cast(),
+        size: decoded.len(),
+        pos: 0,
+    };
+    let mut last_ret = 0usize;
+    let mut saw_error = false;
+    while in_buf.pos < in_buf.size {
+        let ret = dstream::ZSTD_decompressStream(zds, &mut out_buf, &mut in_buf);
+        last_ret = ret;
+        if zstd::common::error::ZSTD_isError(ret) != 0 {
+            saw_error = true;
+            assert_eq!(
+                zstd::common::error::ZSTD_getErrorCode(ret),
+                ZSTD_ErrorCode::ZSTD_error_checksum_wrong,
+                "expected checksum_wrong, got {}",
+                unsafe {
+                    CStr::from_ptr(zstd::common::error::ZSTD_getErrorName(ret))
+                        .to_string_lossy()
+                        .into_owned()
+                }
+            );
+            break;
+        }
+    }
+    assert!(
+        saw_error,
+        "ZSTD_decompressStream accepted a corrupted frame (last ret={last_ret})"
+    );
+    dstream::ZSTD_freeDStream(zds);
+}
+
+#[test]
 fn compress_stream2_trained_dictionary_improves_size() {
     let src = zstreamtest_sample(384 * 1024, 0x1234_ABCD);
     let dict = train_zstreamtest_dictionary(&src);

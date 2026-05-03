@@ -970,6 +970,13 @@ pub(crate) fn bufferless_continue(
         }
         BufferlessStage::NeedChecksum(_) => {
             dctx.bufferless.frame_bytes.extend_from_slice(src);
+            if dctx.force_ignore_checksum == 0 && src.len() == 4 {
+                let expected = u32::from_le_bytes([src[0], src[1], src[2], src[3]]);
+                let actual = crate::ffi::compress::xxh64(&dctx.bufferless.decoded_prefix) as u32;
+                if expected != actual {
+                    return Err(ZSTD_ErrorCode::ZSTD_error_checksum_wrong);
+                }
+            }
             dctx.bufferless.stage = BufferlessStage::Finished;
             dctx.clear_once_dict();
             let _ = (dst, dst_capacity, allow_staging);

@@ -392,6 +392,26 @@ test_libarchive() {
   bsdtar -acf "$dir/specific/archive.tar.zst" -C "$dir/specific/src" .
   bsdtar -xvf "$dir/specific/archive.tar.zst" -C "$dir/specific/out" ./dir/beta.txt >"$dir/specific/extract.log"
   grep -F 'beta payload' "$dir/specific/out/dir/beta.txt" >/dev/null
+
+  # Mirrors the validator usage-libarchive-tools-zstd-cli-test-integrity-flag
+  # case: compress a tiny payload with the zstd CLI, confirm `-t` accepts the
+  # valid frame, then bit-flip a byte mid-frame and confirm `-t` rejects it.
+  mkdir -p "$dir/integrity"
+  assert_uses_safe_lib "$(command -v zstd)"
+  printf 'integrity-flag payload\n' >"$dir/integrity/payload.txt"
+  zstd -q -o "$dir/integrity/good.zst" "$dir/integrity/payload.txt"
+  [[ $(od -An -N4 -tx1 "$dir/integrity/good.zst" | tr -d ' \n') == 28b52ffd ]] || {
+    echo "integrity-flag fixture missing zstd magic" >&2
+    exit 1
+  }
+  zstd -tq "$dir/integrity/good.zst"
+  cp "$dir/integrity/good.zst" "$dir/integrity/bad.zst"
+  [[ $(stat -c %s "$dir/integrity/bad.zst") -gt 12 ]]
+  printf '\xff' | dd of="$dir/integrity/bad.zst" bs=1 seek=10 count=1 conv=notrunc status=none
+  if zstd -tq "$dir/integrity/bad.zst" >/dev/null 2>&1; then
+    echo "zstd -t accepted a corrupted frame" >&2
+    exit 1
+  fi
 }
 
 test_btrfs() {

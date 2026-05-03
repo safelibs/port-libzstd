@@ -119,7 +119,7 @@ Proof generation was not run because the matrix has 1 failed testcase
 
 | testcase_id | kind | client_application | exit_code | error | result_path | log_path | assigned_remediation_phase | remediation_status | regression_test | fix_commit | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| usage-libarchive-tools-zstd-cli-test-integrity-flag | usage | libarchive-tools | 1 | testcase command exited with status 1 | port/results/libzstd/usage-libarchive-tools-zstd-cli-test-integrity-flag.json | port/logs/libzstd/usage-libarchive-tools-zstd-cli-test-integrity-flag.log | impl_validator_libarchive_usage_regressions | open |  |  | libarchive-tools usage case running the installed `zstd` CLI under `bsdtar`/`zstd` packaging; classified to the libarchive usage phase by ID prefix `usage-libarchive-tools-zstd-`. |
+| usage-libarchive-tools-zstd-cli-test-integrity-flag | usage | libarchive-tools | 1 | testcase command exited with status 1 | port/results/libzstd/usage-libarchive-tools-zstd-cli-test-integrity-flag.json | port/logs/libzstd/usage-libarchive-tools-zstd-cli-test-integrity-flag.log | impl_validator_libarchive_usage_regressions | fixed | safe/tests/rust/compress.rs::streaming_decompress_rejects_corrupted_frame_for_libarchive_integrity_flag; safe/tests/validator/usage-libarchive-tools-zstd-cli-test-integrity-flag.sh; safe/docker/dependents/entrypoint.sh::test_libarchive integrity-flag block | edf4e236f6a1c227d0a8740e43f3a8bd66fd5792 | libarchive-tools usage case running the installed `zstd` CLI under `bsdtar`/`zstd` packaging; classified to the libarchive usage phase by ID prefix `usage-libarchive-tools-zstd-`. Streaming decompression silently consumed the trailing 4-byte XXH64 checksum without comparing it to the decoded data, so `zstd -t` reported success on a corrupted frame; bufferless `NeedChecksum` handler in `safe/src/ffi/decompress.rs` now compares the consumed bytes against `xxh64(decoded_prefix)` and returns `ZSTD_error_checksum_wrong` on mismatch (skipped when `force_ignore_checksum` is set). |
 
 **Skip List**
 
@@ -199,5 +199,89 @@ VALIDATOR_RUNNER_STATUS=$status python3 safe/scripts/check-validator-phase-resul
     --completed-phase impl_validator_source_cli_regressions \
     --completed-phase impl_validator_streaming_capi_regressions \
     --allow-remaining-phase impl_validator_libarchive_usage_regressions \
+    --allow-remaining-phase impl_validator_remaining_burn_down
+```
+
+Phase 4 Base Commit: 863016aedd81bacb9afa06ae775030b365f046dc
+
+**Phase 4 — Libarchive Usage Regressions**
+
+- Validator commit: 87b321fe728340d6fc6dd2f638583cca82c667c3
+- Libarchive usage cases inspected: 170 (all `usage-libarchive-tools-zstd-*` cases under `validator/tests/libzstd/tests/cases/usage/`)
+- Failure-table rows assigned to `impl_validator_libarchive_usage_regressions`: 1 (`usage-libarchive-tools-zstd-cli-test-integrity-flag`)
+- Per-row outcome: `usage-libarchive-tools-zstd-cli-test-integrity-flag` → `fixed`
+
+The validator testcase compresses a tiny payload with the safe `zstd` CLI,
+flips one byte at offset 10 (mid-frame, inside the raw block payload), and
+asserts that `zstd -tq` rejects the corrupted copy. With the prior safe
+build this assertion failed: `zstd -tq` returned 0 on the corrupted frame.
+
+Root cause: streaming decompression in `safe/src/ffi/decompress.rs` advanced
+through the `BufferlessStage::NeedChecksum(4)` stage by appending the 4
+trailing bytes to `frame_bytes` and immediately moving to `Finished` —
+without comparing them to `xxh64(decoded_prefix)`. The simple
+(`ZSTD_decompress`) path validates checksums via
+`decode_all_frames(validate_decoded_frame=true)`, but the streaming path
+that the zstd CLI uses (`decode_all_frames_relaxed(validate=false)` plus
+the per-stage state machine) skipped that comparison. The CLI surfaces
+this as a silent success, exactly matching the validator failure.
+
+Fix: in `bufferless_continue`'s `NeedChecksum` arm, when
+`force_ignore_checksum == 0` and the current chunk is the 4 expected
+checksum bytes, decode the LE u32, compare to `xxh64(decoded_prefix)`'s
+low 32 bits, and return `ZSTD_error_checksum_wrong` on mismatch. The
+`ZSTD_d_experimentalParam3 / force_ignore_checksum` opt-out is honored.
+
+Regression coverage:
+
+- `safe/tests/rust/compress.rs::streaming_decompress_rejects_corrupted_frame_for_libarchive_integrity_flag`
+  reproduces the validator scenario through the C ABI (compress with
+  `ZSTD_c_checksumFlag=1`, flip byte 10, drive `ZSTD_decompressStream`,
+  expect `ZSTD_error_checksum_wrong`). Pre-fix the test asserts the
+  streaming decode stops with a checksum error; with the original code
+  the test failed with `ZSTD_decompressStream accepted a corrupted frame
+  (last ret=0)`, confirming the regression boundary.
+- `safe/docker/dependents/entrypoint.sh::test_libarchive` now executes
+  the same CLI sequence as the validator (`zstd -q -o good.zst …`,
+  magic check, `zstd -tq good.zst`, byte-10 flip, `zstd -tq bad.zst`
+  must be non-zero) inside the dependent image, alongside the existing
+  `bsdtar --zstd` cases. Verified via
+  `bash safe/scripts/build-dependent-image.sh && bash safe/scripts/run-dependent-matrix.sh --runtime-only --apps libarchive`
+  → "all dependent runtime tests passed".
+- `safe/tests/validator/usage-libarchive-tools-zstd-cli-test-integrity-flag.sh`
+  is a top-level executable reproducer driven by
+  `safe/scripts/run-validator-regressions.sh` (which uses
+  `find -maxdepth 1`).
+
+Validator status after the fix: `safe/out/validator/artifacts/port/results/libzstd/summary.json`
+reports `cases=175, passed=175, failed=0`. The runner exits 0 and
+proof generation runs.
+
+**Phase 4 Commands Run**
+
+```bash
+git rev-parse HEAD
+git -C validator rev-parse HEAD
+git -C validator status --porcelain --untracked-files=no
+ls validator/tests/libzstd/tests/cases/usage/ | grep -c '^usage-libarchive-tools-zstd-'
+cat safe/out/validator/artifacts/port/results/libzstd/usage-libarchive-tools-zstd-cli-test-integrity-flag.json
+cargo test --manifest-path safe/Cargo.toml --release --test compress streaming_decompress_rejects_corrupted_frame_for_libarchive_integrity_flag
+cargo test --manifest-path safe/Cargo.toml --release --test compress
+cargo test --manifest-path safe/Cargo.toml --release --test decompress
+env -u DEB_BUILD_PROFILES bash safe/scripts/build-artifacts.sh --release
+env -u DEB_BUILD_PROFILES bash safe/scripts/build-deb.sh
+bash safe/scripts/build-dependent-image.sh
+bash safe/scripts/run-dependent-matrix.sh --runtime-only --apps libarchive
+bash safe/scripts/run-validator-regressions.sh
+set +e
+bash safe/scripts/run-validator-libzstd.sh
+status=$?
+set -e
+VALIDATOR_RUNNER_STATUS=$status python3 safe/scripts/check-validator-phase-results.py \
+    --results-root safe/out/validator/artifacts/port/results/libzstd \
+    --report validator-report.md \
+    --completed-phase impl_validator_source_cli_regressions \
+    --completed-phase impl_validator_streaming_capi_regressions \
+    --completed-phase impl_validator_libarchive_usage_regressions \
     --allow-remaining-phase impl_validator_remaining_burn_down
 ```
