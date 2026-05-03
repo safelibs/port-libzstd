@@ -115,6 +115,7 @@ for package in packages:
         }
     )
 
+release_tag = f"build-{commit[:12]}"
 lock = {
     "schema_version": 1,
     "mode": "port",
@@ -125,9 +126,9 @@ lock = {
         {
             "library": "libzstd",
             "repository": "local/port-libzstd",
-            "tag_ref": "refs/tags/libzstd/04-test-local",
+            "tag_ref": f"refs/tags/{release_tag}",
             "commit": commit,
-            "release_tag": f"build-{commit[:12]}",
+            "release_tag": release_tag,
             "debs": debs,
             "unported_original_packages": [],
         }
