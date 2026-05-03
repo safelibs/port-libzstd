@@ -159,3 +159,45 @@ VALIDATOR_RUNNER_STATUS=$status python3 safe/scripts/check-validator-phase-resul
     --allow-remaining-phase impl_validator_libarchive_usage_regressions \
     --allow-remaining-phase impl_validator_remaining_burn_down
 ```
+
+Phase 3 Base Commit: b754ecf91163bf24bbf959dfa0598be19565467e
+
+**Phase 3 — Streaming C API Regressions**
+
+- Validator commit: 87b321fe728340d6fc6dd2f638583cca82c667c3
+- Streaming source case inspected: 1 (`streaming-c-api-smoke`, `kind=source`, `tags=[api, compile]`)
+- Streaming source case status in current results: `passed`
+- Failure-table rows assigned to `impl_validator_streaming_capi_regressions`: 0
+- No streaming-C-API failures assigned to impl_validator_streaming_capi_regressions
+
+The Phase 1 failure table contains a single open row
+(`usage-libarchive-tools-zstd-cli-test-integrity-flag`) assigned to
+`impl_validator_libarchive_usage_regressions`. No rows are assigned to
+`impl_validator_streaming_capi_regressions`, and the lone streaming source
+case (`streaming-c-api-smoke`) is `passed` in
+`safe/out/validator/artifacts/port/results/libzstd/streaming-c-api-smoke.json`.
+This phase therefore makes no streaming-side code change in
+`safe/src/ffi/{compress,decompress,advanced}.rs`, adds no streaming
+regression test under `safe/tests/capi/`, generates no skip artifacts under
+`safe/out/validator/`, and leaves the failure table unchanged.
+
+**Phase 3 Commands Run**
+
+```bash
+git rev-parse HEAD
+git -C validator rev-parse HEAD
+git -C validator status --porcelain --untracked-files=no
+ls validator/tests/libzstd/tests/cases/source/
+cat safe/out/validator/artifacts/port/results/libzstd/streaming-c-api-smoke.json
+set +e
+bash safe/scripts/run-validator-libzstd.sh
+status=$?
+set -e
+VALIDATOR_RUNNER_STATUS=$status python3 safe/scripts/check-validator-phase-results.py \
+    --results-root safe/out/validator/artifacts/port/results/libzstd \
+    --report validator-report.md \
+    --completed-phase impl_validator_source_cli_regressions \
+    --completed-phase impl_validator_streaming_capi_regressions \
+    --allow-remaining-phase impl_validator_libarchive_usage_regressions \
+    --allow-remaining-phase impl_validator_remaining_burn_down
+```
