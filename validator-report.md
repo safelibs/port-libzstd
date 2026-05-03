@@ -125,3 +125,32 @@ Proof generation was not run because the matrix has 1 failed testcase
 **Skip List**
 
 - Empty. No validator checks were skipped in Phase 1.
+
+## Phase 2
+
+- Phase 2 Base Commit: 9155c55b9c102140616e7aa630c603ca8c92e74e
+- Validator Commit: 87b321fe728340d6fc6dd2f638583cca82c667c3
+- Source cases inspected: `corrupted-frame-rejection`, `dictionary-train-use`, `multi-frame-behavior`, `zstd-compress-decompress` (all 4 source-CLI cases under `validator/tests/libzstd/tests/cases/source/`; `original-zstd-cli-source` was a fifth source case in the matrix that also passed).
+- Source cases assigned to `impl_validator_source_cli_regressions`: none.
+- Per-row outcome: No source-case failures assigned to impl_validator_source_cli_regressions; the only Phase 1 failure (`usage-libarchive-tools-zstd-cli-test-integrity-flag`) is assigned to `impl_validator_libarchive_usage_regressions` and remains untouched in this phase.
+- No safe-side code changes, regression tests, or skip artifacts were generated; no fix commits were produced.
+
+**Phase 2 Commands Run**
+
+```bash
+git rev-parse HEAD
+git -C validator rev-parse HEAD
+ls safe/out/validator/artifacts/port/results/libzstd/
+python3 -c "import json; print(json.load(open('safe/out/validator/artifacts/port/results/libzstd/<id>.json'))['status'])"  # for each source case
+set +e
+bash safe/scripts/run-validator-libzstd.sh
+status=$?
+set -e
+VALIDATOR_RUNNER_STATUS=$status python3 safe/scripts/check-validator-phase-results.py \
+    --results-root safe/out/validator/artifacts/port/results/libzstd \
+    --report validator-report.md \
+    --completed-phase impl_validator_source_cli_regressions \
+    --allow-remaining-phase impl_validator_streaming_capi_regressions \
+    --allow-remaining-phase impl_validator_libarchive_usage_regressions \
+    --allow-remaining-phase impl_validator_remaining_burn_down
+```
