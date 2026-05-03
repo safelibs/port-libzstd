@@ -74,11 +74,11 @@ fi
 
 artifact_root="$VALIDATOR_OUT/artifacts"
 proof_root="$artifact_root/proof"
-rm -rf "$artifact_root/port-04-test"
+rm -rf "$artifact_root/port"
 mkdir -p "$proof_root"
 rm -f \
-    "$proof_root/port-04-test-debs-lock.json" \
-    "$proof_root/port-04-test-validation-proof.json"
+    "$proof_root/port-debs-lock.json" \
+    "$proof_root/port-validation-proof.json"
 
 "$PYTHON" - <<'PY'
 from __future__ import annotations
@@ -91,7 +91,7 @@ from datetime import datetime, timezone
 
 repo_root = pathlib.Path.cwd()
 override_leaf = repo_root / "safe/out/validator/override-debs/libzstd"
-lock_path = repo_root / "safe/out/validator/artifacts/proof/port-04-test-debs-lock.json"
+lock_path = repo_root / "safe/out/validator/artifacts/proof/port-debs-lock.json"
 packages = ["libzstd1", "libzstd-dev", "zstd"]
 commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
 if len(commit) != 40 or any(ch not in "0123456789abcdef" for ch in commit):
@@ -117,7 +117,7 @@ for package in packages:
 
 lock = {
     "schema_version": 1,
-    "mode": "port-04-test",
+    "mode": "port",
     "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
     "source_config": "validator/repositories.yml",
     "source_inventory": "local override packages from safe/out/validator/override-debs/libzstd",
@@ -197,13 +197,13 @@ PYTHON="$PYTHON" bash "$VALIDATOR_ROOT/test.sh" \
     --config "$VALIDATOR_ROOT/repositories.yml" \
     --tests-root "$VALIDATOR_TESTS_ROOT" \
     --artifact-root "$artifact_root" \
-    --mode port-04-test \
+    --mode port \
     --library libzstd \
     --override-deb-root "$VALIDATOR_OUT/override-debs" \
-    --port-deb-lock "$proof_root/port-04-test-debs-lock.json" \
+    --port-deb-lock "$proof_root/port-debs-lock.json" \
     --record-casts || validator_status=$?
 
-summary_path="$artifact_root/port-04-test/results/libzstd/summary.json"
+summary_path="$artifact_root/port/results/libzstd/summary.json"
 summary_failed=1
 if [[ -f "$summary_path" ]]; then
     summary_failed=$("$PYTHON" -c 'import json,sys; print(int(json.load(open(sys.argv[1], encoding="utf-8"))["failed"]))' "$summary_path")
@@ -221,8 +221,8 @@ if [[ "$validator_status" -eq 0 && "$summary_failed" -eq 0 ]]; then
         --config "$VALIDATOR_ROOT/repositories.yml" \
         --tests-root "$VALIDATOR_TESTS_ROOT" \
         --artifact-root "$artifact_root" \
-        --proof-output "$proof_root/port-04-test-validation-proof.json" \
-        --mode port-04-test \
+        --proof-output "$proof_root/port-validation-proof.json" \
+        --mode port \
         --library libzstd \
         --min-source-cases "$VALIDATOR_MIN_SOURCE_CASES" \
         --min-usage-cases "$VALIDATOR_MIN_USAGE_CASES" \
