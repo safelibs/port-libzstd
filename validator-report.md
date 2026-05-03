@@ -345,3 +345,154 @@ VALIDATOR_RUNNER_STATUS=$status python3 safe/scripts/check-validator-phase-resul
     --completed-phase impl_validator_libarchive_usage_regressions \
     --completed-phase impl_validator_remaining_burn_down
 ```
+
+Phase 6 Base Commit: 0a3583a438e97577585fcb7168b53e19ba2354be
+
+**Phase 6 — Final Clean Validator Run and Report Consolidation**
+
+- Validator commit: 87b321fe728340d6fc6dd2f638583cca82c667c3
+- Validator worktree status: clean (`git -C validator status --porcelain --untracked-files=no` empty)
+- Latest code-bearing safe commit before this phase: a7040bfc72f93db785b489dc9a2c1613f65714b5 (Phase 4 libarchive integrity-flag fix)
+- Phase 6 base commit (HEAD captured before any change in this phase): 0a3583a438e97577585fcb7168b53e19ba2354be
+- Phase 5 close commit (no-op burn-down): 0a3583a438e97577585fcb7168b53e19ba2354be
+- Validator runner exit status (clean run from wiped artifacts): 0
+- Phase-result checker exit status (all four remediation phases completed): 0
+- Validator regression suite (`safe/scripts/run-validator-regressions.sh`) exit status: 0
+- Dependent image build (`safe/scripts/build-dependent-image.sh`) exit status: 0
+- Full release-gate suite (`safe/scripts/run-full-suite.sh`) exit status: 0
+
+**Phase 6 Package Inventory**
+
+The override leaf `safe/out/validator/override-debs/libzstd/` rebuilt from the
+clean Phase 6 run contains exactly three .debs:
+
+| package | filename | architecture | size | sha256 |
+| --- | --- | --- | --- | --- |
+| libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 381026 | 7886ac0a8f25827f0404b76bd567842c7c7f77908e448bdeeb25da0dd73f21b3 |
+| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 3830246 | c8d41de81b1de2e72da67408c81252a334461d2ac7aa26bf940d47627f63f8a5 |
+| zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
+
+The regenerated port lock at `safe/out/validator/artifacts/proof/port-debs-lock.json`
+records `commit=0a3583a438e97577585fcb7168b53e19ba2354be`,
+`release_tag=build-0a3583a438e9`, and
+`tag_ref=refs/tags/build-0a3583a438e9` against the same three filenames,
+sizes, and SHA-256 digests above. The deb sizes for `libzstd1` and
+`libzstd-dev` differ from the Phase 1 inventory by 100 and -342 bytes
+respectively because the Phase 4 commit (`a7040bf`) added the streaming
+checksum-verification path to `safe/src/ffi/decompress.rs`; the `zstd` CLI
+deb is byte-identical to the Phase 1 build (sha256
+`8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91`).
+
+**Phase 6 Validator Summary**
+
+- Summary path: `safe/out/validator/artifacts/port/results/libzstd/summary.json`
+- schema_version: 2
+- library: libzstd
+- mode: port
+- cases: 175 (canonical inventory: source=5, usage=170; executed inventory: source=5, usage=170, casts=175)
+- source_cases: 5
+- usage_cases: 170
+- passed: 175
+- failed: 0
+- casts: 175
+- Validator runner status: 0
+- Proof generation: ran (`safe/out/validator/artifacts/proof/port-validation-proof.json` written)
+
+**Phase 6 Failures Found**
+
+None. The clean run from a wiped `safe/out/validator/artifacts/` reports
+`failed=0` across all 175 cases.
+
+**Phase 6 Fixes Applied**
+
+No source-side fixes were applied in Phase 6. The single failure-table row
+(`usage-libarchive-tools-zstd-cli-test-integrity-flag`) was already
+`remediation_status=fixed` from Phase 4 (`fix_commit=a7040bfc72f93db785b489dc9a2c1613f65714b5`)
+and the clean Phase 6 run confirms that fix continues to hold.
+
+The only repository change in Phase 6 is a wrapper-script repair caught by
+the final clean release-gate run:
+
+- `safe/tests/fixtures/regression/results-memoized.source-sha256` refreshed
+  from `89ba14ed0d1253a52fa790860753b0852f975638de4e0f297900dcb9ac916be4`
+  to `451e4f4c64131f90f67710a92a746f97a9bd544a40cfbc117fbe5ad539931be2`.
+  After the Phase 4 commit (`a7040bf`) modified `safe/src/ffi/decompress.rs`
+  to compare the bufferless streaming checksum against
+  `xxh64(decoded_prefix)`, the source digest tracked by
+  `safe/scripts/run-upstream-regression.sh` no longer matched the
+  checked-in fixture key, so the wrapper fell through to recomputing the
+  matrix and failed at `rsync` of the absent
+  `original/libzstd-1.5.5+dfsg2/tests/regression/cache/`. The Phase 4 fix
+  only adds checksum verification on corrupted frames; the regression
+  matrix exercises valid frames and produces byte-identical compressed
+  outputs, so `safe/tests/fixtures/regression/results-memoized.csv` is
+  unchanged. Refreshing the digest restores the
+  `memoized_regression_fixture_is_compatible` path so the offline release
+  gate re-uses the memoized snapshot. After the refresh
+  `safe/scripts/run-upstream-regression.sh` (driven by
+  `safe/scripts/run-full-suite.sh`) prints
+  `regression matrix matched all 920 rows exactly against
+  safe/tests/fixtures/regression/results-memoized.csv` and exits 0.
+
+**Phase 6 Regressions Added**
+
+None. No regression test or harness was added in Phase 6. The
+Phase 4 regression coverage
+(`safe/tests/rust/compress.rs::streaming_decompress_rejects_corrupted_frame_for_libarchive_integrity_flag`,
+`safe/tests/validator/usage-libarchive-tools-zstd-cli-test-integrity-flag.sh`,
+`safe/docker/dependents/entrypoint.sh::test_libarchive` integrity-flag
+block) was re-executed by the Phase 6 release-gate run and continues to
+pass.
+
+**Phase 6 Skips**
+
+None. No `safe/out/validator/skip.env` and no
+`safe/out/validator/tests-filtered/` artifacts were produced or are
+required; the failure-table contains zero rows with
+`remediation_status=skipped_validator_bug`.
+
+**Phase 6 Release Gate Result**
+
+GREEN. All four release-gate wrappers exit 0:
+
+- `bash safe/scripts/run-validator-libzstd.sh` → exit 0; `summary.json`
+  reports `cases=175, passed=175, failed=0`; proof artifact written.
+- `VALIDATOR_RUNNER_STATUS=0 python3 safe/scripts/check-validator-phase-results.py
+  ... --completed-phase impl_validator_source_cli_regressions
+  --completed-phase impl_validator_streaming_capi_regressions
+  --completed-phase impl_validator_libarchive_usage_regressions
+  --completed-phase impl_validator_remaining_burn_down` → exit 0;
+  `allowed remaining failed testcase IDs: (none)`.
+- `bash safe/scripts/run-validator-regressions.sh` → exit 0; reproduces
+  the libarchive integrity-flag scenario through the safe `zstd` CLI.
+- `bash safe/scripts/build-dependent-image.sh` → exit 0; image
+  `safelibs-libzstd-dependents:ubuntu24.04` ready for the dependent
+  matrix.
+- `bash safe/scripts/run-full-suite.sh` → exit 0; the final line of the
+  log is `== all dependent runtime tests passed ==`.
+
+**Phase 6 Commands Run**
+
+```bash
+git rev-parse HEAD
+git -C validator rev-parse HEAD
+git -C validator status --porcelain --untracked-files=no
+rm -rf safe/out/validator/artifacts/
+set +e
+bash safe/scripts/run-validator-libzstd.sh
+validator_status=$?
+set -e
+VALIDATOR_RUNNER_STATUS=$validator_status python3 safe/scripts/check-validator-phase-results.py \
+    --results-root safe/out/validator/artifacts/port/results/libzstd \
+    --report validator-report.md \
+    --completed-phase impl_validator_source_cli_regressions \
+    --completed-phase impl_validator_streaming_capi_regressions \
+    --completed-phase impl_validator_libarchive_usage_regressions \
+    --completed-phase impl_validator_remaining_burn_down
+bash safe/scripts/run-validator-regressions.sh
+bash safe/scripts/build-dependent-image.sh
+bash safe/scripts/run-full-suite.sh
+cat safe/out/validator/artifacts/port/results/libzstd/summary.json
+cat safe/out/validator/artifacts/proof/port-debs-lock.json
+ls safe/out/validator/artifacts/proof/port-validation-proof.json
+```
