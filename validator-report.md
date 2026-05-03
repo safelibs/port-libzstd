@@ -285,3 +285,63 @@ VALIDATOR_RUNNER_STATUS=$status python3 safe/scripts/check-validator-phase-resul
     --completed-phase impl_validator_libarchive_usage_regressions \
     --allow-remaining-phase impl_validator_remaining_burn_down
 ```
+
+Phase 5 Base Commit: 38f2dc51a97713d9d57a26679fecbc1521b074c4
+
+**Phase 5 — Remaining Burn-Down and Validator-Bug Triage**
+
+- Validator commit: 87b321fe728340d6fc6dd2f638583cca82c667c3
+- Failure-table rows initially assigned to `impl_validator_remaining_burn_down`: 0
+- Phase 2-4 deferrals carrying `suspected_validator_bug_deferred_to_phase5:<source-phase>` in `notes`: 0
+- Total residual rows owned by this phase: 0
+- Burn-down fixes applied in Phase 5: 0
+- Validator-bug skip artifacts generated in Phase 5: 0 (no `safe/out/validator/skip.env`, no `safe/out/validator/tests-filtered/`)
+
+The Phase 1 failure table contains a single row
+(`usage-libarchive-tools-zstd-cli-test-integrity-flag`) which was assigned to
+`impl_validator_libarchive_usage_regressions` and driven to
+`remediation_status=fixed` in Phase 4 (`fix_commit=a7040bfc72f93db785b489dc9a2c1613f65714b5`).
+No row was ever assigned to `impl_validator_remaining_burn_down`, and a
+search of the failure table for the
+`suspected_validator_bug_deferred_to_phase5:` marker returns no matches, so
+no Phase 2-4 deferral was forwarded to this phase. With zero rows to
+triage, Phase 5 makes no source-side change, adds no regression test,
+generates no validator-bug skip artifacts, and leaves the failure table
+unchanged.
+
+The current matrix run reproduces the Phase 4 clean state:
+`safe/out/validator/artifacts/port/results/libzstd/summary.json` reports
+`cases=175, source_cases=5, usage_cases=170, passed=175, failed=0,
+casts=175`, the runner exits 0, and proof generation runs (the
+`port-validation-proof.json` artifact is written). The all-completed
+checker invocation succeeds with all four remediation phases passed via
+`--completed-phase` and no `--allow-remaining-phase`.
+
+**Phase 5 Validator Bug Findings**
+
+None. No testcase exhibited validator-bug behavior (every Phase 1 failure
+was a genuine safe-side regression, fixed in Phase 4), so no entry under
+this heading is required and no `safe/out/validator/skip.env` or
+`safe/out/validator/tests-filtered/` was produced.
+
+**Phase 5 Commands Run**
+
+```bash
+git rev-parse HEAD
+git -C validator rev-parse HEAD
+git -C validator status --porcelain --untracked-files=no
+grep -n suspected_validator_bug_deferred_to_phase5 validator-report.md || true
+ls safe/out/validator/skip.env safe/out/validator/tests-filtered 2>&1 || true
+cat safe/out/validator/artifacts/port/results/libzstd/summary.json
+set +e
+bash safe/scripts/run-validator-libzstd.sh
+status=$?
+set -e
+VALIDATOR_RUNNER_STATUS=$status python3 safe/scripts/check-validator-phase-results.py \
+    --results-root safe/out/validator/artifacts/port/results/libzstd \
+    --report validator-report.md \
+    --completed-phase impl_validator_source_cli_regressions \
+    --completed-phase impl_validator_streaming_capi_regressions \
+    --completed-phase impl_validator_libarchive_usage_regressions \
+    --completed-phase impl_validator_remaining_burn_down
+```
