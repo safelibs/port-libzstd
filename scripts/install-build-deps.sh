@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
-# Install apt packages and a rust toolchain needed to build the safe
-# port. Honors safe/rust-toolchain.toml when present (auto-detect the
-# pinned channel); falls back to stable. Override SAFELIBS_RUST_TOOLCHAIN
-# to force a specific toolchain regardless of the file.
-#
-# The reference template build only needs `dpkg-deb` (preinstalled on
-# ubuntu-latest), so this script's apt + rustup install only matters for
-# real ports overriding scripts/build-debs.sh. Such ports may safely
-# replace this script with their own apt/rustup logic when their build
-# needs more (clang+lld, autoconf, cmake, etc.).
+# Install apt packages and a rust toolchain (read from
+# safe/rust-toolchain.toml when present, falling back to stable) needed
+# for libzstd's safe build. The port's safe/scripts/build-deb.sh runs
+# cmake + dpkg-buildpackage and pulls in additional system libraries
+# (lz4, lzma, zlib) plus debhelper/dh-package-notes/help2man/less that
+# don't come with the runner-default ubuntu-latest image.
 set -euo pipefail
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,20 +20,26 @@ sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
   build-essential \
   ca-certificates \
+  cmake \
   curl \
+  debhelper \
   devscripts \
+  dh-package-notes \
   dpkg-dev \
   equivs \
   fakeroot \
   file \
   git \
+  help2man \
   jq \
+  less \
+  liblz4-dev \
+  liblzma-dev \
   python3 \
   rsync \
-  xz-utils
+  xz-utils \
+  zlib1g-dev
 
-# Always install rustup into $HOME so subsequent CI steps see the pinned
-# toolchain instead of the runner's preinstalled (older) system rust.
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
   | sh -s -- -y --profile minimal --default-toolchain "$toolchain" --no-modify-path
 
@@ -47,7 +49,6 @@ rustup default "$toolchain"
 rustc --version
 cargo --version
 
-# Persist for subsequent CI steps (build-debs.sh runs in a fresh shell).
 if [[ -n "${GITHUB_PATH:-}" ]]; then
   printf '%s\n' "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 fi
