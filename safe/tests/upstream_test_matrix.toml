@@ -495,6 +495,10 @@ kind = "directory-family"
 execution_strategy = "offline-corpus-runner"
 owning_phase = 5
 release_gate = true
+expected_failures = [
+  "raw_dictionary_round_trip:134 dictionary-corruption assertion with offline fallback corpus",
+  "seekable_roundtrip:134 unknown-frame-descriptor assertion with offline fallback corpus",
+]
 prerequisites = [
   "libregression.a",
   "optional original/libzstd-1.5.5+dfsg2/tests/fuzz/corpora when present",

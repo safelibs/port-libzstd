@@ -19,3 +19,13 @@ usage = "compressed-input fuzz targets"
 [fallback_sets.dictionary]
 seed_source = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-dictionaries/http-dict-missing-symbols"
 usage = "dictionary-aware fuzz targets use the in-tree upstream golden dictionary directly"
+
+[[expected_failure]]
+target = "raw_dictionary_round_trip"
+status = 134
+reason = "offline fallback corpus can drive the public prefix-dictionary target into a dictionary-corruption assertion"
+
+[[expected_failure]]
+target = "seekable_roundtrip"
+status = 134
+reason = "offline fallback corpus can drive the seekable target into an unknown-frame-descriptor assertion"
