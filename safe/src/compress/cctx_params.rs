@@ -2,8 +2,8 @@ use crate::{
     common::error::error_result,
     ffi::{
         compress::{
-            default_params, get_cparams, get_parameter, set_parameter, to_result, with_cctx_mut,
-            EncoderContext,
+            check_cparams, default_params, get_cparams, get_parameter, set_parameter, to_result,
+            with_cctx_mut, EncoderContext,
         },
         types::{
             ZSTD_CCtx, ZSTD_CCtx_params, ZSTD_ErrorCode, ZSTD_cParameter,
@@ -276,6 +276,9 @@ pub extern "C" fn ZSTD_CCtxParams_init_advanced(
     let Some(cctx_params) = params_mut(cctxParams) else {
         return error_result(ZSTD_ErrorCode::ZSTD_error_GENERIC);
     };
+    if let Err(error) = check_cparams(params.cParams) {
+        return error_result(error);
+    }
     *cctx_params = CCtxParamsState {
         compression_level: crate::ffi::types::ZSTD_CLEVEL_DEFAULT,
         params,
@@ -298,14 +301,20 @@ pub extern "C" fn ZSTD_CCtx_setCParams(
     cctx: *mut ZSTD_CCtx,
     cparams: ZSTD_compressionParameters,
 ) -> usize {
+    if let Err(error) = check_cparams(cparams) {
+        return error_result(error);
+    }
     to_result(with_cctx_mut(cctx, |cctx| {
-        cctx.cparams = crate::ffi::compress::normalize_cparams(cparams);
+        cctx.cparams = cparams;
         Ok(0)
     }))
 }
 
 #[no_mangle]
 pub extern "C" fn ZSTD_CCtx_setParams(cctx: *mut ZSTD_CCtx, params: ZSTD_parameters) -> usize {
+    if let Err(error) = check_cparams(params.cParams) {
+        return error_result(error);
+    }
     to_result(with_cctx_mut(cctx, |cctx| {
         cctx.apply_params(params);
         Ok(0)

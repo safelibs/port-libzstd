@@ -7,6 +7,7 @@
 #define ZDICT_STATIC_LINKING_ONLY
 #include "zdict.h"
 #include "zstd.h"
+#include "zstd_errors.h"
 
 #define CHECK(cond, ...)                             \
     do {                                             \
@@ -28,6 +29,16 @@
         size_t const zdict_ret = (expr);                             \
         CHECK(!ZDICT_isError(zdict_ret), "%s: %s\n", #expr,          \
               ZDICT_getErrorName(zdict_ret));                        \
+    } while (0)
+
+#define CHECK_CPARAMS_REJECTED(expr)                                           \
+    do {                                                                       \
+        size_t const cparams_ret = (expr);                                      \
+        CHECK(ZSTD_isError(cparams_ret), "%s accepted invalid cParams\n",      \
+              #expr);                                                          \
+        CHECK(ZSTD_getErrorCode(cparams_ret) == ZSTD_error_parameter_outOfBound,\
+              "%s returned unexpected error: %s\n", #expr,                    \
+              ZSTD_getErrorName(cparams_ret));                                 \
     } while (0)
 
 static void fill_sample(unsigned char* dst, size_t size, unsigned seed)
@@ -145,6 +156,7 @@ int main(void)
     ZSTD_compressionParameters cParams;
     ZSTD_frameParameters fParams;
     ZSTD_parameters fullParams;
+    ZSTD_parameters invalidParams;
     size_t cctxEstimate;
     size_t cstreamEstimate;
     size_t dctxEstimate;
@@ -277,6 +289,15 @@ int main(void)
     fParams.noDictIDFlag = 0;
     fullParams.cParams = cParams;
     fullParams.fParams = fParams;
+    invalidParams = fullParams;
+    invalidParams.cParams.windowLog = 9;
+    CHECK_CPARAMS_REJECTED(ZSTD_CCtxParams_init_advanced(cctxParams, invalidParams));
+    CHECK_CPARAMS_REJECTED(ZSTD_CCtx_setCParams(cctx, invalidParams.cParams));
+    CHECK_CPARAMS_REJECTED(ZSTD_CCtx_setParams(cctx, invalidParams));
+    CHECK_CPARAMS_REJECTED(ZSTD_compress_advanced(cctx, compressed,
+                                                  ZSTD_compressBound(kSrcSize),
+                                                  src, kSrcSize,
+                                                  NULL, 0, invalidParams));
     CHECK_ZSTD(ZSTD_CCtxParams_init_advanced(cctxParams, fullParams));
     CHECK_ZSTD(ZSTD_CCtxParams_reset(cctxParams));
     CHECK_ZSTD(ZSTD_CCtxParams_init(cctxParams, 4));

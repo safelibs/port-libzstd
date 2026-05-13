@@ -2,8 +2,8 @@ use crate::{
     common::error::error_result,
     ffi::{
         compress::{
-            create_cctx, finalize_stream, flush_pending_to_dst, free_cctx, get_cparams,
-            load_dictionary, normalize_cparams, null_cctx, one_shot_context, optional_src_slice,
+            check_cparams, create_cctx, finalize_stream, flush_pending_to_dst, free_cctx,
+            get_cparams, load_dictionary, null_cctx, one_shot_context, optional_src_slice,
             sizeof_cctx, stage_legacy_input, stage_src_slice, to_result, validate_custom_mem,
             with_cctx_mut, with_cctx_ref, write_frame_to_dst,
         },
@@ -219,6 +219,9 @@ pub extern "C" fn ZSTD_compressBegin_advanced(
     params: ZSTD_parameters,
     pledgedSrcSize: u64,
 ) -> usize {
+    if let Err(error) = check_cparams(params.cParams) {
+        return error_result(error);
+    }
     to_result(with_cctx_mut(cctx, |cctx| {
         cctx.reset(ZSTD_ResetDirective::ZSTD_reset_session_only);
         cctx.apply_params(params);
@@ -326,10 +329,12 @@ pub extern "C" fn ZSTD_compress_advanced(
     let Some(src) = optional_src_slice(src, srcSize) else {
         return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
     };
+    if let Err(error) = check_cparams(params.cParams) {
+        return error_result(error);
+    }
     to_result(with_cctx_ref(cctx, |base| {
         let mut temp = base.clone();
         temp.apply_params(params);
-        temp.cparams = normalize_cparams(params.cParams);
         if dictSize != 0 {
             let level = temp.compression_level;
             load_dictionary(&mut temp, dict, dictSize, level)?;

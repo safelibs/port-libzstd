@@ -309,6 +309,20 @@ fn expect_error(code: usize, what: &str) {
     );
 }
 
+fn expect_error_code(code: usize, expected: ZSTD_ErrorCode, what: &str) {
+    expect_error(code, what);
+    assert_eq!(
+        zstd::common::error::ZSTD_getErrorCode(code),
+        expected,
+        "{what} returned the wrong error code: {}",
+        unsafe {
+            CStr::from_ptr(zstd::common::error::ZSTD_getErrorName(code))
+                .to_string_lossy()
+                .into_owned()
+        }
+    );
+}
+
 fn decompress_exact(compressed: &[u8], expected: &[u8]) {
     let mut decoded = vec![0u8; expected.len()];
     let decoded_size = dctx::ZSTD_decompress(
@@ -1619,6 +1633,54 @@ fn compress_stream_legacy(zcs: *mut ZSTD_CStream, src: &[u8]) -> Vec<u8> {
     }
 
     compressed
+}
+
+#[test]
+fn advanced_parameter_apis_reject_invalid_cparams() {
+    let src = compressible_sample(4096);
+    let mut dst = vec![0u8; cctx::ZSTD_compressBound(src.len())];
+    let mut invalid = params::ZSTD_getParams(3, src.len() as u64, 0);
+    let window_bounds = params::ZSTD_cParam_getBounds(ZSTD_cParameter::ZSTD_c_windowLog);
+    let cctx = cctx::ZSTD_createCCtx();
+    let cctx_params = cctx_params::ZSTD_createCCtxParams();
+
+    assert_eq!(window_bounds.error, 0);
+    assert!(!cctx.is_null());
+    assert!(!cctx_params.is_null());
+    invalid.cParams.windowLog = (window_bounds.lowerBound - 1) as u32;
+
+    expect_error_code(
+        cctx_params::ZSTD_CCtxParams_init_advanced(cctx_params, invalid),
+        ZSTD_ErrorCode::ZSTD_error_parameter_outOfBound,
+        "ZSTD_CCtxParams_init_advanced(invalid cParams)",
+    );
+    expect_error_code(
+        cctx_params::ZSTD_CCtx_setCParams(cctx, invalid.cParams),
+        ZSTD_ErrorCode::ZSTD_error_parameter_outOfBound,
+        "ZSTD_CCtx_setCParams(invalid cParams)",
+    );
+    expect_error_code(
+        cctx_params::ZSTD_CCtx_setParams(cctx, invalid),
+        ZSTD_ErrorCode::ZSTD_error_parameter_outOfBound,
+        "ZSTD_CCtx_setParams(invalid cParams)",
+    );
+    expect_error_code(
+        cctx::ZSTD_compress_advanced(
+            cctx,
+            dst.as_mut_ptr().cast(),
+            dst.len(),
+            src.as_ptr().cast(),
+            src.len(),
+            core::ptr::null(),
+            0,
+            invalid,
+        ),
+        ZSTD_ErrorCode::ZSTD_error_parameter_outOfBound,
+        "ZSTD_compress_advanced(invalid cParams)",
+    );
+
+    cctx_params::ZSTD_freeCCtxParams(cctx_params);
+    cctx::ZSTD_freeCCtx(cctx);
 }
 
 #[test]
