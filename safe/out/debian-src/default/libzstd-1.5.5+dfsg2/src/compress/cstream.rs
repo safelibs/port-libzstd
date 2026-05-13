@@ -9,9 +9,9 @@ use crate::{
             validate_custom_mem, with_cctx_mut,
         },
         types::{
-            ZSTD_CCtx, ZSTD_CCtx_params, ZSTD_CStream, ZSTD_EndDirective, ZSTD_ResetDirective,
-            ZSTD_compressionParameters, ZSTD_customMem, ZSTD_inBuffer, ZSTD_outBuffer,
-            ZSTD_parameters, ZSTD_CONTENTSIZE_UNKNOWN,
+            ZSTD_CCtx, ZSTD_CCtx_params, ZSTD_CStream, ZSTD_EndDirective, ZSTD_ErrorCode,
+            ZSTD_ResetDirective, ZSTD_compressionParameters, ZSTD_customMem, ZSTD_inBuffer,
+            ZSTD_outBuffer, ZSTD_parameters, ZSTD_CONTENTSIZE_UNKNOWN,
         },
     },
 };
@@ -33,6 +33,15 @@ fn normalize_legacy_advanced_pledged_src_size(
         ZSTD_CONTENTSIZE_UNKNOWN
     } else {
         pledged_src_size
+    }
+}
+
+fn parse_end_directive(end_op: c_int) -> Result<ZSTD_EndDirective, ZSTD_ErrorCode> {
+    match end_op {
+        0 => Ok(ZSTD_EndDirective::ZSTD_e_continue),
+        1 => Ok(ZSTD_EndDirective::ZSTD_e_flush),
+        2 => Ok(ZSTD_EndDirective::ZSTD_e_end),
+        _ => Err(ZSTD_ErrorCode::ZSTD_error_parameter_outOfBound),
     }
 }
 
@@ -150,8 +159,7 @@ pub extern "C" fn ZSTD_compressStream(
     }))
 }
 
-#[no_mangle]
-pub extern "C" fn ZSTD_compressStream2(
+fn compress_stream2_impl(
     cctx: *mut ZSTD_CCtx,
     output: *mut ZSTD_outBuffer,
     input: *mut ZSTD_inBuffer,
@@ -176,6 +184,28 @@ pub extern "C" fn ZSTD_compressStream2(
         flush_stream_output(cctx, output)?;
         Ok(stream_pending_bytes(cctx))
     }))
+}
+
+pub fn ZSTD_compressStream2(
+    cctx: *mut ZSTD_CCtx,
+    output: *mut ZSTD_outBuffer,
+    input: *mut ZSTD_inBuffer,
+    endOp: ZSTD_EndDirective,
+) -> usize {
+    compress_stream2_impl(cctx, output, input, endOp)
+}
+
+#[export_name = "ZSTD_compressStream2"]
+pub extern "C" fn ZSTD_compressStream2_ffi(
+    cctx: *mut ZSTD_CCtx,
+    output: *mut ZSTD_outBuffer,
+    input: *mut ZSTD_inBuffer,
+    endOp: c_int,
+) -> usize {
+    match parse_end_directive(endOp) {
+        Ok(endOp) => compress_stream2_impl(cctx, output, input, endOp),
+        Err(error) => error_result(error),
+    }
 }
 
 #[no_mangle]
@@ -236,8 +266,7 @@ pub extern "C" fn ZSTD_createCStream_advanced(customMem: ZSTD_customMem) -> *mut
     }
 }
 
-#[no_mangle]
-pub extern "C" fn ZSTD_compressStream2_simpleArgs(
+fn compress_stream2_simple_args_impl(
     cctx: *mut ZSTD_CCtx,
     dst: *mut c_void,
     dstCapacity: usize,
@@ -265,6 +294,45 @@ pub extern "C" fn ZSTD_compressStream2_simpleArgs(
         *srcPos = input.pos;
     }
     result
+}
+
+pub fn ZSTD_compressStream2_simpleArgs(
+    cctx: *mut ZSTD_CCtx,
+    dst: *mut c_void,
+    dstCapacity: usize,
+    dstPos: *mut usize,
+    src: *const c_void,
+    srcSize: usize,
+    srcPos: *mut usize,
+    endOp: ZSTD_EndDirective,
+) -> usize {
+    compress_stream2_simple_args_impl(cctx, dst, dstCapacity, dstPos, src, srcSize, srcPos, endOp)
+}
+
+#[export_name = "ZSTD_compressStream2_simpleArgs"]
+pub extern "C" fn ZSTD_compressStream2_simpleArgs_ffi(
+    cctx: *mut ZSTD_CCtx,
+    dst: *mut c_void,
+    dstCapacity: usize,
+    dstPos: *mut usize,
+    src: *const c_void,
+    srcSize: usize,
+    srcPos: *mut usize,
+    endOp: c_int,
+) -> usize {
+    match parse_end_directive(endOp) {
+        Ok(endOp) => compress_stream2_simple_args_impl(
+            cctx,
+            dst,
+            dstCapacity,
+            dstPos,
+            src,
+            srcSize,
+            srcPos,
+            endOp,
+        ),
+        Err(error) => error_result(error),
+    }
 }
 
 #[no_mangle]

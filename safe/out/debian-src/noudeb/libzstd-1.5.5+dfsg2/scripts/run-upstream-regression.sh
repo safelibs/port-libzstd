@@ -107,7 +107,9 @@ regression_results_are_fresh() {
 stage_regression_cache() {
     rm -rf "$CACHE_DIR"
     install -d "$CACHE_DIR"
-    rsync -a "$ORIGINAL_ROOT/tests/regression/cache/" "$CACHE_DIR/"
+    if [[ -d $ORIGINAL_ROOT/tests/regression/cache ]]; then
+        rsync -a "$ORIGINAL_ROOT/tests/regression/cache/" "$CACHE_DIR/"
+    fi
     if [[ -d $REGRESSION_FIXTURE_ROOT/cache ]]; then
         rsync -a "$REGRESSION_FIXTURE_ROOT/cache/" "$CACHE_DIR/"
     fi

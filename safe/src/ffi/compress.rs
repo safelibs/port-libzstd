@@ -1240,15 +1240,21 @@ pub(crate) fn sizeof_cdict(ptr: *const ZSTD_CDict) -> usize {
 }
 
 pub(crate) fn compress_bound(src_size: usize) -> usize {
-    const MIN_BLOCK_SIZE: usize = 1 << 10;
-    let blocks = if src_size == 0 {
-        1
+    #[cfg(target_pointer_width = "64")]
+    const ZSTD_MAX_INPUT_SIZE: usize = 0xFF00_FF00_FF00_FF00;
+    #[cfg(target_pointer_width = "32")]
+    const ZSTD_MAX_INPUT_SIZE: usize = 0xFF00_FF00;
+
+    if src_size >= ZSTD_MAX_INPUT_SIZE {
+        return error_result(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong);
+    }
+
+    let margin = if src_size < (128 << 10) {
+        ((128 << 10) - src_size) >> 11
     } else {
-        src_size.div_ceil(MIN_BLOCK_SIZE)
+        0
     };
-    src_size
-        .saturating_add(blocks.saturating_mul(8))
-        .saturating_add(32)
+    src_size + (src_size >> 8) + margin
 }
 
 fn is_all_same(src: &[u8]) -> bool {

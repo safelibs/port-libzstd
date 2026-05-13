@@ -353,7 +353,7 @@ phase6_prepare_upstream_tests_helper_root() {
     done
 
     for dir in compress decompress dictBuilder deprecated; do
-        ln -sfn "$ORIGINAL_ROOT/lib/$dir" "$overlay_root/$dir"
+        ln -sfn "$HELPER_LIB_ROOT/$dir" "$overlay_root/$dir"
     done
 
     printf '%s\n' "$overlay_root"

@@ -42,12 +42,14 @@ fi
 
 UPSTREAM_TESTS_LIB_ROOT=$(phase6_prepare_upstream_tests_helper_root "$PHASE6_OUT/upstream-tests/lib")
 UPSTREAM_TESTS_BUILD_ROOT="$PHASE6_OUT/upstream-tests/obj"
+UPSTREAM_TESTS_LDFLAGS="-Wl,--no-as-needed $UPSTREAM_TESTS_LIB_ROOT/libzstd.a -Wl,--as-needed"
 install -d "$UPSTREAM_TESTS_BUILD_ROOT"
 
 phase6_make_upstream_test_targets() {
     make -C "$TESTS_ROOT" \
         BUILD_DIR="$UPSTREAM_TESTS_BUILD_ROOT" \
         LIBZSTD="$UPSTREAM_TESTS_LIB_ROOT" \
+        LDFLAGS="$UPSTREAM_TESTS_LDFLAGS${LDFLAGS:+ $LDFLAGS}" \
         PRGDIR="$ORIGINAL_ROOT/programs" \
         "$@"
 }

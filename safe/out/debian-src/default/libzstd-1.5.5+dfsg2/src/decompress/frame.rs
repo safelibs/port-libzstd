@@ -626,17 +626,21 @@ fn decode_single_modern_frame_impl(
 
     validate_dictionary_for_frame(header, dict)?;
 
-    match dict {
+    let decoded = match dict {
         DictionaryRef::Raw(bytes) if !bytes.is_empty() => {
-            return decode_with_raw_dict(frame, header, format, bytes, validate_decoded_frame)
+            decode_with_raw_dict(frame, header, format, bytes, validate_decoded_frame)?
         }
         DictionaryRef::Formatted(bytes) if !bytes.is_empty() => {
-            return decode_with_formatted_dict(frame, header, format, bytes, validate_decoded_frame)
+            decode_with_formatted_dict(frame, header, format, bytes, validate_decoded_frame)?
         }
-        _ => {}
-    }
+        _ => decode_without_dict(frame, format)?,
+    };
 
-    decode_without_dict(frame, format)
+    if !validate_decoded_frame || decoded_matches_frame(&decoded, frame, header) {
+        Ok(decoded)
+    } else {
+        Err(ZSTD_ErrorCode::ZSTD_error_checksum_wrong)
+    }
 }
 
 pub(crate) fn find_frame_size_info(
@@ -754,12 +758,14 @@ fn decode_all_frames_impl(
 ) -> Result<Vec<u8>, ZSTD_ErrorCode> {
     let mut remaining = src;
     let mut output = Vec::new();
+    let mut decoded_any_frame = false;
 
     while !remaining.is_empty() {
         if format != ZSTD_format_e::ZSTD_f_zstd1_magicless {
             match classify_frame(remaining) {
                 Some(FrameKind::Skippable) => {
                     let skip = read_skippable_frame_size(remaining)?;
+                    decoded_any_frame = true;
                     remaining = &remaining[skip..];
                     continue;
                 }
@@ -778,10 +784,15 @@ fn decode_all_frames_impl(
                     )?;
                     buffer.truncate(decoded);
                     output.extend_from_slice(&buffer);
+                    decoded_any_frame = true;
                     remaining = &remaining[frame_size..];
                     continue;
                 }
                 Some(FrameKind::Modern) => {}
+                None if partial_frame_prefix_is_valid(remaining, format) => {
+                    return Err(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong);
+                }
+                None if decoded_any_frame => return Err(ZSTD_ErrorCode::ZSTD_error_srcSize_wrong),
                 None => return Err(ZSTD_ErrorCode::ZSTD_error_prefix_unknown),
             }
         }
@@ -800,6 +811,7 @@ fn decode_all_frames_impl(
             validate_decoded_frame,
         )?;
         output.extend_from_slice(&decoded);
+        decoded_any_frame = true;
         remaining = &remaining[info.compressed_size..];
     }
 
