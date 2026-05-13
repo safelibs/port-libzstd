@@ -1,5 +1,5 @@
 schema_version = 1
-phase_id = "impl_final_release_burn_down"
+phase_id = "impl_dependent_image_matrix"
 last_verified = "2026-03-31"
 source_inventory = "dependents.json"
 top_level_release_gate = "safe/scripts/run-full-suite.sh"
