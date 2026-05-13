@@ -1645,6 +1645,7 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     let zcs2 = cstream::ZSTD_createCStream();
     let cctx_params_ptr = cctx_params::ZSTD_createCCtxParams();
     let mut checksum_flag = 0;
+    let mut params_checksum_flag = 0;
     let mut ldm_flag = 0;
 
     assert_eq!(bounds.error, 0);
@@ -1682,6 +1683,46 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     assert_eq!(level_bounds.lowerBound, params::ZSTD_minCLevel());
     assert!(level_bounds.lowerBound < 0);
     assert_eq!(level_bounds.upperBound, params::ZSTD_maxCLevel());
+    {
+        let clamp_params_ptr = cctx_params::ZSTD_createCCtxParams();
+        let mut clamped_level = 0;
+        assert!(!clamp_params_ptr.is_null());
+        check_result(
+            cctx_params::ZSTD_CCtxParams_setParameter(
+                clamp_params_ptr,
+                ZSTD_cParameter::ZSTD_c_compressionLevel,
+                level_bounds.upperBound + 1000,
+            ),
+            "ZSTD_CCtxParams_setParameter(compressionLevel high clamp)",
+        );
+        check_result(
+            cctx_params::ZSTD_CCtxParams_getParameter(
+                clamp_params_ptr,
+                ZSTD_cParameter::ZSTD_c_compressionLevel,
+                &mut clamped_level,
+            ),
+            "ZSTD_CCtxParams_getParameter(compressionLevel high clamp)",
+        );
+        assert_eq!(clamped_level, level_bounds.upperBound);
+        check_result(
+            cctx_params::ZSTD_CCtxParams_setParameter(
+                clamp_params_ptr,
+                ZSTD_cParameter::ZSTD_c_compressionLevel,
+                level_bounds.lowerBound - 1000,
+            ),
+            "ZSTD_CCtxParams_setParameter(compressionLevel low clamp)",
+        );
+        check_result(
+            cctx_params::ZSTD_CCtxParams_getParameter(
+                clamp_params_ptr,
+                ZSTD_cParameter::ZSTD_c_compressionLevel,
+                &mut clamped_level,
+            ),
+            "ZSTD_CCtxParams_getParameter(compressionLevel low clamp)",
+        );
+        assert_eq!(clamped_level, level_bounds.lowerBound);
+        cctx_params::ZSTD_freeCCtxParams(clamp_params_ptr);
+    }
     let target_length_bounds = params::ZSTD_cParam_getBounds(ZSTD_cParameter::ZSTD_c_targetLength);
     assert_eq!(target_length_bounds.upperBound, ZSTD_BLOCKSIZE_MAX as c_int);
     assert_eq!(negative_cparams.strategy, ZSTD_strategy::ZSTD_fast);
@@ -1734,19 +1775,44 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     check_result(
         cctx_params::ZSTD_CCtxParams_setParameter(
             cctx_params_ptr,
+            ZSTD_cParameter::ZSTD_c_windowLog,
+            14,
+        ),
+        "ZSTD_CCtxParams_setParameter(windowLog tuned)",
+    );
+    check_result(
+        cctx_params::ZSTD_CCtxParams_setParameter(
+            cctx_params_ptr,
+            ZSTD_cParameter::ZSTD_c_windowLog,
+            0,
+        ),
+        "ZSTD_CCtxParams_setParameter(windowLog default reset)",
+    );
+    check_result(
+        cctx_params::ZSTD_CCtxParams_setParameter(
+            cctx_params_ptr,
             ZSTD_cParameter::ZSTD_c_hashLog,
             20,
         ),
         "ZSTD_CCtxParams_setParameter(hashLog estimate)",
     );
-    expect_error(
+    check_result(
         cctx_params::ZSTD_CCtxParams_setParameter(
             cctx_params_ptr,
             ZSTD_cParameter::ZSTD_c_checksumFlag,
             2,
         ),
-        "ZSTD_CCtxParams_setParameter(checksumFlag out of bounds)",
+        "ZSTD_CCtxParams_setParameter(checksumFlag truthy)",
     );
+    check_result(
+        cctx_params::ZSTD_CCtxParams_getParameter(
+            cctx_params_ptr,
+            ZSTD_cParameter::ZSTD_c_checksumFlag,
+            &mut params_checksum_flag,
+        ),
+        "ZSTD_CCtxParams_getParameter(checksumFlag truthy)",
+    );
+    assert_eq!(params_checksum_flag, 1);
     let cctx_params_window = cctx::ZSTD_estimateCCtxSize_usingCCtxParams(cctx_params_ptr);
     let cstream_params_window = cstream::ZSTD_estimateCStreamSize_usingCCtxParams(cctx_params_ptr);
     check_result(
@@ -1806,8 +1872,16 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     );
     assert_eq!(ldm_flag, 1);
     check_result(
-        cctx::ZSTD_CCtx_setParameter(zcs.cast(), ZSTD_cParameter::ZSTD_c_checksumFlag, 1),
-        "ZSTD_CCtx_setParameter(checksum legacy stream)",
+        cctx::ZSTD_CCtx_setParameter(zcs.cast(), ZSTD_cParameter::ZSTD_c_windowLog, 14),
+        "ZSTD_CCtx_setParameter(windowLog legacy stream tuned)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(zcs.cast(), ZSTD_cParameter::ZSTD_c_windowLog, 0),
+        "ZSTD_CCtx_setParameter(windowLog legacy stream default reset)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(zcs.cast(), ZSTD_cParameter::ZSTD_c_checksumFlag, 2),
+        "ZSTD_CCtx_setParameter(checksum legacy stream truthy)",
     );
     check_result(cstream::ZSTD_initCStream(zcs, 3), "ZSTD_initCStream");
     check_result(

@@ -27,6 +27,7 @@ static void verify_negative_compression_levels(void)
     ZSTD_compressionParameters valid = ZSTD_getCParams(3, 0, 0);
     ZSTD_CCtx* const cctx = ZSTD_createCCtx();
     int current_level = 0;
+    int current_checksum = 0;
 
     if (level_bounds.error != 0 || level_bounds.lowerBound != ZSTD_minCLevel() || level_bounds.lowerBound >= 0) {
         fprintf(stderr, "negative compression-level bounds drifted\n");
@@ -81,8 +82,48 @@ static void verify_negative_compression_levels(void)
         fprintf(stderr, "ZSTD_createCCtx failed\n");
         exit(1);
     }
-    if (!ZSTD_isError(ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 2))) {
-        fprintf(stderr, "ZSTD_CCtx_setParameter accepted checksumFlag=2\n");
+    check_zstd(
+        ZSTD_CCtx_setParameter(cctx, ZSTD_c_windowLog, 14),
+        "ZSTD_CCtx_setParameter(windowLog tuned)"
+    );
+    check_zstd(
+        ZSTD_CCtx_setParameter(cctx, ZSTD_c_windowLog, 0),
+        "ZSTD_CCtx_setParameter(windowLog default reset)"
+    );
+    check_zstd(
+        ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 2),
+        "ZSTD_CCtx_setParameter(checksumFlag truthy)"
+    );
+    check_zstd(
+        ZSTD_CCtx_getParameter(cctx, ZSTD_c_checksumFlag, &current_checksum),
+        "ZSTD_CCtx_getParameter(checksumFlag truthy)"
+    );
+    if (current_checksum != 1) {
+        fprintf(stderr, "truthy checksumFlag did not normalize to 1\n");
+        exit(1);
+    }
+    check_zstd(
+        ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, ZSTD_maxCLevel() + 1000),
+        "ZSTD_CCtx_setParameter(compressionLevel high clamp)"
+    );
+    check_zstd(
+        ZSTD_CCtx_getParameter(cctx, ZSTD_c_compressionLevel, &current_level),
+        "ZSTD_CCtx_getParameter(compressionLevel high clamp)"
+    );
+    if (current_level != ZSTD_maxCLevel()) {
+        fprintf(stderr, "high compression level did not clamp to max\n");
+        exit(1);
+    }
+    check_zstd(
+        ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, ZSTD_minCLevel() - 1000),
+        "ZSTD_CCtx_setParameter(compressionLevel low clamp)"
+    );
+    check_zstd(
+        ZSTD_CCtx_getParameter(cctx, ZSTD_c_compressionLevel, &current_level),
+        "ZSTD_CCtx_getParameter(compressionLevel low clamp)"
+    );
+    if (current_level != ZSTD_minCLevel()) {
+        fprintf(stderr, "low compression level did not clamp to min\n");
         exit(1);
     }
     check_zstd(
@@ -115,6 +156,7 @@ static void verify_estimate_helpers(void)
     size_t cctx_params_window;
     size_t cstream_params_default;
     size_t cstream_params_window;
+    int current_checksum = 0;
 
     if (params == NULL) {
         fprintf(stderr, "ZSTD_createCCtxParams failed\n");
@@ -143,9 +185,29 @@ static void verify_estimate_helpers(void)
     check_zstd(cctx_params_default, "ZSTD_estimateCCtxSize_usingCCtxParams(default)");
     check_zstd(cstream_params_default, "ZSTD_estimateCStreamSize_usingCCtxParams(default)");
     check_zstd(
+        ZSTD_CCtxParams_setParameter(params, ZSTD_c_windowLog, 14),
+        "ZSTD_CCtxParams_setParameter(windowLog tuned)"
+    );
+    check_zstd(
+        ZSTD_CCtxParams_setParameter(params, ZSTD_c_windowLog, 0),
+        "ZSTD_CCtxParams_setParameter(windowLog default reset)"
+    );
+    check_zstd(
         ZSTD_CCtxParams_setParameter(params, ZSTD_c_hashLog, 20),
         "ZSTD_CCtxParams_setParameter(hashLog estimate)"
     );
+    check_zstd(
+        ZSTD_CCtxParams_setParameter(params, ZSTD_c_checksumFlag, 2),
+        "ZSTD_CCtxParams_setParameter(checksumFlag truthy)"
+    );
+    check_zstd(
+        ZSTD_CCtxParams_getParameter(params, ZSTD_c_checksumFlag, &current_checksum),
+        "ZSTD_CCtxParams_getParameter(checksumFlag truthy)"
+    );
+    if (current_checksum != 1) {
+        fprintf(stderr, "truthy CCtxParams checksumFlag did not normalize to 1\n");
+        exit(1);
+    }
     cctx_params_window = ZSTD_estimateCCtxSize_usingCCtxParams(params);
     cstream_params_window = ZSTD_estimateCStreamSize_usingCCtxParams(params);
     check_zstd(cctx_params_window, "ZSTD_estimateCCtxSize_usingCCtxParams(hashLog)");

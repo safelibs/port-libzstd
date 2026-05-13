@@ -2506,7 +2506,8 @@ fn in_bounds(value: c_int, bounds: ZSTD_bounds) -> bool {
 fn cparam_accepts_zero_default(param: ZSTD_cParameter) -> bool {
     matches!(
         param,
-        ZSTD_cParameter::ZSTD_c_hashLog
+        ZSTD_cParameter::ZSTD_c_windowLog
+            | ZSTD_cParameter::ZSTD_c_hashLog
             | ZSTD_cParameter::ZSTD_c_chainLog
             | ZSTD_cParameter::ZSTD_c_searchLog
             | ZSTD_cParameter::ZSTD_c_minMatch
@@ -2515,6 +2516,15 @@ fn cparam_accepts_zero_default(param: ZSTD_cParameter) -> bool {
             | ZSTD_cParameter::ZSTD_c_ldmMinMatch
             | ZSTD_cParameter::ZSTD_c_ldmBucketSizeLog
             | ZSTD_cParameter::ZSTD_c_experimentalParam6
+    )
+}
+
+fn cparam_setter_accepts_any_truthy_value(param: ZSTD_cParameter) -> bool {
+    matches!(
+        param,
+        ZSTD_cParameter::ZSTD_c_contentSizeFlag
+            | ZSTD_cParameter::ZSTD_c_checksumFlag
+            | ZSTD_cParameter::ZSTD_c_dictIDFlag
     )
 }
 
@@ -2705,7 +2715,10 @@ pub(crate) fn set_parameter(
     if is_error_result(bounds.error) {
         return Err(ZSTD_ErrorCode::ZSTD_error_parameter_unsupported);
     }
-    if value != 0 || !cparam_accepts_zero_default(param) {
+    let needs_bounds_check = param != ZSTD_cParameter::ZSTD_c_compressionLevel
+        && !cparam_setter_accepts_any_truthy_value(param)
+        && (value != 0 || !cparam_accepts_zero_default(param));
+    if needs_bounds_check {
         if value < bounds.lowerBound || value > bounds.upperBound {
             return Err(ZSTD_ErrorCode::ZSTD_error_parameter_outOfBound);
         }
