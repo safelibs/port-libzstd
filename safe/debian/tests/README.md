@@ -12,8 +12,8 @@ test them.
 
 In the safelibs packaging flow the entire `debian/tests/` tree is
 checked in under `safe/debian/tests/` and copied into the safe-staged
-Debian source tree under `safe/out/debian-src/default/`. These tests do
-not rely on symlinks back into `../original`.
+Debian source tree under `safe/out/debian-src/default/`. These tests are
+self-contained and do not rely on the upstream source checkout.
 
 ## Configuration file structure
 

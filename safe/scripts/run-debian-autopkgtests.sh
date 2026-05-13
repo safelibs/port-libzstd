@@ -31,8 +31,10 @@ then
     exit 0
 fi
 
-if rg -n "original/libzstd-1.5.5\\+dfsg2" "$DEB_STAGE_ROOT/debian/tests" >/dev/null; then
-    printf 'safe/debian/tests still reference ../original\n' >&2
+if rg -n "(\\.\\./original|original/libzstd-1.5.5\\+dfsg2)" \
+    "$DEB_STAGE_ROOT/debian/tests" >/dev/null
+then
+    printf 'safe-staged debian/tests still reference the upstream checkout\n' >&2
     exit 1
 fi
 
