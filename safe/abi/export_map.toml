@@ -1,7 +1,7 @@
 schema_version = 1
 phase_id = "impl_final_release_burn_down"
-last_verified = "2026-03-31"
-implementation_note = "Phase 1 rebases decompression exports to safe Rust ownership; final burn-down keeps all 185 public exports Rust-owned except the bounded legacy decode shim compiled from upstream legacy sources."
+last_verified = "2026-05-13"
+implementation_note = "Phase 8 keeps all 185 public exports Rust-owned and release-gated by export parity, baseline metadata, downstream image coverage, and the bounded legacy decode shim compiled from upstream legacy sources."
 verified_by = [
   "safe/scripts/verify-export-parity.sh",
   "safe/scripts/verify-baseline-contract.sh",

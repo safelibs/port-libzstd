@@ -41,6 +41,38 @@ require_dependent_image() {
     }
 }
 
+require_no_upstream_runtime_markers() {
+    local -a markers=(
+        "SAFE_UPSTREAM_""LIB"
+        "load_""upstream!"
+        "dl""open"
+        "dl""sym"
+        "upstream-""phase4"
+    )
+    local status
+
+    local marker
+    for marker in "${markers[@]}"; do
+        set +e
+        grep -rInIF -- "$marker" "$SAFE_ROOT"
+        status=$?
+        set -e
+
+        case "$status" in
+            0)
+                printf 'forbidden upstream runtime marker found under %s\n' "$SAFE_ROOT" >&2
+                exit 1
+                ;;
+            1)
+                ;;
+            *)
+                printf 'runtime marker scan failed with status %s\n' "$status" >&2
+                exit "$status"
+                ;;
+        esac
+    done
+}
+
 phase6_require_phase4_inputs "$0"
 require_dependent_image
 phase6_log "running the final release gate against the existing Phase 4 and Phase 6 artifact roots"
@@ -74,3 +106,4 @@ run_step "cli permissions audit" bash "$SAFE_ROOT/scripts/check-cli-permissions.
 run_step "performance smoke" bash "$SAFE_ROOT/scripts/run-performance-smoke.sh"
 run_step "downstream compile compatibility" bash "$SAFE_ROOT/scripts/run-dependent-matrix.sh" --compile-only
 run_step "downstream runtime coverage" bash "$SAFE_ROOT/scripts/run-dependent-matrix.sh" --runtime-only
+run_step "upstream runtime marker scan" require_no_upstream_runtime_markers

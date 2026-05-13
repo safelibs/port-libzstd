@@ -1,6 +1,6 @@
 # Unsafe Audit
 
-Last reviewed: 2026-03-31
+Last reviewed: 2026-05-13
 
 The shipping `libzstd` no longer relies on dynamic loader symbol resolution,
 an environment-selected upstream helper library, or a hidden helper-object
@@ -9,10 +9,12 @@ bounded legacy decode shim, while the advanced parameter, dictionary,
 static-context, sequence, threading, and dictionary-builder entry points are
 owned by Rust code in the shared library itself.
 
-The final release gate now consumes the refreshed Phase 4 install and Debian
-outputs together with the Phase 6 dependent image artifacts directly. It does
-not rebuild those roots implicitly, and it does not reintroduce any runtime
-dependency on upstream C beyond the approved legacy decode shim.
+The final release gate consumes the refreshed Phase 4 install and Debian
+outputs together with the Phase 6 dependent image artifacts directly, then
+checks that the shipping safe tree has not regained the old upstream-loader
+markers. It does not rebuild those roots implicitly, and it does not
+reintroduce any runtime dependency on upstream C beyond the approved legacy
+decode shim.
 
 Phase 1 specifically removed decompression-side dynamic loading: dictionary
 validation, DCtx/DDict decode, bufferless replay, block decode, and DStream

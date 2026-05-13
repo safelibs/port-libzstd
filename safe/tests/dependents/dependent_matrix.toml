@@ -1,6 +1,6 @@
 schema_version = 1
 phase_id = "impl_dependent_image_matrix"
-last_verified = "2026-03-31"
+last_verified = "2026-05-13"
 source_inventory = "dependents.json"
 top_level_release_gate = "safe/scripts/run-full-suite.sh"
 verification_helpers = [
@@ -15,6 +15,7 @@ artifact_roots = [
 ]
 compile_contract = "run-dependent-matrix.sh --compile-only executes compile probes inside the built dependent image"
 runtime_contract = "run-dependent-matrix.sh --runtime-only reuses that image with --privileged plus writable /run and /run/lock tmpfs mounts"
+phase6_topology = "The final burn-down preserves the Phase 6 12-application image matrix without adding alternate image tags, mounts, roots, or result manifests."
 
 [[dependent]]
 source_package = "apt"
