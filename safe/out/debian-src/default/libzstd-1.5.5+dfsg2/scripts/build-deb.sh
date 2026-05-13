@@ -193,6 +193,24 @@ rsync_tree() {
     rsync -a --delete "$@" "$src" "$dest"
 }
 
+copy_tracked_tree() {
+    local src=$1
+    local dest=$2
+    local rel
+    local tracked
+    local target
+
+    rel=$(realpath --relative-to="$REPO_ROOT" "$src")
+    rm -rf "$dest"
+    install -d "$dest"
+
+    while IFS= read -r -d '' tracked; do
+        target="$dest/${tracked#"$rel"/}"
+        install -d "$(dirname "$target")"
+        cp -a "$REPO_ROOT/$tracked" "$target"
+    done < <(git -C "$REPO_ROOT" ls-files -z -- "$rel")
+}
+
 link_latest_package() {
     local pattern=$1
     local output_dir=$2
@@ -266,10 +284,8 @@ rsync_tree "$UPSTREAM_ROOT/programs/" "$STAGE_ROOT/programs/" \
     --exclude='zstd-frugal' \
     --exclude='zstd-nolegacy' \
     --exclude='zstd-small'
-rsync_tree "$UPSTREAM_ROOT/zlibWrapper/" "$STAGE_ROOT/zlibWrapper/" \
-    --exclude='.gitignore' \
-    --exclude='*.o' \
-    --exclude='*.d'
+copy_tracked_tree "$UPSTREAM_ROOT/zlibWrapper" "$STAGE_ROOT/zlibWrapper"
+rm -f "$STAGE_ROOT/zlibWrapper/.gitignore"
 rsync_tree "$UPSTREAM_ROOT/examples/" "$STAGE_ROOT/examples/" \
     --exclude='.gitignore' \
     --exclude='*.o' \
