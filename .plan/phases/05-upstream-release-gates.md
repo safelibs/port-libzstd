@@ -6,6 +6,11 @@ Upstream Black-Box Release Gates
 
 `impl_upstream_release_gates`
 
+# Phase Rebase Note
+
+This phase promotes the rebased upstream-suite matrix into release gates while
+keeping Phase 1 through Phase 5 ownership assignments stable.
+
 # Preexisting Inputs
 
 - `safe/out/install/release-default/`

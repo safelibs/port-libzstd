@@ -15,6 +15,9 @@ fn custom_mem_supported(custom_mem: ZSTD_customMem) -> bool {
     custom_mem.customAlloc.is_none() && custom_mem.customFree.is_none()
 }
 
+// DDict entry points are part of the Phase 1 native decompression boundary:
+// dictionaries are validated and retained by Rust-owned decoder state.
+
 #[no_mangle]
 pub extern "C" fn ZSTD_createDDict(dictBuffer: *const c_void, dictSize: usize) -> *mut ZSTD_DDict {
     let Some(dict) = decompress::optional_src_slice(dictBuffer, dictSize) else {

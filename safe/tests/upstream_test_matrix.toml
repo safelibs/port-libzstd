@@ -2,6 +2,7 @@ schema_version = 1
 phase_id = "impl_final_release_burn_down"
 last_verified = "2026-03-31"
 top_level_release_gate = "safe/scripts/run-full-suite.sh"
+phase1_rebase_note = "Phase 1 owns native decompression suites, phases 2-5 own the preserved compression, advanced, packaging, and black-box upstream wrappers after the scaffold removal."
 verification_helpers = [
   "safe/scripts/phase6-common.sh",
   "safe/scripts/verify-header-identity.sh",

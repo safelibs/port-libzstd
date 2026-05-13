@@ -772,6 +772,10 @@ fn decompress_dictionary_roundtrip_via_cli() {
         ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted,
         "ZSTD_decompress_usingDict(corrupt dict)",
     );
+    assert!(
+        ddict::ZSTD_createDDict(truncated_dict.as_ptr().cast(), truncated_dict.len()).is_null(),
+        "truncated formatted dictionary should be rejected before decode"
+    );
 
     let mut corrupt_dictionary_frame = compressed_bytes.clone();
     let corrupt_header_size = frame::ZSTD_frameHeaderSize(

@@ -8,6 +8,8 @@ REPO_ROOT=$(cd "$SAFE_ROOT/.." && pwd)
 bash "$SAFE_ROOT/scripts/verify-header-identity.sh"
 bash "$SAFE_ROOT/scripts/capture-upstream-abi.sh" --check
 
+# Enforce the Phase 1 ownership rebase directly against checked-in baselines,
+# without requiring prebuilt upstream shared/static/pkg-config artifacts.
 python3 - "$SAFE_ROOT" "$REPO_ROOT" <<'PY'
 from __future__ import annotations
 

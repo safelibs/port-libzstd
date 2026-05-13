@@ -6,6 +6,12 @@ Packaging, Install Layout, and Drop-In Artifact Flow
 
 `impl_safe_packaging_install`
 
+# Phase Rebase Note
+
+This phase packages the safe library after the Phase 1 decompression and
+metadata rebase; its install roots must consume those artifacts in place rather
+than shifting ownership metadata again.
+
 # Preexisting Inputs
 
 - `safe/build.rs`

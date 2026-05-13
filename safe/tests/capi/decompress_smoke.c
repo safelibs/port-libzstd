@@ -115,6 +115,7 @@ static void test_context(const unsigned char* compressed, size_t compressed_size
     check_zstd(result, "ZSTD_decompress_usingDict");
     if (result != decompressed_size) die("unexpected dict decompressed size");
     expect_zeroes(alt, result);
+    if (ZSTD_createDDict(NULL, 1) != NULL) die("invalid dictionary pointer unexpectedly created a DDict");
 
     check_zstd(ZSTD_DCtx_reset(dctx, ZSTD_reset_session_and_parameters), "ZSTD_DCtx_reset");
 

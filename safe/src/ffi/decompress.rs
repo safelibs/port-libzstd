@@ -13,6 +13,8 @@ use crate::{
 use core::{ffi::c_void, mem::size_of};
 
 fn validate_formatted_dictionary(bytes: &[u8]) -> Result<(), ZSTD_ErrorCode> {
+    // Phase 1 independence: formatted dictionaries are validated by Rust-side
+    // FSE/HUF/zdict parsing instead of by loading an upstream libzstd symbol.
     if bytes.len() < 8 {
         return Err(ZSTD_ErrorCode::ZSTD_error_dictionary_corrupted);
     }
@@ -318,6 +320,8 @@ impl Clone for BufferlessState {
 
 impl BufferlessState {
     fn begin(&mut self) {
+        // Bufferless replay starts from a Rust state machine; callers drive it
+        // through nextSrcSize/decompressContinue/decompressBlock.
         self.stage = BufferlessStage::NeedStart;
         self.frame_bytes.clear();
         self.header = None;

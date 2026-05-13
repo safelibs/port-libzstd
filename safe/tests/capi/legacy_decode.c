@@ -16,6 +16,8 @@
 #define EXPECTED_REPEATS 5u
 #define SUPPORTED_REPEATS 3u
 
+/* Legacy v0.5-v0.7 decode is the only decompression-side C bridge retained. */
+
 static void die(const char* message)
 {
     fprintf(stderr, "%s\n", message);

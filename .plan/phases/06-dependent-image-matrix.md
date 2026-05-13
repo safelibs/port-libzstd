@@ -6,6 +6,12 @@ Dependent Inventory Expansion and Reproducible Image
 
 `impl_dependent_image_matrix`
 
+# Phase Rebase Note
+
+This phase starts from the Phase 1 safe-only decompression baseline and extends
+validation into dependent images without relying on host upstream libraries or
+repo bind mounts.
+
 # Preexisting Inputs
 
 - `safe/tests/upstream_test_matrix.toml`

@@ -24,6 +24,8 @@ fn decode_into(
     format: ZSTD_format_e,
     max_window_size: usize,
 ) -> usize {
+    // Phase 1 boundary: one-shot and DCtx decompression resolve dictionaries
+    // inside the Rust decoder instead of delegating to an upstream DCtx.
     let Some(src) = decompress::optional_src_slice(src, src_size) else {
         return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
     };

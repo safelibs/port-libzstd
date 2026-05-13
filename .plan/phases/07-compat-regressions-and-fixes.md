@@ -6,6 +6,11 @@ Dependent Regressions and Compatibility Fixes
 
 `impl_compat_regressions_and_fixes`
 
+# Phase Rebase Note
+
+This phase fixes compatibility regressions found after the Phase 1 rebase and
+keeps any new coverage assigned to the existing fixed phase ownership model.
+
 # Preexisting Inputs
 
 - `safe/out/install/release-default/`

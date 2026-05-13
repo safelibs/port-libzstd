@@ -6,6 +6,12 @@ Safe Decompression Independence and Metadata Rebase
 
 `impl_safe_decompression_independence`
 
+# Phase Rebase Note
+
+This implementation phase owns the post-scaffold Phase 1 rebase: native Rust
+decompression independence, decompression-side ABI/test metadata ownership, and
+the workflow artifact regenerated from this numbered phase set.
+
 # Preexisting Inputs
 
 - `.plan/phases/01-safe-decompression-independence.md`

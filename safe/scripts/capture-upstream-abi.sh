@@ -17,6 +17,8 @@ elif [[ $# -gt 0 ]]; then
   exit 2
 fi
 
+# In --check mode the checked-in ABI text files are authoritative; the
+# historical upstream shared object path is retained only as provenance.
 python3 - "$MODE" "$UPSTREAM_SO" "$EXPORTS_OUT" "$SONAME_OUT" "$EXPORT_MAP_OUT" "$REPO_ROOT" <<'PY'
 from __future__ import annotations
 

@@ -57,6 +57,7 @@ static void* read_file(const char* path, size_t* size_out)
 
 static void probe_frame(const void* compressed, size_t compressed_size, unsigned long long expected_size)
 {
+    /* Phase 1 regression surface: metadata probes must remain native and deterministic. */
     ZSTD_frameHeader header;
     size_t header_size = ZSTD_frameHeaderSize(compressed, compressed_size);
     unsigned long long content_size = ZSTD_getFrameContentSize(compressed, compressed_size);

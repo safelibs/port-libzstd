@@ -1,3 +1,6 @@
+# Phase 1 rebase checkpoint: implementation commits must include the
+# decompression, ABI metadata, test, script, audit, and regenerated-workflow
+# artifacts named by the first implementation block.
 linear: true
 yaml_source_mode: inline-only
 verifier_encoding: explicit-phases

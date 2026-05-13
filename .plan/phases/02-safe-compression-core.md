@@ -6,6 +6,12 @@ Safe Compression Core Independence
 
 `impl_safe_compression_core`
 
+# Phase Rebase Note
+
+This phase consumes the Phase 1 decompression independence baseline and must
+preserve the rebased ABI and upstream-suite ownership numbers while replacing
+core compression compatibility scaffolding.
+
 # Preexisting Inputs
 
 - `workflow.yaml`

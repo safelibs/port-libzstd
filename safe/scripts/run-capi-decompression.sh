@@ -9,6 +9,8 @@ RUNTIME_DIR="$BUILD_DIR/runtime"
 
 mkdir -p "$BUILD_DIR" "$RUNTIME_DIR"
 
+# Phase 1 independence gate: this harness links only against the safe build
+# output and never consults an environment-selected upstream library.
 cargo build --manifest-path "$SAFE_ROOT/Cargo.toml" --release
 ln -sf "$SAFE_ROOT/target/release/libzstd.so" "$RUNTIME_DIR/libzstd.so.1"
 

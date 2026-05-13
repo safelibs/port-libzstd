@@ -6,6 +6,12 @@ Advanced ABI, Dict-Builder, Threading, and Build Purge
 
 `impl_safe_advanced_abi_completion`
 
+# Phase Rebase Note
+
+This phase consumes the Phase 1 ownership rebase and completes advanced ABI,
+threading, static-context, sequence, and dictionary-builder coverage without
+reintroducing decompression-side dynamic loading.
+
 # Preexisting Inputs
 
 - `safe/abi/export_map.toml`

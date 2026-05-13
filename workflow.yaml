@@ -123,6 +123,12 @@ phases:
 
       `impl_safe_decompression_independence`
 
+      # Phase Rebase Note
+
+      This implementation phase owns the post-scaffold Phase 1 rebase: native Rust
+      decompression independence, decompression-side ABI/test metadata ownership, and
+      the workflow artifact regenerated from this numbered phase set.
+
       # Preexisting Inputs
 
       - `.plan/phases/01-safe-decompression-independence.md`
@@ -594,6 +600,12 @@ phases:
 
       `impl_safe_compression_core`
 
+      # Phase Rebase Note
+
+      This phase consumes the Phase 1 decompression independence baseline and must
+      preserve the rebased ABI and upstream-suite ownership numbers while replacing
+      core compression compatibility scaffolding.
+
       # Preexisting Inputs
 
       - `workflow.yaml`
@@ -1045,6 +1057,12 @@ phases:
       # Implement Phase ID
 
       `impl_safe_advanced_abi_completion`
+
+      # Phase Rebase Note
+
+      This phase consumes the Phase 1 ownership rebase and completes advanced ABI,
+      threading, static-context, sequence, and dictionary-builder coverage without
+      reintroducing decompression-side dynamic loading.
 
       # Preexisting Inputs
 
@@ -1536,6 +1554,12 @@ phases:
       # Implement Phase ID
 
       `impl_safe_packaging_install`
+
+      # Phase Rebase Note
+
+      This phase packages the safe library after the Phase 1 decompression and
+      metadata rebase; its install roots must consume those artifacts in place rather
+      than shifting ownership metadata again.
 
       # Preexisting Inputs
 
@@ -2054,6 +2078,11 @@ phases:
       # Implement Phase ID
 
       `impl_upstream_release_gates`
+
+      # Phase Rebase Note
+
+      This phase promotes the rebased upstream-suite matrix into release gates while
+      keeping Phase 1 through Phase 5 ownership assignments stable.
 
       # Preexisting Inputs
 
@@ -2578,6 +2607,12 @@ phases:
       # Implement Phase ID
 
       `impl_dependent_image_matrix`
+
+      # Phase Rebase Note
+
+      This phase starts from the Phase 1 safe-only decompression baseline and extends
+      validation into dependent images without relying on host upstream libraries or
+      repo bind mounts.
 
       # Preexisting Inputs
 
@@ -3134,6 +3169,11 @@ phases:
 
       `impl_compat_regressions_and_fixes`
 
+      # Phase Rebase Note
+
+      This phase fixes compatibility regressions found after the Phase 1 rebase and
+      keeps any new coverage assigned to the existing fixed phase ownership model.
+
       # Preexisting Inputs
 
       - `safe/out/install/release-default/`
@@ -3634,6 +3674,11 @@ phases:
       # Implement Phase ID
 
       `impl_final_release_burn_down`
+
+      # Phase Rebase Note
+
+      This phase is the final release burn-down over the complete safe-only workflow
+      and must leave the Phase 1 decompression independence contract intact.
 
       # Preexisting Inputs
 

@@ -51,6 +51,8 @@ pub(crate) enum HeaderProbe {
     Header(ZSTD_frameHeader),
 }
 
+// Phase 1 dictionary references intentionally carry only Rust-visible bytes.
+// Formatted dictionaries are decoded through structured-zstd/zdict helpers.
 #[derive(Clone, Copy)]
 pub(crate) enum DictionaryRef<'a> {
     None,

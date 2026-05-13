@@ -24,6 +24,9 @@ fn estimate_dstream_size(window_size: usize) -> Result<usize, ZSTD_ErrorCode> {
         .ok_or(ZSTD_ErrorCode::ZSTD_error_frameParameter_windowTooLarge)
 }
 
+// The streaming ABI shares the same Rust DecoderContext and bufferless state
+// used by block replay; no upstream streaming session is loaded at runtime.
+
 fn custom_mem_supported(custom_mem: ZSTD_customMem) -> bool {
     custom_mem.customAlloc.is_none() && custom_mem.customFree.is_none()
 }

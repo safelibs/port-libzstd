@@ -14,6 +14,11 @@ outputs together with the Phase 6 dependent image artifacts directly. It does
 not rebuild those roots implicitly, and it does not reintroduce any runtime
 dependency on upstream C beyond the approved legacy decode shim.
 
+Phase 1 specifically removed decompression-side dynamic loading: dictionary
+validation, DCtx/DDict decode, bufferless replay, block decode, and DStream
+progress are native Rust paths. The legacy shim remains bounded to v0.5-v0.7
+frame support and is not a general upstream libzstd escape hatch.
+
 ## Remaining Unsafe Categories
 
 1. C ABI boundaries that still accept raw pointers, opaque handles, callback

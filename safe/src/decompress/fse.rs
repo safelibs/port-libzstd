@@ -1,5 +1,7 @@
 use crate::ffi::types::ZSTD_ErrorCode;
 
+// Phase 1 uses this lightweight FSE/HUF dictionary-kind check before invoking
+// the Rust formatted-dictionary parser, replacing the old upstream validator.
 pub(crate) fn formatted_dict_id(bytes: &[u8]) -> u32 {
     if bytes.len() < 8 || !crate::decompress::huf::is_formatted_dictionary(bytes) {
         return 0;

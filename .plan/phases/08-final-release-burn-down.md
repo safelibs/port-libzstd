@@ -6,6 +6,11 @@ Final Release Burn-Down
 
 `impl_final_release_burn_down`
 
+# Phase Rebase Note
+
+This phase is the final release burn-down over the complete safe-only workflow
+and must leave the Phase 1 decompression independence contract intact.
+
 # Preexisting Inputs
 
 - `safe/out/install/release-default/`
