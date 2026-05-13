@@ -873,6 +873,7 @@ fn compress_one_shot_context_and_block_api_roundtrip() {
     let mut compressible_out = vec![0u8; compressible_bound];
     let mut second = vec![0u8; bound];
     let mut third = vec![0u8; bound];
+    let mut empty_frame = vec![0u8; cctx::ZSTD_compressBound(0)];
     let cctx_ptr: *mut ZSTD_CCtx = cctx::ZSTD_createCCtx();
     let clone: *mut ZSTD_CCtx = cctx::ZSTD_createCCtx();
     let copy_src: *mut ZSTD_CCtx = cctx::ZSTD_createCCtx();
@@ -889,6 +890,17 @@ fn compress_one_shot_context_and_block_api_roundtrip() {
     );
     check_result(size, "ZSTD_compress");
     decompress_exact(&compressed[..size], &src);
+
+    let empty_size = cctx::ZSTD_compress(
+        empty_frame.as_mut_ptr().cast(),
+        empty_frame.len(),
+        std::ptr::null::<u8>().cast(),
+        0,
+        1,
+    );
+    check_result(empty_size, "ZSTD_compress(empty null src)");
+    assert_eq!(frame_first_block_type(&empty_frame[..empty_size]), 0);
+    decompress_exact(&empty_frame[..empty_size], b"");
 
     let compressible_size = cctx::ZSTD_compress(
         compressible_out.as_mut_ptr().cast(),
@@ -1027,6 +1039,17 @@ fn compress_one_shot_context_and_block_api_roundtrip() {
         check_result(block_size, "ZSTD_compressBlock");
         assert!(block_size > 0);
         assert!(block_size < block_compressed.len());
+
+        let empty_block_size = cblock::ZSTD_compressBlock(
+            cctx_ptr,
+            block_compressed.as_mut_ptr().cast(),
+            block_compressed.len(),
+            std::ptr::null::<u8>().cast(),
+            0,
+        );
+        check_result(empty_block_size, "ZSTD_compressBlock(empty null src)");
+        assert_eq!(empty_block_size, 0);
+
         let wrapped = wrap_single_block_frame(
             1,
             block_src.len(),

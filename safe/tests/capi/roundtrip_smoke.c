@@ -170,7 +170,11 @@ static int decompress_exact(const void* compressed,
 {
     size_t const decoded_size =
         ZSTD_decompress(decoded, decoded_capacity, compressed, compressed_size);
-    CHECK(!ZSTD_isError(decoded_size), "ZSTD_decompress failed: %s\n",
+    CHECK(!ZSTD_isError(decoded_size),
+          "ZSTD_decompress failed for compressed=%zu dst_capacity=%zu expected=%zu: %s\n",
+          compressed_size,
+          decoded_capacity,
+          expected_size,
           ZSTD_getErrorName(decoded_size));
     CHECK(decoded_size == expected_size, "decoded size mismatch\n");
     CHECK(memcmp(decoded, expected, expected_size) == 0, "decoded payload mismatch\n");
@@ -366,6 +370,14 @@ static int test_one_shot_context_and_block(void)
     CHECK(!ZSTD_isError(size), "ZSTD_compress failed: %s\n", ZSTD_getErrorName(size));
     if (decompress_exact(compressed, size, decoded, src_size, src, src_size)) return 1;
 
+    size = ZSTD_compress(compressed, bound, NULL, 0, 1);
+    CHECK(!ZSTD_isError(size), "ZSTD_compress(empty null src) failed: %s\n",
+          ZSTD_getErrorName(size));
+    CHECK(frame_first_block_type(compressed, size) == 0U,
+          "empty one-shot compression did not emit an empty raw block\n");
+    CHECK(ZSTD_getFrameContentSize(compressed, size) == 0,
+          "empty one-shot compression did not preserve zero content size\n");
+
     size = ZSTD_compress(compressible_out, compressible_bound,
                          compressible_src, compressible_size, 1);
     CHECK(!ZSTD_isError(size), "ZSTD_compress(compressible) failed: %s\n",
@@ -428,6 +440,7 @@ static int test_one_shot_context_and_block(void)
         unsigned char* noise = NULL;
         unsigned char* too_large = NULL;
         size_t block_size;
+        size_t empty_block_size;
         size_t wrapped_size;
         CHECK_Z(ZSTD_compressBegin(cctx, 1));
         block_limit = ZSTD_getBlockSize(cctx);
@@ -446,6 +459,16 @@ static int test_one_shot_context_and_block(void)
         CHECK(!ZSTD_isError(block_size), "ZSTD_compressBlock failed: %s\n",
               ZSTD_getErrorName(block_size));
         CHECK(block_size > 0, "block compression produced no output\n");
+
+        empty_block_size = ZSTD_compressBlock(cctx,
+                                              block_compressed,
+                                              ZSTD_compressBound(block_limit),
+                                              NULL,
+                                              0);
+        CHECK(!ZSTD_isError(empty_block_size), "empty ZSTD_compressBlock failed: %s\n",
+              ZSTD_getErrorName(empty_block_size));
+        CHECK(empty_block_size == 0, "empty ZSTD_compressBlock emitted data\n");
+
         wrapped_size = wrap_single_block_frame(block_frame,
                                                ZSTD_compressBound(block_limit) + 32U,
                                                1U,

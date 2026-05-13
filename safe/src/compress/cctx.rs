@@ -3,9 +3,9 @@ use crate::{
     ffi::{
         compress::{
             create_cctx, finalize_stream, flush_pending_to_dst, free_cctx, get_cparams,
-            load_dictionary, normalize_cparams, null_cctx, optional_src_slice, sizeof_cctx,
-            stage_legacy_input, stage_src_slice, to_result, validate_custom_mem, with_cctx_mut,
-            with_cctx_ref, write_frame_to_dst, EncoderContext,
+            load_dictionary, normalize_cparams, null_cctx, one_shot_context, optional_src_slice,
+            sizeof_cctx, stage_legacy_input, stage_src_slice, to_result, validate_custom_mem,
+            with_cctx_mut, with_cctx_ref, write_frame_to_dst,
         },
         types::{
             ZSTD_CCtx, ZSTD_CCtx_params, ZSTD_ErrorCode, ZSTD_ResetDirective, ZSTD_cParameter,
@@ -41,9 +41,7 @@ pub extern "C" fn ZSTD_compress(
     let Some(src) = optional_src_slice(src, srcSize) else {
         return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
     };
-    let mut ctx = EncoderContext::default();
-    ctx.compression_level = compressionLevel;
-    ctx.cparams = get_cparams(compressionLevel, src.len() as u64, 0);
+    let ctx = one_shot_context(compressionLevel, src.len(), 0);
     to_result(write_frame_to_dst(&ctx, dst, dstCapacity, src))
 }
 
@@ -60,9 +58,7 @@ pub extern "C" fn ZSTD_compressCCtx(
         return error_result(crate::ffi::types::ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong);
     };
     to_result(with_cctx_ref(cctx, |_| {
-        let mut fresh = EncoderContext::default();
-        fresh.compression_level = compressionLevel;
-        fresh.cparams = get_cparams(compressionLevel, src.len() as u64, 0);
+        let fresh = one_shot_context(compressionLevel, src.len(), 0);
         write_frame_to_dst(&fresh, dst, dstCapacity, src)
     }))
 }

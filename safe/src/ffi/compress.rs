@@ -951,6 +951,17 @@ pub(crate) fn default_params() -> ZSTD_parameters {
     }
 }
 
+pub(crate) fn one_shot_context(
+    compression_level: c_int,
+    src_size: usize,
+    dict_size: usize,
+) -> EncoderContext {
+    let mut ctx = EncoderContext::default();
+    ctx.compression_level = compression_level;
+    ctx.cparams = get_cparams(compression_level, src_size as u64, dict_size);
+    ctx
+}
+
 pub(crate) fn optional_src_slice<'a>(ptr: *const c_void, len: usize) -> Option<&'a [u8]> {
     if ptr.is_null() {
         return (len == 0).then_some(&[]);
