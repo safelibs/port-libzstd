@@ -2398,7 +2398,7 @@ pub(crate) fn cparam_bounds(param: ZSTD_cParameter) -> ZSTD_bounds {
         ZSTD_cParameter::ZSTD_c_checksumFlag => ZSTD_bounds {
             error: 0,
             lowerBound: 0,
-            upperBound: 2,
+            upperBound: 1,
         },
         ZSTD_cParameter::ZSTD_c_enableLongDistanceMatching
         | ZSTD_cParameter::ZSTD_c_experimentalParam17 => ZSTD_bounds {

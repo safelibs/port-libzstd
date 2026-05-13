@@ -19,6 +19,7 @@ static void verify_negative_compression_levels(void)
 {
     ZSTD_bounds const level_bounds = ZSTD_cParam_getBounds(ZSTD_c_compressionLevel);
     ZSTD_bounds const window_bounds = ZSTD_cParam_getBounds(ZSTD_c_windowLog);
+    ZSTD_bounds const checksum_bounds = ZSTD_cParam_getBounds(ZSTD_c_checksumFlag);
     ZSTD_bounds const target_bounds = ZSTD_cParam_getBounds(ZSTD_c_targetLength);
     ZSTD_compressionParameters const negative = ZSTD_getCParams(-5, 0, 0);
     ZSTD_compressionParameters const negative_dict = ZSTD_getCParams(-5, 0, 1);
@@ -37,6 +38,10 @@ static void verify_negative_compression_levels(void)
     }
     if (window_bounds.error != 0 || window_bounds.lowerBound != 10 || window_bounds.upperBound != 31) {
         fprintf(stderr, "windowLog bounds drifted\n");
+        exit(1);
+    }
+    if (checksum_bounds.error != 0 || checksum_bounds.lowerBound != 0 || checksum_bounds.upperBound != 1) {
+        fprintf(stderr, "checksumFlag bounds drifted\n");
         exit(1);
     }
     valid.windowLog = 0;
@@ -74,6 +79,10 @@ static void verify_negative_compression_levels(void)
     }
     if (cctx == NULL) {
         fprintf(stderr, "ZSTD_createCCtx failed\n");
+        exit(1);
+    }
+    if (!ZSTD_isError(ZSTD_CCtx_setParameter(cctx, ZSTD_c_checksumFlag, 2))) {
+        fprintf(stderr, "ZSTD_CCtx_setParameter accepted checksumFlag=2\n");
         exit(1);
     }
     check_zstd(

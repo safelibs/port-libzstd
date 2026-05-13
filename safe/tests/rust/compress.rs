@@ -1630,6 +1630,8 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     let bounds: ZSTD_bounds = params::ZSTD_cParam_getBounds(ZSTD_cParameter::ZSTD_c_strategy);
     let c_window_bounds: ZSTD_bounds =
         params::ZSTD_cParam_getBounds(ZSTD_cParameter::ZSTD_c_windowLog);
+    let checksum_bounds: ZSTD_bounds =
+        params::ZSTD_cParam_getBounds(ZSTD_cParameter::ZSTD_c_checksumFlag);
     let window_bounds = params::ZSTD_dParam_getBounds(ZSTD_dParameter::ZSTD_d_windowLogMax);
     let cparams: ZSTD_compressionParameters =
         params::ZSTD_getCParams(4, src.len() as u64, dict.len());
@@ -1649,6 +1651,9 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     assert_eq!(c_window_bounds.error, 0);
     assert_eq!(c_window_bounds.lowerBound, 10);
     assert_eq!(c_window_bounds.upperBound, 31);
+    assert_eq!(checksum_bounds.error, 0);
+    assert_eq!(checksum_bounds.lowerBound, 0);
+    assert_eq!(checksum_bounds.upperBound, 1);
     assert_eq!(window_bounds.error, 0);
     assert!(!cctx_params_ptr.is_null());
     check_result(params::ZSTD_checkCParams(cparams), "ZSTD_checkCParams");
@@ -1733,6 +1738,14 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
             20,
         ),
         "ZSTD_CCtxParams_setParameter(hashLog estimate)",
+    );
+    expect_error(
+        cctx_params::ZSTD_CCtxParams_setParameter(
+            cctx_params_ptr,
+            ZSTD_cParameter::ZSTD_c_checksumFlag,
+            2,
+        ),
+        "ZSTD_CCtxParams_setParameter(checksumFlag out of bounds)",
     );
     let cctx_params_window = cctx::ZSTD_estimateCCtxSize_usingCCtxParams(cctx_params_ptr);
     let cstream_params_window = cstream::ZSTD_estimateCStreamSize_usingCCtxParams(cctx_params_ptr);
