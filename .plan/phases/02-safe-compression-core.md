@@ -8,17 +8,21 @@ Safe Compression Core Independence
 
 # Preexisting Inputs
 
-- `.plan/goal.md`
-- `.plan/workflow-structure.yaml`
 - `workflow.yaml`
-- All outputs from `impl_safe_decompression_independence`, including `.plan/phases/`, `.plan/workflow-structure.yaml`, `workflow.yaml`, `safe/abi/export_map.toml`, `safe/tests/upstream_test_matrix.toml`, `safe/src/decompress/`, `safe/src/ffi/decompress.rs`, `safe/tests/rust/decompress.rs`, `safe/tests/capi/`, `safe/scripts/run-capi-decompression.sh`, `safe/scripts/capture-upstream-abi.sh`, `safe/scripts/verify-baseline-contract.sh`, and `safe/docs/unsafe-audit.md`
+- `.plan/phases/`
+- `.plan/workflow-structure.yaml`
+- `safe/src/decompress/`
+- `safe/src/ffi/decompress.rs`
+- `safe/tests/rust/decompress.rs`
+- `safe/tests/capi/`
+- `safe/scripts/run-capi-decompression.sh`
+- `safe/scripts/capture-upstream-abi.sh`
+- `safe/scripts/verify-baseline-contract.sh`
+- `safe/docs/unsafe-audit.md`
 - `safe/Cargo.toml`
-- `safe/build.rs`
 - `safe/include/zstd.h`
 - `safe/include/zdict.h`
 - `safe/include/zstd_errors.h`
-- `safe/abi/original.exports.txt`
-- `safe/abi/original.soname.txt`
 - `safe/abi/export_map.toml`
 - `safe/tests/upstream_test_matrix.toml`
 - `safe/src/common/error.rs`
@@ -40,9 +44,7 @@ Safe Compression Core Independence
 - `safe/src/decompress/ddict.rs`
 - `safe/src/decompress/frame.rs`
 - `safe/src/ffi/compress.rs`
-- `safe/src/ffi/decompress.rs`
 - `safe/tests/rust/compress.rs`
-- `safe/tests/rust/decompress.rs`
 - `safe/tests/capi/roundtrip_smoke.c`
 - `safe/tests/capi/bigdict_driver.c`
 - `safe/tests/capi/invalid_dictionaries_driver.c`
@@ -51,7 +53,6 @@ Safe Compression Core Independence
 - `safe/tests/capi/external_matchfinder_driver.c`
 - `safe/scripts/run-capi-roundtrip.sh`
 - `safe/scripts/run-original-examples.sh`
-- `safe/scripts/verify-baseline-contract.sh`
 - `original/libzstd-1.5.5+dfsg2/lib/compress/`
 - `original/libzstd-1.5.5+dfsg2/tests/bigdict.c`
 - `original/libzstd-1.5.5+dfsg2/tests/invalidDictionaries.c`
@@ -59,6 +60,9 @@ Safe Compression Core Independence
 - `original/libzstd-1.5.5+dfsg2/tests/paramgrill.c`
 - `original/libzstd-1.5.5+dfsg2/tests/external_matchfinder.c`
 - `original/libzstd-1.5.5+dfsg2/examples/`
+- `safe/build.rs`
+- `safe/abi/original.exports.txt`
+- `safe/abi/original.soname.txt`
 
 The decompression implementation, rebased ownership metadata, regenerated `workflow.yaml`, and upstream compression sources are consumed in place. Do not patch the upstream source snapshot unless no safe-side change can preserve a public interface.
 

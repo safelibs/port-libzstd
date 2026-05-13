@@ -8,10 +8,6 @@ Dependent Regressions and Compatibility Fixes
 
 # Preexisting Inputs
 
-- `.plan/goal.md`
-- `.plan/workflow-structure.yaml`
-- `workflow.yaml`
-- All outputs from `impl_dependent_image_matrix`, including `dependents.json`, `safe/tests/dependents/dependent_matrix.toml`, `safe/tests/dependents/src/rpm_probe.c`, `safe/tests/dependents/src/zarchive_probe.c`, `safe/tests/dependents/fixtures/rpm/`, `safe/tests/dependents/fixtures/zarchive/`, `safe/docker/dependents/`, `safe/scripts/build-dependent-image.sh`, `safe/scripts/run-dependent-matrix.sh`, `safe/scripts/check-dependent-compile-compat.sh`, `safe/scripts/verify-baseline-contract.sh`, `test-original.sh`, `safe/out/dependents/image-context/metadata.env`, `safe/out/dependents/compile-compat/`, and `safe/out/dependents/logs/`
 - `safe/out/install/release-default/`
 - `safe/out/original-cli/lib/`
 - `safe/out/debian-src/default/libzstd-1.5.5+dfsg2/`
@@ -24,33 +20,54 @@ Dependent Regressions and Compatibility Fixes
 - `safe/abi/export_map.toml`
 - `safe/tests/upstream_test_matrix.toml`
 - `safe/tests/dependents/dependent_matrix.toml`
+- `safe/src/`
+- `safe/tests/`
 - `dependents.json`
 - `test-original.sh`
-- `safe/include/zstd.h`
-- `safe/include/zdict.h`
-- `safe/include/zstd_errors.h`
 - `safe/src/decompress/dctx.rs`
 - `safe/src/decompress/ddict.rs`
 - `safe/src/decompress/dstream.rs`
 - `safe/src/decompress/frame.rs`
-- `safe/src/decompress/huf.rs`
-- `safe/src/decompress/fse.rs`
 - `safe/src/compress/block.rs`
 - `safe/src/compress/cctx.rs`
 - `safe/src/compress/cstream.rs`
 - `safe/src/compress/params.rs`
+- `safe/src/compress/cctx_params.rs`
+- `safe/src/compress/cdict.rs`
+- `safe/src/compress/sequence_api.rs`
+- `safe/src/ffi/compress.rs`
+- `safe/src/ffi/decompress.rs`
+- `safe/src/ffi/advanced.rs`
+- `safe/tests/rust/compress.rs`
+- `safe/tests/rust/decompress.rs`
+- `safe/tests/capi/roundtrip_smoke.c`
+- `safe/tests/capi/decompress_smoke.c`
+- `safe/tests/dependents/src/rpm_probe.c`
+- `safe/tests/dependents/src/zarchive_probe.c`
+- `safe/tests/dependents/fixtures/rpm/`
+- `safe/tests/dependents/fixtures/zarchive/`
+- `safe/docker/dependents/Dockerfile`
+- `safe/docker/dependents/entrypoint.sh`
+- `safe/scripts/build-dependent-image.sh`
+- `safe/scripts/run-dependent-matrix.sh`
+- `safe/scripts/run-full-suite.sh`
+- `safe/docs/unsafe-audit.md`
+- `.plan/workflow-structure.yaml`
+- `workflow.yaml`
+- `safe/docker/dependents/`
+- `safe/scripts/check-dependent-compile-compat.sh`
+- `safe/scripts/verify-baseline-contract.sh`
+- `safe/include/zstd.h`
+- `safe/include/zdict.h`
+- `safe/include/zstd_errors.h`
+- `safe/src/decompress/huf.rs`
+- `safe/src/decompress/fse.rs`
 - `safe/src/compress/frame.rs`
 - `safe/src/compress/literals.rs`
 - `safe/src/compress/ldm.rs`
 - `safe/src/compress/match_state.rs`
 - `safe/src/compress/sequences.rs`
-- `safe/src/compress/cctx_params.rs`
-- `safe/src/compress/cdict.rs`
-- `safe/src/compress/sequence_api.rs`
 - `safe/src/compress/static_ctx.rs`
-- `safe/src/ffi/compress.rs`
-- `safe/src/ffi/decompress.rs`
-- `safe/src/ffi/advanced.rs`
 - `safe/src/threading/job_queue.rs`
 - `safe/src/threading/pool.rs`
 - `safe/src/threading/zstdmt.rs`
@@ -58,12 +75,8 @@ Dependent Regressions and Compatibility Fixes
 - `safe/src/dict_builder/divsufsort.rs`
 - `safe/src/dict_builder/fastcover.rs`
 - `safe/src/dict_builder/zdict.rs`
-- `safe/tests/rust/compress.rs`
-- `safe/tests/rust/decompress.rs`
-- `safe/tests/capi/decompress_smoke.c`
 - `safe/tests/capi/frame_probe.c`
 - `safe/tests/capi/legacy_decode.c`
-- `safe/tests/capi/roundtrip_smoke.c`
 - `safe/tests/capi/bigdict_driver.c`
 - `safe/tests/capi/invalid_dictionaries_driver.c`
 - `safe/tests/capi/zstream_driver.c`
@@ -82,22 +95,13 @@ Dependent Regressions and Compatibility Fixes
 - `safe/tests/dependents/src/squashfs-tools_probe.c`
 - `safe/tests/dependents/src/systemd_probe.c`
 - `safe/tests/dependents/src/tiff_probe.c`
-- `safe/tests/dependents/src/rpm_probe.c`
-- `safe/tests/dependents/src/zarchive_probe.c`
-- `safe/docker/dependents/Dockerfile`
-- `safe/docker/dependents/entrypoint.sh`
 - `safe/scripts/build-artifacts.sh`
 - `safe/scripts/build-original-cli-against-safe.sh`
 - `safe/scripts/build-deb.sh`
-- `safe/scripts/build-dependent-image.sh`
-- `safe/scripts/run-dependent-matrix.sh`
-- `safe/scripts/check-dependent-compile-compat.sh`
 - `safe/scripts/run-capi-decompression.sh`
 - `safe/scripts/run-capi-roundtrip.sh`
 - `safe/scripts/run-advanced-mt-tests.sh`
 - `safe/scripts/run-upstream-tests.sh`
-- `safe/scripts/run-full-suite.sh`
-- `safe/docs/unsafe-audit.md`
 
 Existing Phase 6 logs and artifacts are the first triage inputs. Do not create a second downstream results manifest or broaden the 12-application inventory.
 

@@ -8,10 +8,26 @@ Dependent Inventory Expansion and Reproducible Image
 
 # Preexisting Inputs
 
-- `.plan/goal.md`
-- `.plan/workflow-structure.yaml`
-- `workflow.yaml`
-- All outputs from `impl_upstream_release_gates`, including `safe/tests/upstream_test_matrix.toml`, `safe/scripts/phase6-common.sh`, the upstream wrapper scripts under `safe/scripts/`, `safe/scripts/run-full-suite.sh`, the fixture manifests under `safe/tests/fixtures/`, and the refreshed Phase 4 artifact roots under `safe/out/install/release-default/`, `safe/out/original-cli/lib/`, `safe/out/debian-src/default/libzstd-1.5.5+dfsg2/`, and `safe/out/deb/default/`
+- `safe/tests/upstream_test_matrix.toml`
+- `safe/scripts/phase6-common.sh`
+- `safe/scripts/run-upstream-tests.sh`
+- `safe/scripts/run-original-playtests.sh`
+- `safe/scripts/run-original-cli-tests.sh`
+- `safe/scripts/run-original-gzip-tests.sh`
+- `safe/scripts/run-zlibwrapper-tests.sh`
+- `safe/scripts/run-educational-decoder-tests.sh`
+- `safe/scripts/run-pzstd-tests.sh`
+- `safe/scripts/run-seekable-tests.sh`
+- `safe/scripts/run-version-compat-tests.sh`
+- `safe/scripts/run-upstream-regression.sh`
+- `safe/scripts/run-upstream-fuzz-tests.sh`
+- `safe/scripts/run-original-examples.sh`
+- `safe/scripts/check-cli-permissions.sh`
+- `safe/scripts/run-performance-smoke.sh`
+- `safe/scripts/run-full-suite.sh`
+- `safe/tests/fixtures/versions/`
+- `safe/tests/fixtures/regression/`
+- `safe/tests/fixtures/fuzz-corpora/`
 - `safe/scripts/build-artifacts.sh`
 - `safe/scripts/build-original-cli-against-safe.sh`
 - `safe/scripts/build-deb.sh`
@@ -36,6 +52,11 @@ Dependent Inventory Expansion and Reproducible Image
 - `safe/scripts/check-dependent-compile-compat.sh`
 - `safe/scripts/verify-baseline-contract.sh`
 - `test-original.sh`
+- `.plan/workflow-structure.yaml`
+- `workflow.yaml`
+- `safe/scripts/`
+- `safe/tests/fixtures/`
+- `safe/out/deb/default/`
 
 The current inventories and existing 10 dependent probes are consumed and updated in place. The image files and dependent output roots are introduced here, then become the only downstream image and results artifacts for later phases. Do not introduce a second dependent inventory, image context, image tag discovery path, or results manifest.
 

@@ -8,18 +8,22 @@ Packaging, Install Layout, and Drop-In Artifact Flow
 
 # Preexisting Inputs
 
-- `.plan/goal.md`
-- `.plan/workflow-structure.yaml`
-- `workflow.yaml`
-- All outputs from `impl_safe_advanced_abi_completion`, including `safe/build.rs`, `safe/abi/export_map.toml`, `safe/tests/upstream_test_matrix.toml`, `safe/src/ffi/`, `safe/src/compress/`, `safe/src/threading/`, `safe/src/dict_builder/`, `safe/tests/capi/`, `safe/tests/link-compat/`, `safe/scripts/run-advanced-mt-tests.sh`, `safe/scripts/verify-link-compat.sh`, and `safe/docs/unsafe-audit.md`
-- `safe/Cargo.toml`
 - `safe/build.rs`
+- `safe/abi/export_map.toml`
+- `safe/tests/upstream_test_matrix.toml`
+- `safe/src/ffi/`
+- `safe/src/compress/`
+- `safe/src/threading/`
+- `safe/src/dict_builder/`
+- `safe/tests/capi/`
+- `safe/tests/link-compat/`
+- `safe/scripts/run-advanced-mt-tests.sh`
+- `safe/scripts/verify-link-compat.sh`
+- `safe/docs/unsafe-audit.md`
+- `safe/Cargo.toml`
 - `safe/include/zstd.h`
 - `safe/include/zdict.h`
 - `safe/include/zstd_errors.h`
-- `safe/abi/original.exports.txt`
-- `safe/abi/original.soname.txt`
-- `safe/abi/export_map.toml`
 - `safe/scripts/build-artifacts.sh`
 - `safe/scripts/build-deb.sh`
 - `safe/scripts/build-original-cli-against-safe.sh`
@@ -41,14 +45,8 @@ Packaging, Install Layout, and Drop-In Artifact Flow
 - `safe/debian/zstd.install`
 - `safe/debian/zstd.docs`
 - `safe/debian/zstd.manpages`
-- `safe/debian/tests/README.md`
 - `safe/debian/tests/control`
-- `safe/debian/tests/python/check_build/__init__.py`
 - `safe/debian/tests/python/check_build/__main__.py`
-- `safe/debian/tests/python/check_build/defs.py`
-- `safe/debian/tests/python/check_build/parse.py`
-- `safe/debian/tests/python/check_build/process.py`
-- `safe/debian/tests/python/check_build/util.py`
 - `safe/debian/tests/requirements/install.txt`
 - `safe/debian/tests/requirements/tests.txt`
 - `safe/debian/tests/ztest/programs.toml`
@@ -62,12 +60,22 @@ Packaging, Install Layout, and Drop-In Artifact Flow
 - `original/libzstd-1.5.5+dfsg2/doc/educational_decoder/`
 - `original/libzstd-1.5.5+dfsg2/contrib/pzstd/`
 - `original/libzstd-1.5.5+dfsg2/CHANGELOG`
-- `original/libzstd-1.5.5+dfsg2/CODE_OF_CONDUCT.md`
-- `original/libzstd-1.5.5+dfsg2/CONTRIBUTING.md`
-- `original/libzstd-1.5.5+dfsg2/COPYING`
 - `original/libzstd-1.5.5+dfsg2/LICENSE`
 - `original/libzstd-1.5.5+dfsg2/README.md`
 - `original/libzstd-1.5.5+dfsg2/TESTING.md`
+- `.plan/workflow-structure.yaml`
+- `workflow.yaml`
+- `safe/abi/original.exports.txt`
+- `safe/abi/original.soname.txt`
+- `safe/debian/tests/README.md`
+- `safe/debian/tests/python/check_build/__init__.py`
+- `safe/debian/tests/python/check_build/defs.py`
+- `safe/debian/tests/python/check_build/parse.py`
+- `safe/debian/tests/python/check_build/process.py`
+- `safe/debian/tests/python/check_build/util.py`
+- `original/libzstd-1.5.5+dfsg2/CODE_OF_CONDUCT.md`
+- `original/libzstd-1.5.5+dfsg2/CONTRIBUTING.md`
+- `original/libzstd-1.5.5+dfsg2/COPYING`
 
 Packaging work consumes the safe-only library produced by earlier phases plus the existing Debian metadata and upstream CLI/doc/example source trees. Update those artifacts in place.
 

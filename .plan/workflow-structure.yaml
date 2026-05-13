@@ -7,7 +7,6 @@ phases:
     type: implement
     bounce_target: null
     required_preexisting_inputs:
-      - .plan/goal.md
       - .plan/phases/01-safe-decompression-independence.md
       - .plan/phases/02-safe-compression-core.md
       - .plan/phases/03-safe-advanced-abi-completion.md
@@ -45,17 +44,13 @@ phases:
       - safe/src/decompress/huf.rs
       - safe/src/decompress/fse.rs
       - safe/src/decompress/legacy.rs
-      - safe/src/ffi/decompress.rs
       - safe/src/ffi/legacy_shim.c
-      - safe/tests/rust/decompress.rs
       - safe/tests/capi/decompress_smoke.c
       - safe/tests/capi/frame_probe.c
       - safe/tests/capi/legacy_decode.c
-      - safe/scripts/run-capi-decompression.sh
-      - safe/scripts/capture-upstream-abi.sh
-      - safe/scripts/verify-baseline-contract.sh
-      - safe/docs/unsafe-audit.md
       - original/libzstd-1.5.5+dfsg2/
+      - safe/src/ffi/compress.rs
+      - safe/scripts/verify-export-parity.sh
   - order: 2
     id: script_safe_decompression_independence
     type: check
@@ -150,7 +145,6 @@ phases:
       - safe/src/decompress/ddict.rs
       - safe/src/decompress/frame.rs
       - safe/src/ffi/compress.rs
-      - safe/src/ffi/decompress.rs
       - safe/tests/rust/compress.rs
       - safe/tests/capi/roundtrip_smoke.c
       - safe/tests/capi/bigdict_driver.c
@@ -167,6 +161,9 @@ phases:
       - original/libzstd-1.5.5+dfsg2/tests/paramgrill.c
       - original/libzstd-1.5.5+dfsg2/tests/external_matchfinder.c
       - original/libzstd-1.5.5+dfsg2/examples/
+      - safe/build.rs
+      - safe/abi/original.exports.txt
+      - safe/abi/original.soname.txt
   - order: 6
     id: script_safe_compression_core
     type: check
@@ -229,9 +226,6 @@ phases:
       - safe/include/zstd.h
       - safe/include/zdict.h
       - safe/include/zstd_errors.h
-      - safe/abi/export_map.toml
-      - safe/tests/upstream_test_matrix.toml
-      - safe/src/ffi/compress.rs
       - safe/src/ffi/advanced.rs
       - safe/src/ffi/legacy_shim.c
       - safe/src/compress/cctx_params.rs
@@ -261,6 +255,17 @@ phases:
       - original/libzstd-1.5.5+dfsg2/tests/poolTests.c
       - original/libzstd-1.5.5+dfsg2/tests/zstreamtest.c
       - original/libzstd-1.5.5+dfsg2/tests/fuzz/sequence_compression_api.c
+      - .plan/workflow-structure.yaml
+      - workflow.yaml
+      - safe/Cargo.toml
+      - safe/abi/original.exports.txt
+      - safe/abi/original.soname.txt
+      - safe/scripts/verify-export-parity.sh
+      - original/libzstd-1.5.5+dfsg2/lib/common/pool.h
+      - original/libzstd-1.5.5+dfsg2/lib/common/threading.h
+      - original/libzstd-1.5.5+dfsg2/lib/compress/zstdmt_compress.h
+      - original/libzstd-1.5.5+dfsg2/examples/streaming_compression_thread_pool.c
+      - original/libzstd-1.5.5+dfsg2/examples/streaming_memory_usage.c
   - order: 10
     id: script_safe_advanced_abi_completion
     type: check
@@ -332,7 +337,6 @@ phases:
       - safe/scripts/verify-link-compat.sh
       - safe/docs/unsafe-audit.md
       - safe/Cargo.toml
-      - safe/build.rs
       - safe/include/zstd.h
       - safe/include/zdict.h
       - safe/include/zstd_errors.h
@@ -375,6 +379,19 @@ phases:
       - original/libzstd-1.5.5+dfsg2/LICENSE
       - original/libzstd-1.5.5+dfsg2/README.md
       - original/libzstd-1.5.5+dfsg2/TESTING.md
+      - .plan/workflow-structure.yaml
+      - workflow.yaml
+      - safe/abi/original.exports.txt
+      - safe/abi/original.soname.txt
+      - safe/debian/tests/README.md
+      - safe/debian/tests/python/check_build/__init__.py
+      - safe/debian/tests/python/check_build/defs.py
+      - safe/debian/tests/python/check_build/parse.py
+      - safe/debian/tests/python/check_build/process.py
+      - safe/debian/tests/python/check_build/util.py
+      - original/libzstd-1.5.5+dfsg2/CODE_OF_CONDUCT.md
+      - original/libzstd-1.5.5+dfsg2/CONTRIBUTING.md
+      - original/libzstd-1.5.5+dfsg2/COPYING
   - order: 14
     id: script_safe_packaging_install
     type: check
@@ -478,6 +495,24 @@ phases:
       - original/libzstd-1.5.5+dfsg2/doc/educational_decoder/
       - original/libzstd-1.5.5+dfsg2/contrib/pzstd/
       - original/libzstd-1.5.5+dfsg2/contrib/seekable_format/
+      - .plan/workflow-structure.yaml
+      - workflow.yaml
+      - safe/scripts/install-safe-debs.sh
+      - safe/scripts/verify-install-layout.sh
+      - safe/scripts/verify-deb-profiles.sh
+      - safe/scripts/run-debian-autopkgtests.sh
+      - safe/scripts/run-build-variant-tests.sh
+      - safe/tests/fixtures/versions/README.md
+      - safe/tests/fixtures/versions/hello
+      - safe/tests/fixtures/versions/hello.zst
+      - safe/tests/fixtures/versions/helloworld
+      - safe/tests/fixtures/versions/helloworld.zst
+      - safe/tests/fixtures/regression/results-memoized.csv
+      - safe/tests/fixtures/regression/results-memoized.source-sha256
+      - safe/tests/fixtures/fuzz-corpora/raw/hello
+      - safe/tests/fixtures/fuzz-corpora/raw/helloworld
+      - safe/tests/fixtures/fuzz-corpora/compressed/hello.zst
+      - safe/tests/fixtures/fuzz-corpora/compressed/helloworld.zst
   - order: 18
     id: script_upstream_release_gates
     type: check
@@ -582,6 +617,11 @@ phases:
       - safe/scripts/check-dependent-compile-compat.sh
       - safe/scripts/verify-baseline-contract.sh
       - test-original.sh
+      - .plan/workflow-structure.yaml
+      - workflow.yaml
+      - safe/scripts/
+      - safe/tests/fixtures/
+      - safe/out/deb/default/
   - order: 22
     id: script_dependent_image_matrix
     type: check
@@ -684,6 +724,56 @@ phases:
       - safe/scripts/run-dependent-matrix.sh
       - safe/scripts/run-full-suite.sh
       - safe/docs/unsafe-audit.md
+      - .plan/workflow-structure.yaml
+      - workflow.yaml
+      - safe/docker/dependents/
+      - safe/scripts/check-dependent-compile-compat.sh
+      - safe/scripts/verify-baseline-contract.sh
+      - safe/include/zstd.h
+      - safe/include/zdict.h
+      - safe/include/zstd_errors.h
+      - safe/src/decompress/huf.rs
+      - safe/src/decompress/fse.rs
+      - safe/src/compress/frame.rs
+      - safe/src/compress/literals.rs
+      - safe/src/compress/ldm.rs
+      - safe/src/compress/match_state.rs
+      - safe/src/compress/sequences.rs
+      - safe/src/compress/static_ctx.rs
+      - safe/src/threading/job_queue.rs
+      - safe/src/threading/pool.rs
+      - safe/src/threading/zstdmt.rs
+      - safe/src/dict_builder/cover.rs
+      - safe/src/dict_builder/divsufsort.rs
+      - safe/src/dict_builder/fastcover.rs
+      - safe/src/dict_builder/zdict.rs
+      - safe/tests/capi/frame_probe.c
+      - safe/tests/capi/legacy_decode.c
+      - safe/tests/capi/bigdict_driver.c
+      - safe/tests/capi/invalid_dictionaries_driver.c
+      - safe/tests/capi/zstream_driver.c
+      - safe/tests/capi/paramgrill_driver.c
+      - safe/tests/capi/external_matchfinder_driver.c
+      - safe/tests/capi/dict_builder_driver.c
+      - safe/tests/capi/sequence_api_driver.c
+      - safe/tests/capi/thread_pool_driver.c
+      - safe/tests/dependents/src/apt_probe.c
+      - safe/tests/dependents/src/btrfs-progs_probe.c
+      - safe/tests/dependents/src/curl_probe.c
+      - safe/tests/dependents/src/dpkg_probe.c
+      - safe/tests/dependents/src/libarchive_probe.c
+      - safe/tests/dependents/src/qemu_probe.c
+      - safe/tests/dependents/src/rsync_probe.c
+      - safe/tests/dependents/src/squashfs-tools_probe.c
+      - safe/tests/dependents/src/systemd_probe.c
+      - safe/tests/dependents/src/tiff_probe.c
+      - safe/scripts/build-artifacts.sh
+      - safe/scripts/build-original-cli-against-safe.sh
+      - safe/scripts/build-deb.sh
+      - safe/scripts/run-capi-decompression.sh
+      - safe/scripts/run-capi-roundtrip.sh
+      - safe/scripts/run-advanced-mt-tests.sh
+      - safe/scripts/run-upstream-tests.sh
   - order: 26
     id: script_compat_regressions_and_fixes
     type: check
@@ -784,6 +874,10 @@ phases:
       - safe/scripts/run-performance-smoke.sh
       - safe/scripts/run-dependent-matrix.sh
       - safe/docs/unsafe-audit.md
+      - .plan/workflow-structure.yaml
+      - workflow.yaml
+      - safe/tests/
+      - safe/scripts/
   - order: 30
     id: script_final_release_burn_down
     type: check

@@ -8,16 +8,13 @@ Upstream Black-Box Release Gates
 
 # Preexisting Inputs
 
-- `.plan/goal.md`
-- `.plan/workflow-structure.yaml`
-- `workflow.yaml`
-- All outputs from `impl_safe_packaging_install`, including `safe/scripts/build-artifacts.sh`, `safe/scripts/build-deb.sh`, `safe/scripts/build-original-cli-against-safe.sh`, `safe/scripts/install-safe-debs.sh`, `safe/scripts/verify-install-layout.sh`, `safe/scripts/verify-deb-profiles.sh`, `safe/scripts/run-debian-autopkgtests.sh`, `safe/scripts/run-build-variant-tests.sh`, `safe/debian/`, `safe/out/install/release-default/`, `safe/out/original-cli/lib/`, `safe/out/debian-src/default/libzstd-1.5.5+dfsg2/`, `safe/out/deb/default/metadata.env`, `safe/out/deb/default/packages/`, and `safe/out/deb/default/stage-root/`
 - `safe/out/install/release-default/`
 - `safe/out/original-cli/lib/`
 - `safe/out/debian-src/default/libzstd-1.5.5+dfsg2/`
 - `safe/out/deb/default/metadata.env`
 - `safe/out/deb/default/packages/`
 - `safe/out/deb/default/stage-root/`
+- `safe/debian/`
 - `safe/include/zstd.h`
 - `safe/include/zdict.h`
 - `safe/include/zstd_errors.h`
@@ -49,20 +46,9 @@ Upstream Black-Box Release Gates
 - `safe/scripts/check-cli-permissions.sh`
 - `safe/scripts/run-performance-smoke.sh`
 - `safe/scripts/run-full-suite.sh`
-- `safe/tests/fixtures/versions/README.md`
 - `safe/tests/fixtures/versions/manifest.toml`
-- `safe/tests/fixtures/versions/hello`
-- `safe/tests/fixtures/versions/hello.zst`
-- `safe/tests/fixtures/versions/helloworld`
-- `safe/tests/fixtures/versions/helloworld.zst`
 - `safe/tests/fixtures/regression/README.md`
-- `safe/tests/fixtures/regression/results-memoized.csv`
-- `safe/tests/fixtures/regression/results-memoized.source-sha256`
 - `safe/tests/fixtures/fuzz-corpora/manifest.toml`
-- `safe/tests/fixtures/fuzz-corpora/raw/hello`
-- `safe/tests/fixtures/fuzz-corpora/raw/helloworld`
-- `safe/tests/fixtures/fuzz-corpora/compressed/hello.zst`
-- `safe/tests/fixtures/fuzz-corpora/compressed/helloworld.zst`
 - `safe/tests/ported/whitebox/Makefile`
 - `safe/tests/ported/whitebox/offline_regression_data.c`
 - `relevant_cves.json`
@@ -74,6 +60,24 @@ Upstream Black-Box Release Gates
 - `original/libzstd-1.5.5+dfsg2/doc/educational_decoder/`
 - `original/libzstd-1.5.5+dfsg2/contrib/pzstd/`
 - `original/libzstd-1.5.5+dfsg2/contrib/seekable_format/`
+- `.plan/workflow-structure.yaml`
+- `workflow.yaml`
+- `safe/scripts/install-safe-debs.sh`
+- `safe/scripts/verify-install-layout.sh`
+- `safe/scripts/verify-deb-profiles.sh`
+- `safe/scripts/run-debian-autopkgtests.sh`
+- `safe/scripts/run-build-variant-tests.sh`
+- `safe/tests/fixtures/versions/README.md`
+- `safe/tests/fixtures/versions/hello`
+- `safe/tests/fixtures/versions/hello.zst`
+- `safe/tests/fixtures/versions/helloworld`
+- `safe/tests/fixtures/versions/helloworld.zst`
+- `safe/tests/fixtures/regression/results-memoized.csv`
+- `safe/tests/fixtures/regression/results-memoized.source-sha256`
+- `safe/tests/fixtures/fuzz-corpora/raw/hello`
+- `safe/tests/fixtures/fuzz-corpora/raw/helloworld`
+- `safe/tests/fixtures/fuzz-corpora/compressed/hello.zst`
+- `safe/tests/fixtures/fuzz-corpora/compressed/helloworld.zst`
 
 This phase consumes the Phase 4 build/package roots and the checked-in offline fixtures. Header identity inputs are explicit and must be preserved in place.
 

@@ -8,20 +8,17 @@ Advanced ABI, Dict-Builder, Threading, and Build Purge
 
 # Preexisting Inputs
 
-- `.plan/goal.md`
-- `.plan/workflow-structure.yaml`
-- `workflow.yaml`
-- All outputs from `impl_safe_compression_core`, including `safe/abi/export_map.toml`, `safe/tests/upstream_test_matrix.toml`, `safe/src/compress/`, `safe/src/ffi/compress.rs`, `safe/tests/rust/compress.rs`, `safe/tests/capi/`, and `safe/scripts/run-capi-roundtrip.sh`
-- `safe/Cargo.toml`
+- `safe/abi/export_map.toml`
+- `safe/tests/upstream_test_matrix.toml`
+- `safe/src/compress/`
+- `safe/src/ffi/compress.rs`
+- `safe/tests/rust/compress.rs`
+- `safe/tests/capi/`
+- `safe/scripts/run-capi-roundtrip.sh`
 - `safe/build.rs`
 - `safe/include/zstd.h`
 - `safe/include/zdict.h`
 - `safe/include/zstd_errors.h`
-- `safe/abi/original.exports.txt`
-- `safe/abi/original.soname.txt`
-- `safe/abi/export_map.toml`
-- `safe/tests/upstream_test_matrix.toml`
-- `safe/src/ffi/compress.rs`
 - `safe/src/ffi/advanced.rs`
 - `safe/src/ffi/legacy_shim.c`
 - `safe/src/compress/cctx_params.rs`
@@ -43,18 +40,23 @@ Advanced ABI, Dict-Builder, Threading, and Build Purge
 - `safe/tests/link-compat/run_zstreamtest.c`
 - `safe/scripts/run-advanced-mt-tests.sh`
 - `safe/scripts/verify-link-compat.sh`
-- `safe/scripts/verify-export-parity.sh`
 - `safe/docs/unsafe-audit.md`
 - `original/libzstd-1.5.5+dfsg2/lib/dictBuilder/`
 - `original/libzstd-1.5.5+dfsg2/lib/common/pool.c`
-- `original/libzstd-1.5.5+dfsg2/lib/common/pool.h`
 - `original/libzstd-1.5.5+dfsg2/lib/common/threading.c`
-- `original/libzstd-1.5.5+dfsg2/lib/common/threading.h`
 - `original/libzstd-1.5.5+dfsg2/lib/compress/zstdmt_compress.c`
-- `original/libzstd-1.5.5+dfsg2/lib/compress/zstdmt_compress.h`
 - `original/libzstd-1.5.5+dfsg2/tests/poolTests.c`
 - `original/libzstd-1.5.5+dfsg2/tests/zstreamtest.c`
 - `original/libzstd-1.5.5+dfsg2/tests/fuzz/sequence_compression_api.c`
+- `.plan/workflow-structure.yaml`
+- `workflow.yaml`
+- `safe/Cargo.toml`
+- `safe/abi/original.exports.txt`
+- `safe/abi/original.soname.txt`
+- `safe/scripts/verify-export-parity.sh`
+- `original/libzstd-1.5.5+dfsg2/lib/common/pool.h`
+- `original/libzstd-1.5.5+dfsg2/lib/common/threading.h`
+- `original/libzstd-1.5.5+dfsg2/lib/compress/zstdmt_compress.h`
 - `original/libzstd-1.5.5+dfsg2/examples/streaming_compression_thread_pool.c`
 - `original/libzstd-1.5.5+dfsg2/examples/streaming_memory_usage.c`
 

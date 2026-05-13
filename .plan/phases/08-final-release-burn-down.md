@@ -8,10 +8,6 @@ Final Release Burn-Down
 
 # Preexisting Inputs
 
-- `.plan/goal.md`
-- `.plan/workflow-structure.yaml`
-- `workflow.yaml`
-- All outputs from `impl_compat_regressions_and_fixes`, including touched safe source files, checked-in regressions under `safe/tests/`, updated scripts under `safe/scripts/`, `safe/docs/unsafe-audit.md`, metadata updates in `safe/tests/upstream_test_matrix.toml` and `safe/tests/dependents/dependent_matrix.toml`, the refreshed Phase 4 artifact roots, and the refreshed Phase 6 dependent roots
 - `safe/out/install/release-default/`
 - `safe/out/original-cli/lib/`
 - `safe/out/debian-src/default/libzstd-1.5.5+dfsg2/`
@@ -66,7 +62,10 @@ Final Release Burn-Down
 - `safe/scripts/run-performance-smoke.sh`
 - `safe/scripts/run-dependent-matrix.sh`
 - `safe/docs/unsafe-audit.md`
-- git history from the previous implement phases
+- `.plan/workflow-structure.yaml`
+- `workflow.yaml`
+- `safe/tests/`
+- `safe/scripts/`
 
 Final work consumes the canonical Phase 4 and Phase 6 artifact roots. Do not introduce new build, package, image, or results roots.
 

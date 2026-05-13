@@ -8,7 +8,6 @@ Safe Decompression Independence and Metadata Rebase
 
 # Preexisting Inputs
 
-- `.plan/goal.md`
 - `.plan/phases/01-safe-decompression-independence.md`
 - `.plan/phases/02-safe-compression-core.md`
 - `.plan/phases/03-safe-advanced-abi-completion.md`
@@ -19,6 +18,14 @@ Safe Decompression Independence and Metadata Rebase
 - `.plan/phases/08-final-release-burn-down.md`
 - `.plan/workflow-structure.yaml`
 - `workflow.yaml`
+- `safe/src/decompress/`
+- `safe/src/ffi/decompress.rs`
+- `safe/tests/rust/decompress.rs`
+- `safe/tests/capi/`
+- `safe/scripts/run-capi-decompression.sh`
+- `safe/scripts/capture-upstream-abi.sh`
+- `safe/scripts/verify-baseline-contract.sh`
+- `safe/docs/unsafe-audit.md`
 - `safe/Cargo.toml`
 - `safe/build.rs`
 - `safe/include/zstd.h`
@@ -38,19 +45,13 @@ Safe Decompression Independence and Metadata Rebase
 - `safe/src/decompress/huf.rs`
 - `safe/src/decompress/fse.rs`
 - `safe/src/decompress/legacy.rs`
-- `safe/src/ffi/compress.rs`
-- `safe/src/ffi/decompress.rs`
 - `safe/src/ffi/legacy_shim.c`
-- `safe/tests/rust/decompress.rs`
 - `safe/tests/capi/decompress_smoke.c`
 - `safe/tests/capi/frame_probe.c`
 - `safe/tests/capi/legacy_decode.c`
-- `safe/scripts/run-capi-decompression.sh`
-- `safe/scripts/capture-upstream-abi.sh`
-- `safe/scripts/verify-baseline-contract.sh`
-- `safe/scripts/verify-export-parity.sh`
-- `safe/docs/unsafe-audit.md`
 - `original/libzstd-1.5.5+dfsg2/`
+- `safe/src/ffi/compress.rs`
+- `safe/scripts/verify-export-parity.sh`
 
 The existing plan artifacts, upstream source snapshot, ABI baselines, headers, test matrices, and harnesses are consumed in place. Do not regenerate ABI baselines from absent artifacts such as `original/libzstd-1.5.5+dfsg2/lib/libzstd.so.1.5.5`, `original/libzstd-1.5.5+dfsg2/lib/libzstd.a`, or `original/libzstd-1.5.5+dfsg2/lib/libzstd.pc`.
 
