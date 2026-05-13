@@ -1,0 +1,10 @@
+libzstd (1.5.5+dfsg2-2build1.1+safelibs1) unstable; urgency=medium
+
+  * Rebuild the Debian package layout around the safe Rust libzstd ABI.
+  * Preserve the upstream package names, examples, docs, manpages, and
+    autopkgtests.
+  * Make the Phase 4 producer scripts the only canonical refresh path for the
+    safe install tree, helper root, staged Debian source tree, and package
+    outputs.
+
+ -- Safelibs Maintainers <safelibs@example.invalid>  Sat, 28 Mar 2026 12:00:00 -0700

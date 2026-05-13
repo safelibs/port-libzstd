@@ -1,0 +1,15 @@
+Package: libzstd1-dbgsym
+Package-Type: ddeb
+Source: libzstd
+Version: 1.5.5+dfsg2-2build1.1+safelibs1
+Auto-Built-Package: debug-symbols
+Architecture: amd64
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+Installed-Size: 183
+Depends: libzstd1 (= 1.5.5+dfsg2-2build1.1+safelibs1)
+Section: debug
+Priority: optional
+Multi-Arch: same
+Description: debug symbols for libzstd1
+Build-Ids: e1f8494fc6ef77b3a625929afa49cd75b86326d3
+Original-Maintainer: RPM packaging team <team+pkg-rpm@tracker.debian.org>

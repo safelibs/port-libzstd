@@ -1,0 +1,68 @@
+Source: libzstd
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+XSBC-Original-Maintainer: RPM packaging team <team+pkg-rpm@tracker.debian.org>
+Uploaders: Peter Pentchev <roam@debian.org>
+Section: libs
+Priority: optional
+Build-Depends: cargo,
+               cmake (>= 3.24~),
+               debhelper (>> 13.3.2~),
+               dh-package-notes,
+               dpkg-build-api (= 1),
+               help2man,
+               liblz4-dev,
+               liblzma-dev,
+               rustc,
+               zlib1g-dev,
+               less <!nocheck>,
+               python3 <!nocheck>,
+Standards-Version: 4.6.2
+Vcs-Browser: https://salsa.debian.org/pkg-rpm-team/libzstd
+Vcs-Git: https://salsa.debian.org/pkg-rpm-team/libzstd.git
+Homepage: https://github.com/facebook/zstd
+
+Package: libzstd-dev
+Architecture: any
+Multi-Arch: same
+Section: libdevel
+Depends: libzstd1 (= ${binary:Version}),
+         ${misc:Depends}
+Description: fast lossless compression algorithm -- development files
+ Zstd, short for Zstandard, is a fast lossless compression algorithm, targeting
+ real-time compression scenarios at zlib-level compression ratio.
+ .
+ This package contains the headers, static library, pkg-config metadata, and
+ CMake package metadata.
+
+Package: libzstd1
+Architecture: any
+Multi-Arch: same
+Section: libs
+Depends: ${misc:Depends},
+         ${shlibs:Depends}
+Description: fast lossless compression algorithm
+ Zstd, short for Zstandard, is a fast lossless compression algorithm, targeting
+ real-time compression scenarios at zlib-level compression ratio.
+ .
+ This package contains the shared library.
+
+Package: zstd
+Architecture: any
+Multi-Arch: foreign
+Section: utils
+Depends: ${misc:Depends},
+         ${shlibs:Depends}
+Description: fast lossless compression algorithm -- CLI tool
+ Zstd, short for Zstandard, is a fast lossless compression algorithm, targeting
+ real-time compression scenarios at zlib-level compression ratio.
+ .
+ This package contains the CLI programs implementing zstd, zstdmt, and pzstd.
+
+Package: libzstd1-udeb
+Architecture: any
+Section: debian-installer
+Depends: ${misc:Depends},
+         ${shlibs:Depends}
+Package-Type: udeb
+Build-Profiles: <!noudeb>
+Description: fast lossless compression algorithm library for debian-installer

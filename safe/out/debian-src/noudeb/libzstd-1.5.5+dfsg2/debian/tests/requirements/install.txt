@@ -1,0 +1,4 @@
+# Python modules required by the checked-in safe-rooted autopkgtest helpers.
+click >= 8, < 9
+typedload >= 2.16, < 3
+tomli >= 2, < 3; python_version < '3.11'

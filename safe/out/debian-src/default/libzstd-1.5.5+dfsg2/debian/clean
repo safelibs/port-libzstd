@@ -1,0 +1,5 @@
+# Keep the stage-local packaging roots refreshable only through the Phase 4
+# producer scripts.
+out/
+obj-*
+target/

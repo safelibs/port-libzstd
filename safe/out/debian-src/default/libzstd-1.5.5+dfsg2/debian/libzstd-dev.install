@@ -1,0 +1,8 @@
+# Ship the safe-built headers, static archive, linker symlink, pkg-config data,
+# and generated CMake package exports.
+obj-${DEB_HOST_GNU_TYPE}/zstdConfig*.cmake usr/lib/${DEB_HOST_MULTIARCH}/cmake/zstd
+obj-${DEB_HOST_GNU_TYPE}/CMakeFiles/Export/*/zstdTargets*.cmake usr/lib/${DEB_HOST_MULTIARCH}/cmake/zstd
+usr/include
+usr/lib/${DEB_HOST_MULTIARCH}/*.a
+usr/lib/${DEB_HOST_MULTIARCH}/*.so
+usr/lib/${DEB_HOST_MULTIARCH}/pkgconfig

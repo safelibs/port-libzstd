@@ -1,0 +1,5 @@
+debian/tmp/usr/share/man/man1/unzstd.1
+debian/tmp/usr/share/man/man1/zstd.1
+debian/tmp/usr/share/man/man1/zstdcat.1
+debian/tmp/usr/share/man/man1/zstdgrep.1
+debian/tmp/usr/share/man/man1/zstdless.1

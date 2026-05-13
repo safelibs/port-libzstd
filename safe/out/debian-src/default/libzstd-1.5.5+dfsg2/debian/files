@@ -1,0 +1,7 @@
+libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb libdevel optional
+libzstd1-dbgsym_1.5.5+dfsg2-2build1.1+safelibs1_amd64.ddeb debug optional automatic=yes
+libzstd1-udeb_1.5.5+dfsg2-2build1.1+safelibs1_amd64.udeb debian-installer optional
+libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb libs optional
+libzstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.buildinfo libs optional
+zstd-dbgsym_1.5.5+dfsg2-2build1.1+safelibs1_amd64.ddeb debug optional automatic=yes
+zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb utils optional

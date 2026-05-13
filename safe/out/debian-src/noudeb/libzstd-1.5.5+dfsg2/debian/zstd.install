@@ -1,0 +1,2 @@
+# Ship the safe-built CLI binaries and helper wrappers.
+usr/bin

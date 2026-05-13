@@ -1,0 +1,143 @@
+#!/usr/bin/make -f
+
+DPKG_EXPORT_BUILDTOOLS=1
+
+include /usr/share/dpkg/default.mk
+include /usr/share/debhelper/dh_package_notes/package-notes.mk
+
+export DH_VERBOSE=1
+export DEB_BUILD_MAINT_OPTIONS=hardening=+all
+export PREFIX=/usr
+
+HELP2MAN = help2man --no-info --help-option="'-h'" --no-discard-stderr
+INSTALL_ROOT := $(CURDIR)/debian/tmp
+BUILD_STAGE_ROOT := $(CURDIR)/out/build-stage
+OBJDIR := $(CURDIR)/obj-${DEB_HOST_GNU_TYPE}
+MANDIR := $(CURDIR)/debian/zstd/usr/share/man/man1
+UDEB_PACKAGE := libzstd1-udeb
+UDEB_MARKER := .safelibs-enable-udeb
+SAFE_BUILD_ARTIFACTS_ARGS := \
+	--release \
+	--prefix /usr \
+	--libdir /usr/lib/${DEB_HOST_MULTIARCH} \
+	--includedir /usr/include \
+	--multiarch ${DEB_HOST_MULTIARCH} \
+	--no-install-cmake
+SAFE_BUILD_CLI_ARGS := \
+	--source-root $(CURDIR) \
+	--prefix /usr \
+	--libdir /usr/lib/${DEB_HOST_MULTIARCH} \
+	--includedir /usr/include \
+	--multiarch ${DEB_HOST_MULTIARCH}
+
+ifeq (,$(filter terse,$(DEB_BUILD_OPTIONS)))
+export V=1
+endif
+
+%:
+	dh '$@'
+
+override_dh_auto_clean:
+	-dh_auto_clean -D contrib/pzstd
+	-dh_auto_clean -D doc/educational_decoder
+	-$(MAKE) -C programs clean > /dev/null
+	$(RM) -r $(INSTALL_ROOT) $(CURDIR)/out $(CURDIR)/target $(CURDIR)/obj-*
+
+override_dh_auto_build:
+	bash scripts/build-artifacts.sh \
+		$(SAFE_BUILD_ARTIFACTS_ARGS) \
+		--destdir $(BUILD_STAGE_ROOT) \
+		--objdir $(OBJDIR)
+	bash scripts/build-original-cli-against-safe.sh \
+		$(SAFE_BUILD_CLI_ARGS) \
+		--artifact-root $(BUILD_STAGE_ROOT) \
+		--work-root $(CURDIR)/out/original-cli-build \
+		--destdir $(BUILD_STAGE_ROOT)
+
+override_dh_auto_install:
+	bash scripts/build-artifacts.sh \
+		$(SAFE_BUILD_ARTIFACTS_ARGS) \
+		--destdir $(INSTALL_ROOT) \
+		--objdir $(OBJDIR)
+	bash scripts/build-original-cli-against-safe.sh \
+		$(SAFE_BUILD_CLI_ARGS) \
+		--artifact-root $(INSTALL_ROOT) \
+		--work-root $(CURDIR)/out/original-cli-install \
+		--destdir $(INSTALL_ROOT)
+
+override_dh_auto_test:
+	:
+
+override_dh_install:
+	dh_install
+	if [ -f $(UDEB_MARKER) ]; then \
+		$(RM) -r debian/$(UDEB_PACKAGE); \
+		install -d debian/$(UDEB_PACKAGE); \
+		cp -a debian/libzstd1/usr/. debian/$(UDEB_PACKAGE)/; \
+	fi
+
+override_dh_strip_nondeterminism:
+	dh_strip_nondeterminism
+	if [ -f $(UDEB_MARKER) ]; then \
+		dh_strip_nondeterminism -p$(UDEB_PACKAGE); \
+	fi
+
+override_dh_fixperms:
+	dh_fixperms
+	if [ -f $(UDEB_MARKER) ]; then \
+		dh_fixperms -p$(UDEB_PACKAGE); \
+	fi
+
+override_dh_strip:
+	dh_strip -a
+	if [ -f $(UDEB_MARKER) ]; then \
+		dh_strip -p$(UDEB_PACKAGE); \
+	fi
+
+override_dh_makeshlibs:
+	dh_makeshlibs -plibzstd1 -V'libzstd1 (>= 1.5.5)' --add-udeb=libzstd1-udeb
+
+override_dh_shlibdeps:
+	dh_shlibdeps -a
+	if [ -f $(UDEB_MARKER) ]; then \
+		dh_shlibdeps -p$(UDEB_PACKAGE); \
+	fi
+
+override_dh_installdeb:
+	dh_installdeb
+	if [ -f $(UDEB_MARKER) ]; then \
+		dh_installdeb -p$(UDEB_PACKAGE); \
+	fi
+
+override_dh_gencontrol:
+	dh_gencontrol
+	if [ -f $(UDEB_MARKER) ]; then \
+		install -d debian/$(UDEB_PACKAGE)/DEBIAN; \
+		echo misc:Depends= >> debian/$(UDEB_PACKAGE).substvars; \
+		echo misc:Pre-Depends= >> debian/$(UDEB_PACKAGE).substvars; \
+		dh_gencontrol -p$(UDEB_PACKAGE) -Pdebian/$(UDEB_PACKAGE); \
+	fi
+
+override_dh_md5sums:
+	dh_md5sums
+	if [ -f $(UDEB_MARKER) ]; then \
+		dh_md5sums -p$(UDEB_PACKAGE); \
+	fi
+
+override_dh_builddeb:
+	dh_builddeb
+	if [ -f $(UDEB_MARKER) ]; then \
+		dh_builddeb -p$(UDEB_PACKAGE); \
+	fi
+
+ifeq (,$(filter nodoc,$(DEB_BUILD_OPTIONS)))
+execute_after_dh_installman:
+	cp $(MANDIR)/zstd.1 $(MANDIR)/zstdmt.1
+	$(HELP2MAN) --name='parallelized Zstandard compression, a la pigz' contrib/pzstd/pzstd \
+	| perl -pe 's/(\(de\)compression\s\(default:)(\d+)(\))/$$1 All$$3/g' >$(MANDIR)/pzstd.1
+endif
+
+build:
+	dh $@
+
+.PHONY: build

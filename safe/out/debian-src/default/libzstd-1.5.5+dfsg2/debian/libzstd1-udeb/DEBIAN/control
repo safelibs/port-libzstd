@@ -1,0 +1,11 @@
+Package: libzstd1-udeb
+Source: libzstd
+Version: 1.5.5+dfsg2-2build1.1+safelibs1
+Architecture: amd64
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+Installed-Size: 910
+Depends: libc6-udeb (>= 2.39), libgcc-s1
+Section: debian-installer
+Priority: optional
+Description: fast lossless compression algorithm library for debian-installer
+Original-Maintainer: RPM packaging team <team+pkg-rpm@tracker.debian.org>

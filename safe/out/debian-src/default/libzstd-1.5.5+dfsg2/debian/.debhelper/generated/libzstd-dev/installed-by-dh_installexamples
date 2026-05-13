@@ -1,0 +1,13 @@
+./examples/common.h
+./examples/dictionary_compression.c
+./examples/dictionary_decompression.c
+./examples/Makefile
+./examples/multiple_simple_compression.c
+./examples/multiple_streaming_compression.c
+./examples/README.md
+./examples/simple_compression.c
+./examples/simple_decompression.c
+./examples/streaming_compression.c
+./examples/streaming_compression_thread_pool.c
+./examples/streaming_decompression.c
+./examples/streaming_memory_usage.c

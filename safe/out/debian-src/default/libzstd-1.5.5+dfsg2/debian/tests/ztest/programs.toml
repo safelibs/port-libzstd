@@ -1,0 +1,21 @@
+[format.version]
+major = 0
+minor = 1
+
+# These sample builds are copied into the safe-staged Debian source tree and
+# exercised against the safe package outputs only.
+[program.pkg-make]
+executable = "ztest"
+
+[program.pkg-make.commands]
+clean = [["make", "clean"]]
+build = [["make"]]
+test = [["make", "test"]]
+
+[program.cmake]
+executable = "ztest"
+
+[program.cmake.commands]
+clean = [["make", "clean"]]
+build = [["cmake", "."], ["make"]]
+test = [["./ztest"]]

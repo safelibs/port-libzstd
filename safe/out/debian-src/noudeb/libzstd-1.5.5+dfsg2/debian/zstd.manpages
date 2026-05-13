@@ -1,0 +1,2 @@
+# Install the safe-built manpage set, including generated zstdmt.1 and pzstd.1.
+usr/share/man/man1/*

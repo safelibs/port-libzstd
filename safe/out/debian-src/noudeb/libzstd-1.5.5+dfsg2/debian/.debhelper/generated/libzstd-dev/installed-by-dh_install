@@ -1,0 +1,8 @@
+./obj-x86_64-linux-gnu/zstdConfig.cmake
+./obj-x86_64-linux-gnu/zstdConfigVersion.cmake
+./obj-x86_64-linux-gnu/CMakeFiles/Export/libzstd-safe/zstdTargets-noconfig.cmake
+./obj-x86_64-linux-gnu/CMakeFiles/Export/libzstd-safe/zstdTargets.cmake
+debian/tmp/usr/include
+debian/tmp/usr/lib/x86_64-linux-gnu/libzstd.a
+debian/tmp/usr/lib/x86_64-linux-gnu/libzstd.so
+debian/tmp/usr/lib/x86_64-linux-gnu/pkgconfig

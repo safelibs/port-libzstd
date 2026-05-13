@@ -1,0 +1,47 @@
+[package]
+name = "libzstd-safe"
+version = "1.5.5"
+edition = "2021"
+rust-version = "1.82"
+publish = false
+build = "build.rs"
+description = "Phase-2 common/decompression ABI scaffold for the libzstd safe port"
+license = "BSD-3-Clause OR GPL-2.0-only"
+
+[lib]
+name = "zstd"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[[test]]
+name = "decompress"
+path = "tests/rust/decompress.rs"
+
+[[test]]
+name = "compress"
+path = "tests/rust/compress.rs"
+
+[features]
+default = []
+legacy = []
+threading = []
+build-shared-default = ["threading"]
+build-static-default = []
+variant-mt = ["threading"]
+variant-nomt = []
+
+[package.metadata.libzstd-safe]
+upstream_root = "../original/libzstd-1.5.5+dfsg2"
+abi_baseline = "abi/original.exports.txt"
+headers = [
+    "include/zstd.h",
+    "include/zdict.h",
+    "include/zstd_errors.h",
+]
+
+[dependencies]
+oxiarc-core = "=0.2.5"
+oxiarc-zstd = "=0.2.5"
+structured-zstd = { version = "=0.0.3", path = "third_party/structured-zstd" }
+
+[build-dependencies]
+cc = "1.2"

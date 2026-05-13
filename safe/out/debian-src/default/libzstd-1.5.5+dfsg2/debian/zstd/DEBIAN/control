@@ -1,0 +1,17 @@
+Package: zstd
+Source: libzstd
+Version: 1.5.5+dfsg2-2build1.1+safelibs1
+Architecture: amd64
+Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+Installed-Size: 383
+Depends: libc6 (>= 2.34), libgcc-s1 (>= 3.3.1), liblz4-1 (>= 1.8.0), liblzma5 (>= 5.1.1alpha+20120614), libstdc++6 (>= 12), libzstd1 (>= 1.5.5), zlib1g (>= 1:1.1.4)
+Section: utils
+Priority: optional
+Multi-Arch: foreign
+Homepage: https://github.com/facebook/zstd
+Description: fast lossless compression algorithm -- CLI tool
+ Zstd, short for Zstandard, is a fast lossless compression algorithm, targeting
+ real-time compression scenarios at zlib-level compression ratio.
+ .
+ This package contains the CLI programs implementing zstd, zstdmt, and pzstd.
+Original-Maintainer: RPM packaging team <team+pkg-rpm@tracker.debian.org>
