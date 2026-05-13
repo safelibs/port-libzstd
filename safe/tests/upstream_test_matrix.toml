@@ -3,7 +3,7 @@ phase_id = "impl_final_release_burn_down"
 last_verified = "2026-05-13"
 top_level_release_gate = "safe/scripts/run-full-suite.sh"
 phase1_rebase_note = "Phase 1 owns native decompression suites, phases 2-5 own the preserved compression, advanced, packaging, and black-box upstream wrappers after the scaffold removal."
-phase5_artifact_policy = "Upstream black-box wrappers require the prebuilt Phase 4 install tree, helper root, Debian metadata, and a staged safe/scripts tree that matches the repository before running."
+phase5_artifact_policy = "Upstream black-box wrappers require the prebuilt Phase 4 install trees, helper root, Debian metadata/profile outputs, and a staged safe/scripts tree that matches the repository before running."
 verification_helpers = [
   "safe/scripts/phase6-common.sh",
   "safe/scripts/verify-header-identity.sh",
@@ -37,8 +37,11 @@ verification_helpers = [
 upstream_root = "original/libzstd-1.5.5+dfsg2"
 phase4_inputs = [
   "safe/out/install/release-default",
+  "safe/out/install/release-mt",
+  "safe/out/install/release-nomt",
   "safe/out/original-cli/lib",
   "safe/out/deb/default/metadata.env",
+  "safe/out/deb/noudeb/metadata.env",
 ]
 phase6_artifact_roots = [
   "safe/out/dependents/image-context",

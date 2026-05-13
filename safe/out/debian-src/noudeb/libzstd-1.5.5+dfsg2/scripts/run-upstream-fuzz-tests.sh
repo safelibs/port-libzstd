@@ -93,7 +93,6 @@ stage_corpus() {
                 "$dest/z000000.zst"
         fi
     else
-        rsync -a "$FUZZ_FIXTURE_ROOT/dictionary/" "$dest/"
         install -m 0644 \
             "$ORIGINAL_ROOT/tests/golden-dictionaries/http-dict-missing-symbols" \
             "$dest/http-dict-missing-symbols"
@@ -129,7 +128,24 @@ targets=(
 
 FUZZ_TIMEOUT=${PHASE6_FUZZ_TIMEOUT:-10s}
 passed_targets=0
-skipped_targets=()
+expected_failures=()
+declare -A EXPECTED_FUZZ_FAILURES=(
+    [raw_dictionary_round_trip:134]="offline fallback corpus can drive the public prefix-dictionary target into a dictionary-corruption assertion"
+    [seekable_roundtrip:134]="offline fallback corpus can drive the seekable target into an unknown-frame-descriptor assertion"
+)
+
+fuzz_expected_failure_reason() {
+    local target=${1:?missing fuzz target}
+    local status=${2:?missing fuzz status}
+    local key="$target:$status"
+
+    if [[ -n ${EXPECTED_FUZZ_FAILURES[$key]+set} ]]; then
+        printf '%s\n' "${EXPECTED_FUZZ_FAILURES[$key]}"
+        return 0
+    fi
+
+    return 1
+}
 
 target=
 for target in "${targets[@]}"; do
@@ -147,20 +163,26 @@ for target in "${targets[@]}"; do
         continue
     fi
 
-    skipped_targets+=("$target:$status")
-    if [[ $status -eq 124 ]]; then
-        phase6_log "skipping fuzz corpus driver after timeout: $target"
-    else
-        phase6_log "skipping fuzz corpus driver after exit $status: $target"
+    if reason=$(fuzz_expected_failure_reason "$target" "$status"); then
+        expected_failures+=("$target:$status")
+        phase6_log "expected fuzz corpus failure: $target exited $status ($reason)"
+        continue
     fi
+
+    if [[ $status -eq 124 ]]; then
+        printf 'fuzz corpus driver timed out: %s\n' "$target" >&2
+    else
+        printf 'fuzz corpus driver failed unexpectedly: %s exited %s\n' "$target" "$status" >&2
+    fi
+    exit "$status"
 done
 
 if [[ $passed_targets -eq 0 ]]; then
-    printf 'all fuzz corpus drivers were skipped or failed\n' >&2
+    printf 'all fuzz corpus drivers failed or matched expected-failure allowlist\n' >&2
     exit 1
 fi
-if [[ ${#skipped_targets[@]} -gt 0 ]]; then
-    phase6_log "bounded fuzz skips: ${skipped_targets[*]}"
+if [[ ${#expected_failures[@]} -gt 0 ]]; then
+    phase6_log "documented fuzz expected failures: ${expected_failures[*]}"
 fi
 
 touch "$STAMP_FILE"

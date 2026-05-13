@@ -239,10 +239,37 @@ phase6_assert_staged_copy_matches_repo() {
     }
 }
 
+phase6_assert_staged_tracked_tree_matches_repo() {
+    local repo_tree=${1:?missing repository tree}
+    local rel
+    local tracked
+    local repo_path
+    local staged_path
+    local staged_rel
+
+    repo_tree=$(phase6_abspath "$repo_tree")
+    [[ $repo_tree == "$SAFE_ROOT/"* ]] || return 0
+
+    rel=${repo_tree#"$SAFE_ROOT/"}
+    while IFS= read -r -d '' tracked; do
+        repo_path="$REPO_ROOT/$tracked"
+        staged_rel=${tracked#safe/}
+        staged_path="$PHASE6_DEB_STAGE_ROOT/$staged_rel"
+
+        phase6_require_path "$staged_path" "staged Debian source copy for $staged_rel"
+        cmp -s "$repo_path" "$staged_path" || {
+            printf 'staged Debian source tree is stale for %s\n' "$staged_rel" >&2
+            phase6_refresh_hint
+            exit 1
+        }
+    done < <(git -C "$REPO_ROOT" ls-files -z -- "safe/$rel")
+}
+
 phase6_require_phase4_inputs() {
     local caller=${1:-}
 
     phase6_load_phase4_metadata
+    phase6_assert_staged_tracked_tree_matches_repo "$SAFE_ROOT/scripts"
     phase6_assert_staged_copy_matches_repo "$SCRIPT_DIR/phase6-common.sh"
     if [[ -n $caller ]]; then
         phase6_assert_staged_copy_matches_repo "$caller"

@@ -10,6 +10,7 @@ NOUDEB_METADATA_FILE="$SAFE_ROOT/out/deb/noudeb/metadata.env"
 source "$SAFE_ROOT/scripts/phase6-common.sh"
 
 phase6_require_phase4_inputs "$0"
+phase6_require_path "$NOUDEB_METADATA_FILE" "noudeb Debian package metadata"
 
 DEFAULT_PACKAGE_DIR=
 DEFAULT_INSTALL_ROOT=
@@ -52,8 +53,6 @@ then
     phase6_log "Debian profile verification already fresh; skipping rerun"
     exit 0
 fi
-
-DEB_BUILD_PROFILES=noudeb bash "$SAFE_ROOT/scripts/build-deb.sh"
 
 # shellcheck disable=SC1090
 source "$SAFE_ROOT/out/deb/default/metadata.env"

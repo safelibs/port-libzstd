@@ -30,9 +30,6 @@ then
     exit 0
 fi
 
-bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release --variant mt
-bash "$SAFE_ROOT/scripts/build-artifacts.sh" --release --variant nomt
-
 DEFAULT_LIBDIR="$SAFE_ROOT/out/install/release-default/usr/lib/$MULTIARCH"
 MT_LIBDIR="$SAFE_ROOT/out/install/release-mt/usr/lib/$MULTIARCH"
 NOMT_LIBDIR="$SAFE_ROOT/out/install/release-nomt/usr/lib/$MULTIARCH"
@@ -41,6 +38,9 @@ for candidate in "$DEFAULT_LIBDIR" "$MT_LIBDIR" "$NOMT_LIBDIR"; do
     if [[ ! -d $candidate ]]; then
         candidate=${candidate%/$MULTIARCH}
     fi
+    phase6_require_path "$candidate/libzstd.so.1.5.5" "prepared build variant shared object"
+    phase6_require_path "$candidate/libzstd.a" "prepared build variant static archive"
+    phase6_require_path "$candidate/pkgconfig/libzstd.pc" "prepared build variant pkg-config metadata"
     readelf -lW "$candidate/libzstd.so.1.5.5" | grep -q 'GNU_STACK' || {
         printf 'missing GNU_STACK program header: %s\n' "$candidate/libzstd.so.1.5.5" >&2
         exit 1
