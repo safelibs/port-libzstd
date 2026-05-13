@@ -1,10 +1,12 @@
 # Offline Regression Fixtures
 
-Phase 6 reuses the checked-in upstream cache under
-`original/libzstd-1.5.5+dfsg2/tests/regression/cache/` first.
+The Phase 5 upstream release gate reuses the checked-in safe regression
+snapshot first, and can also consume an upstream cache under
+`original/libzstd-1.5.5+dfsg2/tests/regression/cache/` when that cache is
+present.
 
-This directory exists so the phase-6 wrapper has a stable place to overlay any
-additional local-only fixtures if the upstream cache ever becomes incomplete.
+This directory exists so the upstream wrapper has a stable place to overlay any
+additional local-only fixtures if an upstream cache is added later.
 No network fetches or corpus regeneration are part of the release gate.
 
 The wrapper is rooted on the prebuilt Phase 4 artifacts:

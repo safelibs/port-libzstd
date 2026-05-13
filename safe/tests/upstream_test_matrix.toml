@@ -1,8 +1,9 @@
 schema_version = 1
 phase_id = "impl_final_release_burn_down"
-last_verified = "2026-03-31"
+last_verified = "2026-05-13"
 top_level_release_gate = "safe/scripts/run-full-suite.sh"
 phase1_rebase_note = "Phase 1 owns native decompression suites, phases 2-5 own the preserved compression, advanced, packaging, and black-box upstream wrappers after the scaffold removal."
+phase5_artifact_policy = "Upstream black-box wrappers require the prebuilt Phase 4 install tree, helper root, Debian metadata, and a staged safe/scripts tree that matches the repository before running."
 verification_helpers = [
   "safe/scripts/phase6-common.sh",
   "safe/scripts/verify-header-identity.sh",
@@ -496,7 +497,7 @@ owning_phase = 5
 release_gate = true
 prerequisites = [
   "libregression.a",
-  "original/libzstd-1.5.5+dfsg2/tests/fuzz/corpora",
+  "optional original/libzstd-1.5.5+dfsg2/tests/fuzz/corpora when present",
   "safe/tests/fixtures/fuzz-corpora",
   "safe/out/install/release-default",
   "safe/out/original-cli/lib",

@@ -4,7 +4,7 @@ schema_version = 1
 install_root = "../../../out/install/release-default"
 helper_root = "../../../out/original-cli/lib"
 metadata = "../../../out/deb/default/metadata.env"
-policy = "The fuzz wrapper reuses these checked-in corpora offline and only overlays small upstream golden samples that are already in-tree."
+policy = "The Phase 5 fuzz wrapper reuses these checked-in corpora offline and only overlays small upstream golden samples that are already in-tree."
 
 [fallback_sets.raw]
 path = "raw"
@@ -17,6 +17,5 @@ seed_source = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-decompressi
 usage = "compressed-input fuzz targets"
 
 [fallback_sets.dictionary]
-path = "dictionary"
 seed_source = "../../../../original/libzstd-1.5.5+dfsg2/tests/golden-dictionaries/http-dict-missing-symbols"
-usage = "dictionary-aware fuzz targets"
+usage = "dictionary-aware fuzz targets use the in-tree upstream golden dictionary directly"

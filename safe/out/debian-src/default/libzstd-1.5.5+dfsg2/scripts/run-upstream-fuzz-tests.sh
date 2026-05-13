@@ -93,7 +93,6 @@ stage_corpus() {
                 "$dest/z000000.zst"
         fi
     else
-        rsync -a "$FUZZ_FIXTURE_ROOT/dictionary/" "$dest/"
         install -m 0644 \
             "$ORIGINAL_ROOT/tests/golden-dictionaries/http-dict-missing-symbols" \
             "$dest/http-dict-missing-symbols"
