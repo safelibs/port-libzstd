@@ -2355,7 +2355,7 @@ pub(crate) fn cparam_bounds(param: ZSTD_cParameter) -> ZSTD_bounds {
         },
         ZSTD_cParameter::ZSTD_c_windowLog => ZSTD_bounds {
             error: 0,
-            lowerBound: 0,
+            lowerBound: 10,
             upperBound: 31,
         },
         ZSTD_cParameter::ZSTD_c_hashLog => ZSTD_bounds {
@@ -2679,7 +2679,10 @@ pub(crate) fn adjust_cparams(
         } else {
             u64::BITS - (total_size - 1).leading_zeros()
         };
-        cparams.windowLog = cparams.windowLog.min(src_log);
+        cparams.windowLog = cparams
+            .windowLog
+            .min(src_log)
+            .max(bounds(ZSTD_cParameter::ZSTD_c_windowLog).lowerBound as u32);
     }
 
     if normalized_src_size != ZSTD_CONTENTSIZE_UNKNOWN {

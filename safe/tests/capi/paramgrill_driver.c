@@ -18,10 +18,12 @@ static void check_zstd(size_t code, const char* label)
 static void verify_negative_compression_levels(void)
 {
     ZSTD_bounds const level_bounds = ZSTD_cParam_getBounds(ZSTD_c_compressionLevel);
+    ZSTD_bounds const window_bounds = ZSTD_cParam_getBounds(ZSTD_c_windowLog);
     ZSTD_bounds const target_bounds = ZSTD_cParam_getBounds(ZSTD_c_targetLength);
     ZSTD_compressionParameters const negative = ZSTD_getCParams(-5, 0, 0);
     ZSTD_compressionParameters const negative_dict = ZSTD_getCParams(-5, 0, 1);
     ZSTD_compressionParameters const level_one = ZSTD_getCParams(1, 0, 0);
+    ZSTD_compressionParameters valid = ZSTD_getCParams(3, 0, 0);
     ZSTD_CCtx* const cctx = ZSTD_createCCtx();
     int current_level = 0;
 
@@ -31,6 +33,21 @@ static void verify_negative_compression_levels(void)
     }
     if (level_bounds.upperBound != ZSTD_maxCLevel()) {
         fprintf(stderr, "compression-level upper bound drifted\n");
+        exit(1);
+    }
+    if (window_bounds.error != 0 || window_bounds.lowerBound != 10 || window_bounds.upperBound != 31) {
+        fprintf(stderr, "windowLog bounds drifted\n");
+        exit(1);
+    }
+    valid.windowLog = 0;
+    if (!ZSTD_isError(ZSTD_checkCParams(valid))) {
+        fprintf(stderr, "ZSTD_checkCParams accepted zero windowLog\n");
+        exit(1);
+    }
+    valid = ZSTD_getCParams(3, 0, 0);
+    valid.windowLog = (unsigned)(window_bounds.lowerBound - 1);
+    if (!ZSTD_isError(ZSTD_checkCParams(valid))) {
+        fprintf(stderr, "ZSTD_checkCParams accepted below-minimum windowLog\n");
         exit(1);
     }
     if (target_bounds.error != 0 || target_bounds.upperBound != (int)ZSTD_BLOCKSIZE_MAX) {

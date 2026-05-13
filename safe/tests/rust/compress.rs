@@ -1628,6 +1628,8 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     let dict = dict_fixture();
     let cdict_ptr = cdict::ZSTD_createCDict(dict.as_ptr().cast(), dict.len(), 4);
     let bounds: ZSTD_bounds = params::ZSTD_cParam_getBounds(ZSTD_cParameter::ZSTD_c_strategy);
+    let c_window_bounds: ZSTD_bounds =
+        params::ZSTD_cParam_getBounds(ZSTD_cParameter::ZSTD_c_windowLog);
     let window_bounds = params::ZSTD_dParam_getBounds(ZSTD_dParameter::ZSTD_d_windowLogMax);
     let cparams: ZSTD_compressionParameters =
         params::ZSTD_getCParams(4, src.len() as u64, dict.len());
@@ -1644,6 +1646,9 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     let mut ldm_flag = 0;
 
     assert_eq!(bounds.error, 0);
+    assert_eq!(c_window_bounds.error, 0);
+    assert_eq!(c_window_bounds.lowerBound, 10);
+    assert_eq!(c_window_bounds.upperBound, 31);
     assert_eq!(window_bounds.error, 0);
     assert!(!cctx_params_ptr.is_null());
     check_result(params::ZSTD_checkCParams(cparams), "ZSTD_checkCParams");
@@ -1654,6 +1659,18 @@ fn compress_streaming_and_parameter_helpers_roundtrip() {
     check_result(
         params::ZSTD_checkCParams(adjusted_small),
         "ZSTD_checkCParams(adjusted_small)",
+    );
+    let mut zero_window_cparams = cparams;
+    zero_window_cparams.windowLog = 0;
+    expect_error(
+        params::ZSTD_checkCParams(zero_window_cparams),
+        "ZSTD_checkCParams(zero windowLog)",
+    );
+    let mut below_window_cparams = cparams;
+    below_window_cparams.windowLog = (c_window_bounds.lowerBound - 1) as u32;
+    expect_error(
+        params::ZSTD_checkCParams(below_window_cparams),
+        "ZSTD_checkCParams(below-min windowLog)",
     );
     let level_bounds = params::ZSTD_cParam_getBounds(ZSTD_cParameter::ZSTD_c_compressionLevel);
     assert_eq!(level_bounds.error, 0);
