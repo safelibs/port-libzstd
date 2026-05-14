@@ -1,4 +1,8 @@
-use core::ffi::{c_double, c_int, c_uint, c_void};
+use core::{
+    ffi::{c_double, c_int, c_uint, c_void},
+    mem::size_of,
+    ptr,
+};
 
 pub const ZSTD_CONTENTSIZE_UNKNOWN: u64 = u64::MAX;
 pub const ZSTD_CONTENTSIZE_ERROR: u64 = u64::MAX - 1;
@@ -73,6 +77,51 @@ pub struct ZSTD_customMem {
     pub customAlloc: ZSTD_allocFunction,
     pub customFree: ZSTD_freeFunction,
     pub opaque: *mut c_void,
+}
+
+impl ZSTD_customMem {
+    pub(crate) fn is_valid(self) -> bool {
+        self.customAlloc.is_some() == self.customFree.is_some()
+    }
+}
+
+pub(crate) fn allocate_with_custom_mem<T>(value: T, custom_mem: ZSTD_customMem) -> *mut T {
+    if !custom_mem.is_valid() {
+        return ptr::null_mut();
+    }
+
+    let Some(custom_alloc) = custom_mem.customAlloc else {
+        return Box::into_raw(Box::new(value));
+    };
+
+    let size = size_of::<T>().max(1);
+    let raw = unsafe { custom_alloc(custom_mem.opaque, size) }.cast::<T>();
+    if raw.is_null() {
+        return ptr::null_mut();
+    }
+
+    unsafe {
+        raw.write(value);
+    }
+    raw
+}
+
+pub(crate) unsafe fn free_with_custom_mem<T>(ptr: *mut T, custom_mem: ZSTD_customMem) {
+    if ptr.is_null() {
+        return;
+    }
+
+    let Some(custom_free) = custom_mem.customFree else {
+        unsafe {
+            drop(Box::from_raw(ptr));
+        }
+        return;
+    };
+
+    unsafe {
+        ptr::drop_in_place(ptr);
+        custom_free(custom_mem.opaque, ptr.cast());
+    }
 }
 
 #[repr(C)]

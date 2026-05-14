@@ -27,10 +27,6 @@ fn estimate_dstream_size(window_size: usize) -> Result<usize, ZSTD_ErrorCode> {
 // The streaming ABI shares the same Rust DecoderContext and bufferless state
 // used by block replay; no upstream streaming session is loaded at runtime.
 
-fn custom_mem_supported(custom_mem: ZSTD_customMem) -> bool {
-    custom_mem.customAlloc.is_none() && custom_mem.customFree.is_none()
-}
-
 #[no_mangle]
 pub extern "C" fn ZSTD_createDStream() -> *mut ZSTD_DStream {
     decompress::create_dctx().cast()
@@ -188,8 +184,8 @@ pub extern "C" fn ZSTD_decompressStream_simpleArgs(
 
 #[no_mangle]
 pub extern "C" fn ZSTD_createDStream_advanced(customMem: ZSTD_customMem) -> *mut ZSTD_DStream {
-    if !custom_mem_supported(customMem) {
+    if !customMem.is_valid() {
         return core::ptr::null_mut();
     }
-    decompress::create_dctx().cast()
+    decompress::create_dctx_advanced(customMem).cast()
 }

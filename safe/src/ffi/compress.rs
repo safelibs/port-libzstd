@@ -9,12 +9,12 @@ use crate::{
         huf::is_formatted_dictionary,
     },
     ffi::types::{
-        ZSTD_CCtx, ZSTD_CCtx_params, ZSTD_CDict, ZSTD_ErrorCode, ZSTD_ResetDirective,
-        ZSTD_Sequence, ZSTD_bounds, ZSTD_cParameter, ZSTD_compressionParameters, ZSTD_customMem,
-        ZSTD_dParameter, ZSTD_dictContentType_e, ZSTD_dictLoadMethod_e, ZSTD_format_e,
-        ZSTD_frameParameters, ZSTD_inBuffer, ZSTD_outBuffer, ZSTD_parameters,
-        ZSTD_sequenceFormat_e, ZSTD_sequenceProducer_F, ZSTD_strategy, ZSTD_threadPool,
-        ZSTD_BLOCKSIZE_MAX, ZSTD_CLEVEL_DEFAULT, ZSTD_CONTENTSIZE_UNKNOWN,
+        allocate_with_custom_mem, free_with_custom_mem, ZSTD_CCtx, ZSTD_CCtx_params, ZSTD_CDict,
+        ZSTD_ErrorCode, ZSTD_ResetDirective, ZSTD_Sequence, ZSTD_bounds, ZSTD_cParameter,
+        ZSTD_compressionParameters, ZSTD_customMem, ZSTD_dParameter, ZSTD_dictContentType_e,
+        ZSTD_dictLoadMethod_e, ZSTD_format_e, ZSTD_frameParameters, ZSTD_inBuffer, ZSTD_outBuffer,
+        ZSTD_parameters, ZSTD_sequenceFormat_e, ZSTD_sequenceProducer_F, ZSTD_strategy,
+        ZSTD_threadPool, ZSTD_BLOCKSIZE_MAX, ZSTD_CLEVEL_DEFAULT, ZSTD_CONTENTSIZE_UNKNOWN,
     },
 };
 use core::{
@@ -84,6 +84,7 @@ impl EncoderDictionaryStorage {
 
 #[derive(Clone, Debug)]
 pub(crate) struct EncoderDictionary {
+    custom_mem: ZSTD_customMem,
     storage: EncoderDictionaryStorage,
     static_workspace_size: usize,
     pub(crate) dict_id: u32,
@@ -150,6 +151,7 @@ impl EncoderDictionary {
             }
         };
         Ok(Self {
+            custom_mem: ZSTD_customMem::default(),
             storage,
             static_workspace_size,
             dict_id,
@@ -563,6 +565,7 @@ impl Matcher for DictionaryMatcher {
 
 #[derive(Clone, Debug)]
 pub(crate) struct EncoderContext {
+    pub(crate) custom_mem: ZSTD_customMem,
     pub(crate) static_workspace_size: usize,
     pub compression_level: c_int,
     pub cparams: ZSTD_compressionParameters,
@@ -603,6 +606,7 @@ pub(crate) struct EncoderContext {
 impl Default for EncoderContext {
     fn default() -> Self {
         Self {
+            custom_mem: ZSTD_customMem::default(),
             static_workspace_size: 0,
             compression_level: ZSTD_CLEVEL_DEFAULT,
             cparams: default_cparams(),
@@ -1071,7 +1075,16 @@ pub(crate) fn with_cdict_ref<T>(
 }
 
 pub(crate) fn create_cctx() -> *mut ZSTD_CCtx {
-    Box::into_raw(Box::new(EncoderContext::default())).cast()
+    create_cctx_advanced(ZSTD_customMem::default())
+}
+
+pub(crate) fn create_cctx_advanced(custom_mem: ZSTD_customMem) -> *mut ZSTD_CCtx {
+    if !validate_custom_mem(custom_mem) {
+        return null_cctx();
+    }
+    let mut ctx = EncoderContext::default();
+    ctx.custom_mem = custom_mem;
+    allocate_with_custom_mem(ctx, custom_mem).cast()
 }
 
 pub(crate) fn init_static_cctx(workspace: *mut c_void, workspace_size: usize) -> *mut ZSTD_CCtx {
@@ -1096,8 +1109,11 @@ pub(crate) fn free_cctx(ptr: *mut ZSTD_CCtx) -> usize {
     if cctx_ref(ptr.cast_const()).is_some_and(|cctx| cctx.static_workspace_size != 0) {
         return error_result(ZSTD_ErrorCode::ZSTD_error_memory_allocation);
     }
+    let custom_mem = cctx_ref(ptr.cast_const())
+        .map(|cctx| cctx.custom_mem)
+        .unwrap_or_default();
     unsafe {
-        drop(Box::from_raw(ptr.cast::<EncoderContext>()));
+        free_with_custom_mem(ptr.cast::<EncoderContext>(), custom_mem);
     }
     0
 }
@@ -1127,7 +1143,7 @@ fn validate_dictionary_source(
 
 pub(crate) fn create_cdict(dict: &[u8], compression_level: c_int) -> *mut ZSTD_CDict {
     match EncoderDictionary::from_bytes(dict, compression_level) {
-        Ok(dict) => Box::into_raw(Box::new(dict)).cast(),
+        Ok(dict) => allocate_with_custom_mem(dict, ZSTD_customMem::default()).cast(),
         Err(_) => null_cdict(),
     }
 }
@@ -1156,6 +1172,61 @@ pub(crate) fn create_cdict_with_settings(
     dict_load_method: ZSTD_dictLoadMethod_e,
     dict_content_type: ZSTD_dictContentType_e,
 ) -> *mut ZSTD_CDict {
+    create_cdict_with_custom_mem(
+        dict,
+        compression_level,
+        cparams,
+        enable_long_distance_matching,
+        enable_dedicated_dict_search,
+        ldm_hash_log,
+        ldm_min_match,
+        ldm_bucket_size_log,
+        ldm_hash_rate_log,
+        nb_workers,
+        job_size,
+        overlap_log,
+        rsyncable,
+        literal_compression_mode,
+        target_cblock_size,
+        src_size_hint,
+        block_delimiters,
+        validate_sequences,
+        use_row_match_finder,
+        enable_seq_producer_fallback,
+        dict_load_method,
+        dict_content_type,
+        ZSTD_customMem::default(),
+    )
+}
+
+pub(crate) fn create_cdict_with_custom_mem(
+    dict: &[u8],
+    compression_level: c_int,
+    cparams: ZSTD_compressionParameters,
+    enable_long_distance_matching: bool,
+    enable_dedicated_dict_search: bool,
+    ldm_hash_log: c_int,
+    ldm_min_match: c_int,
+    ldm_bucket_size_log: c_int,
+    ldm_hash_rate_log: c_int,
+    nb_workers: c_int,
+    job_size: c_int,
+    overlap_log: c_int,
+    rsyncable: c_int,
+    literal_compression_mode: c_int,
+    target_cblock_size: c_int,
+    src_size_hint: c_int,
+    block_delimiters: ZSTD_sequenceFormat_e,
+    validate_sequences: bool,
+    use_row_match_finder: c_int,
+    enable_seq_producer_fallback: bool,
+    dict_load_method: ZSTD_dictLoadMethod_e,
+    dict_content_type: ZSTD_dictContentType_e,
+    custom_mem: ZSTD_customMem,
+) -> *mut ZSTD_CDict {
+    if !validate_custom_mem(custom_mem) {
+        return null_cdict();
+    }
     match EncoderDictionary::from_settings(
         dict,
         compression_level,
@@ -1180,7 +1251,10 @@ pub(crate) fn create_cdict_with_settings(
         dict_load_method,
         dict_content_type,
     ) {
-        Ok(dict) => Box::into_raw(Box::new(dict)).cast(),
+        Ok(mut dict) => {
+            dict.custom_mem = custom_mem;
+            allocate_with_custom_mem(dict, custom_mem).cast()
+        }
         Err(_) => null_cdict(),
     }
 }
@@ -1273,8 +1347,11 @@ pub(crate) fn free_cdict(ptr: *mut ZSTD_CDict) -> usize {
     if cdict_ref(ptr.cast_const()).is_some_and(|cdict| cdict.workspace_size() != 0) {
         return 0;
     }
+    let custom_mem = cdict_ref(ptr.cast_const())
+        .map(|cdict| cdict.custom_mem)
+        .unwrap_or_default();
     unsafe {
-        drop(Box::from_raw(ptr.cast::<EncoderDictionary>()));
+        free_with_custom_mem(ptr.cast::<EncoderDictionary>(), custom_mem);
     }
     0
 }
@@ -4232,7 +4309,7 @@ pub(crate) fn load_dictionary_advanced(
 }
 
 pub(crate) fn validate_custom_mem(custom_mem: ZSTD_customMem) -> bool {
-    custom_mem.customAlloc.is_none() && custom_mem.customFree.is_none()
+    custom_mem.is_valid()
 }
 
 pub(crate) fn to_result(code: Result<usize, ZSTD_ErrorCode>) -> usize {

@@ -2,10 +2,10 @@ use crate::{
     common::error::error_result,
     ffi::{
         compress::{
-            check_cparams, create_cctx, finalize_stream, flush_pending_to_dst, free_cctx,
-            get_cparams, load_dictionary, null_cctx, one_shot_context, optional_src_slice,
-            sizeof_cctx, stage_legacy_input, stage_src_slice, to_result, validate_custom_mem,
-            with_cctx_mut, with_cctx_ref, write_frame_to_dst,
+            check_cparams, create_cctx, create_cctx_advanced, finalize_stream,
+            flush_pending_to_dst, free_cctx, get_cparams, load_dictionary, null_cctx,
+            one_shot_context, optional_src_slice, sizeof_cctx, stage_legacy_input, stage_src_slice,
+            to_result, validate_custom_mem, with_cctx_mut, with_cctx_ref, write_frame_to_dst,
         },
         types::{
             ZSTD_CCtx, ZSTD_CCtx_params, ZSTD_ErrorCode, ZSTD_ResetDirective, ZSTD_cParameter,
@@ -92,8 +92,10 @@ pub extern "C" fn ZSTD_copyCCtx(
         let snapshot = prepared.clone();
         with_cctx_mut(cctx, |cctx| {
             let static_workspace_size = cctx.static_workspace_size;
+            let custom_mem = cctx.custom_mem;
             *cctx = snapshot;
             cctx.static_workspace_size = static_workspace_size;
+            cctx.custom_mem = custom_mem;
             cctx.pledged_src_size = pledgedSrcSize;
             Ok(0)
         })
@@ -356,6 +358,6 @@ pub extern "C" fn ZSTD_createCCtx_advanced(customMem: ZSTD_customMem) -> *mut ZS
     if !validate_custom_mem(customMem) {
         null_cctx()
     } else {
-        create_cctx()
+        create_cctx_advanced(customMem)
     }
 }

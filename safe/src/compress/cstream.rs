@@ -2,7 +2,7 @@ use crate::{
     common::error::error_result,
     ffi::{
         compress::{
-            create_cctx, cstream_size_estimate, emit_mt_continue_job,
+            create_cctx, create_cctx_advanced, cstream_size_estimate, emit_mt_continue_job,
             estimate_cstream_size_from_cparams, estimate_cstream_size_from_level, finalize_stream,
             flush_stream_data, flush_stream_output, free_cctx, get_cparams, load_dictionary,
             next_input_size_hint, null_cctx, stage_stream_input, stream_pending_bytes, to_result,
@@ -261,7 +261,7 @@ pub extern "C" fn ZSTD_createCStream_advanced(customMem: ZSTD_customMem) -> *mut
     if !validate_custom_mem(customMem) {
         null_cctx().cast()
     } else {
-        create_cctx().cast()
+        create_cctx_advanced(customMem).cast()
     }
 }
 

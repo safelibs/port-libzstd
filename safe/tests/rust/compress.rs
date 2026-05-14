@@ -1,5 +1,5 @@
 use std::{
-    ffi::{c_int, CStr},
+    ffi::{c_int, c_void, CStr},
     fs,
     path::{Path, PathBuf},
 };
@@ -37,6 +37,151 @@ fn invalid_cdict_fixture() -> &'static [u8] {
         0x43, 0xce, 0x28, 0xa5, 0x08, 0x88, 0xc0, 0x80, 0x88, 0x8c, 0x00, 0x01, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00,
     ]
+}
+
+#[derive(Default)]
+struct CustomAllocatorStats {
+    allocs: usize,
+    frees: usize,
+    bytes: usize,
+}
+
+unsafe extern "C" {
+    fn malloc(size: usize) -> *mut c_void;
+    fn free(ptr: *mut c_void);
+}
+
+unsafe extern "C" fn tracking_alloc(opaque: *mut c_void, size: usize) -> *mut c_void {
+    let stats = unsafe { &mut *opaque.cast::<CustomAllocatorStats>() };
+    stats.allocs += 1;
+    stats.bytes += size;
+    unsafe { malloc(size.max(1)) }
+}
+
+unsafe extern "C" fn tracking_free(opaque: *mut c_void, address: *mut c_void) {
+    let stats = unsafe { &mut *opaque.cast::<CustomAllocatorStats>() };
+    if !address.is_null() {
+        stats.frees += 1;
+    }
+    unsafe {
+        free(address);
+    }
+}
+
+fn tracking_custom_mem(stats: &mut CustomAllocatorStats) -> ZSTD_customMem {
+    ZSTD_customMem {
+        customAlloc: Some(tracking_alloc),
+        customFree: Some(tracking_free),
+        opaque: (stats as *mut CustomAllocatorStats).cast(),
+    }
+}
+
+#[test]
+fn advanced_custom_allocators_create_and_free_abi_handles() {
+    let mut stats = CustomAllocatorStats::default();
+    let custom_mem = tracking_custom_mem(&mut stats);
+    let dict = b"custom allocator dictionary payload payload payload";
+    let cparams = params::ZSTD_getCParams(3, ZSTD_CONTENTSIZE_UNKNOWN, dict.len());
+
+    let cctx_ptr = cctx::ZSTD_createCCtx_advanced(custom_mem);
+    assert!(!cctx_ptr.is_null(), "custom CCtx allocation failed");
+    assert_eq!(cctx::ZSTD_freeCCtx(cctx_ptr), 0);
+
+    let cstream_ptr = cstream::ZSTD_createCStream_advanced(custom_mem);
+    assert!(!cstream_ptr.is_null(), "custom CStream allocation failed");
+    assert_eq!(cstream::ZSTD_freeCStream(cstream_ptr), 0);
+
+    let cdict_ptr = cdict::ZSTD_createCDict_advanced(
+        dict.as_ptr().cast(),
+        dict.len(),
+        ZSTD_dictLoadMethod_e::ZSTD_dlm_byCopy,
+        ZSTD_dictContentType_e::ZSTD_dct_rawContent,
+        cparams,
+        custom_mem,
+    );
+    assert!(!cdict_ptr.is_null(), "custom CDict allocation failed");
+    assert_eq!(cdict::ZSTD_freeCDict(cdict_ptr), 0);
+
+    let params_ptr = cctx_params::ZSTD_createCCtxParams();
+    assert!(!params_ptr.is_null(), "CCtx params allocation failed");
+    let cdict2_ptr = cdict::ZSTD_createCDict_advanced2(
+        dict.as_ptr().cast(),
+        dict.len(),
+        ZSTD_dictLoadMethod_e::ZSTD_dlm_byCopy,
+        ZSTD_dictContentType_e::ZSTD_dct_rawContent,
+        params_ptr,
+        custom_mem,
+    );
+    assert!(
+        !cdict2_ptr.is_null(),
+        "custom CDict advanced2 allocation failed"
+    );
+    assert_eq!(cdict::ZSTD_freeCDict(cdict2_ptr), 0);
+    assert_eq!(cctx_params::ZSTD_freeCCtxParams(params_ptr), 0);
+
+    let dctx_ptr = dctx::ZSTD_createDCtx_advanced(custom_mem);
+    assert!(!dctx_ptr.is_null(), "custom DCtx allocation failed");
+    assert_eq!(dctx::ZSTD_freeDCtx(dctx_ptr), 0);
+
+    let dstream_ptr = dstream::ZSTD_createDStream_advanced(custom_mem);
+    assert!(!dstream_ptr.is_null(), "custom DStream allocation failed");
+    assert_eq!(dstream::ZSTD_freeDStream(dstream_ptr), 0);
+
+    let ddict_ptr = ddict::ZSTD_createDDict_advanced(
+        dict.as_ptr().cast(),
+        dict.len(),
+        ZSTD_dictLoadMethod_e::ZSTD_dlm_byCopy,
+        ZSTD_dictContentType_e::ZSTD_dct_rawContent,
+        custom_mem,
+    );
+    assert!(!ddict_ptr.is_null(), "custom DDict allocation failed");
+    assert_eq!(ddict::ZSTD_freeDDict(ddict_ptr), 0);
+
+    assert_eq!(stats.allocs, stats.frees);
+    assert!(
+        stats.allocs >= 7,
+        "expected custom allocators to back advanced handles"
+    );
+    assert!(
+        stats.bytes > 0,
+        "custom allocator was not asked for storage"
+    );
+}
+
+#[test]
+fn advanced_custom_allocators_reject_incomplete_pairs() {
+    let mut stats = CustomAllocatorStats::default();
+    let incomplete = ZSTD_customMem {
+        customAlloc: Some(tracking_alloc),
+        customFree: None,
+        opaque: (&mut stats as *mut CustomAllocatorStats).cast(),
+    };
+    let dict = b"incomplete allocator dictionary";
+    let cparams = params::ZSTD_getCParams(1, ZSTD_CONTENTSIZE_UNKNOWN, dict.len());
+
+    assert!(cctx::ZSTD_createCCtx_advanced(incomplete).is_null());
+    assert!(cstream::ZSTD_createCStream_advanced(incomplete).is_null());
+    assert!(cdict::ZSTD_createCDict_advanced(
+        dict.as_ptr().cast(),
+        dict.len(),
+        ZSTD_dictLoadMethod_e::ZSTD_dlm_byCopy,
+        ZSTD_dictContentType_e::ZSTD_dct_rawContent,
+        cparams,
+        incomplete,
+    )
+    .is_null());
+    assert!(dctx::ZSTD_createDCtx_advanced(incomplete).is_null());
+    assert!(dstream::ZSTD_createDStream_advanced(incomplete).is_null());
+    assert!(ddict::ZSTD_createDDict_advanced(
+        dict.as_ptr().cast(),
+        dict.len(),
+        ZSTD_dictLoadMethod_e::ZSTD_dlm_byCopy,
+        ZSTD_dictContentType_e::ZSTD_dct_rawContent,
+        incomplete,
+    )
+    .is_null());
+    assert_eq!(stats.allocs, 0);
+    assert_eq!(stats.frees, 0);
 }
 
 fn dict_fixture_path() -> PathBuf {
