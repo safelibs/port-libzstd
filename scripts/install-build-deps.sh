@@ -46,6 +46,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 # shellcheck source=/dev/null
 . "$HOME/.cargo/env"
 rustup default "$toolchain"
+rustup component add rust-src --toolchain "$toolchain"
 rustc --version
 cargo --version
 

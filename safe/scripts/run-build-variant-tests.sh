@@ -36,13 +36,14 @@ NOMT_LIBDIR="$SAFE_ROOT/out/install/release-nomt/usr/lib/$MULTIARCH"
 
 assert_archive_ready() {
     local archive=$1
-    local bad="dl""sym"
+    local lookup="dl""sym"
+    local loader="dl""open"
 
     ar t "$archive" >/dev/null || {
         printf 'build variant static library is not a readable archive: %s\n' "$archive" >&2
         exit 1
     }
-    if LC_ALL=C strings -a "$archive" | LC_ALL=C grep -a "$bad" >/dev/null; then
+    if LC_ALL=C strings -a "$archive" | LC_ALL=C grep -aE "${lookup}|${loader}" >/dev/null; then
         printf 'build variant static library carries loader lookup token: %s\n' "$archive" >&2
         exit 1
     fi

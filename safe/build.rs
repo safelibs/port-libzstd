@@ -99,7 +99,6 @@ fn main() {
         legacy_root.join("zstd_v06.c"),
         legacy_root.join("zstd_v07.c"),
         manifest_dir.join("src/ffi/legacy_shim.c"),
-        manifest_dir.join("src/ffi/runtime_lookup_stub.c"),
     ];
 
     for path in &legacy_files {
