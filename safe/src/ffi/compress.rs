@@ -2264,11 +2264,16 @@ struct MtJobConfig {
     use_row_match_finder: c_int,
     enable_seq_producer_fallback: bool,
     prepend_stream_empty: bool,
+    compress_payload: bool,
 }
 
 #[cfg(libzstd_threading)]
 impl MtJobConfig {
-    fn from_context(ctx: &EncoderContext, prepend_stream_empty: bool) -> Self {
+    fn from_context(
+        ctx: &EncoderContext,
+        prepend_stream_empty: bool,
+        compress_payload: bool,
+    ) -> Self {
         Self {
             compression_level: ctx.compression_level,
             cparams: ctx.cparams,
@@ -2294,6 +2299,7 @@ impl MtJobConfig {
             use_row_match_finder: ctx.use_row_match_finder,
             enable_seq_producer_fallback: ctx.enable_seq_producer_fallback,
             prepend_stream_empty,
+            compress_payload,
         }
     }
 
@@ -2366,7 +2372,21 @@ fn encode_mt_payload_job(
     last_block: bool,
 ) -> Result<Vec<u8>, ZSTD_ErrorCode> {
     let prepend_stream_empty = config.prepend_stream_empty;
+    let compress_payload = config.compress_payload;
     let ctx = config.into_context()?;
+
+    if compress_payload {
+        let already_prepends_without_stream = should_prepend_fast_empty_block(&ctx, false);
+        let mut payload = payload_with_history(&[], &chunk, &ctx)?;
+        if !last_block && !payload.is_empty() {
+            clear_last_block_flag(&mut payload)?;
+        }
+        if prepend_stream_empty && !already_prepends_without_stream {
+            payload = maybe_prepend_fast_empty_block(&ctx, true, payload)?;
+        }
+        return Ok(payload);
+    }
+
     let mut payload = Vec::with_capacity(chunk.len().saturating_add(BLOCK_HEADER_SIZE));
     append_stored_blocks(
         &mut payload,
@@ -2444,14 +2464,8 @@ fn submit_mt_payload_jobs(
             break;
         }
 
-        let open_slots = workers.saturating_sub(ctx.stream.mt_jobs.len()).max(1);
         let configured_job_size = mt_submission_job_size(ctx);
-        let job_size = if open_slots > 1 {
-            configured_job_size.min(remaining.div_ceil(open_slots))
-        } else {
-            configured_job_size
-        }
-        .max(1);
+        let job_size = configured_job_size.max(1);
         let take = if remaining >= job_size {
             job_size
         } else if force_remaining {
@@ -2465,9 +2479,14 @@ fn submit_mt_payload_jobs(
         // independent avoids back-references into history that the block encoder cannot
         // currently prove are aligned with the decoder's cross-job history.
         let history = Vec::new();
+        let compress_payload = last_block
+            && start == 0
+            && end == ctx.stream.input.len()
+            && ctx.stream.mt_jobs.is_empty();
         let config = MtJobConfig::from_context(
             ctx,
             start == 0 && should_prepend_fast_empty_block(ctx, true),
+            compress_payload,
         );
         let job_last_block = last_block && end == ctx.stream.input.len();
         let handle = crate::threading::pool::submit_job(ctx, move || {
