@@ -670,3 +670,84 @@ SAFELIBS_VALIDATOR_DIR="$PWD/validator" bash scripts/run-validation-tests.sh
 ```
 
 All listed checks passed. No validator checks were skipped.
+
+Phase 9 Bounce Resolution: safe MT worker completion
+
+**Validator Checkout**
+
+- Validator URL: https://github.com/safelibs/validator
+- Validator commit: d1c08d01cd50b34a7aeb62c5630e28df0eb6cd97
+- Final code-bearing source commit validated: 6fe88a3a63c13f992b12b9ce62ba98a3c744eb03
+- Local release tag used by the final validator lock: build-6fe88a3a63c1
+- Mode: port
+- Invocation: `SAFELIBS_COMMIT_SHA=$(git rev-parse HEAD) SAFELIBS_VALIDATOR_DIR="$PWD/validator" bash scripts/run-validation-tests.sh`
+
+This section is a report-only update after the clean run. The validated
+shipping source is commit `6fe88a3a63c13f992b12b9ce62ba98a3c744eb03`; the
+report commit that contains this text does not alter build inputs.
+
+**Package Inventory**
+
+The root build hook produced these canonical override packages in `dist/`:
+
+| package | filename | architecture | size | sha256 |
+| --- | --- | --- | --- | --- |
+| libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 419890 | a23754b79eb738154ec9a2fdd02f1a01d3266888bfa12287a204d9c36ec11084 |
+| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 2015556 | 17b014d52f5b993a2f852adc4d61a604c25a3f3229fb8b36088f59c8acabfdd0 |
+| zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
+
+The generated port lock recorded all three canonical packages as ported and
+zero unported original packages.
+
+**Validator Summary**
+
+- Log root: `.work/validation/artifacts/port/logs/libzstd/`
+- Result summary: `.work/validation/artifacts/port/results/libzstd/summary.json`
+- Port lock path: `.work/validation/port-deb-lock.json`
+- Cases: 257
+- Source cases: 5
+- Usage cases: 250
+- Regression cases: 2
+- Passed: 257
+- Failed: 0
+- Casts recorded: 0
+
+**Failures Found And Fixed**
+
+- `check_safe_advanced_abi_software_tester` found that MT support was still a
+  synchronous facade. `28d3e9b76a1cf6c1061222c94e2bf8dd7a5ef2c7` replaced the
+  empty job-queue stub with a safe Rust worker queue and wired `nbWorkers`,
+  owned pools, external pools, MT job counters, and frame progression through
+  real worker jobs.
+- The first validator rerun against `28d3e9b76a1cf6c1061222c94e2bf8dd7a5ef2c7`
+  found `usage-libarchive-tools-zstd-bsdtar-options-threads-2`: a split MT
+  frame corrupted tar header padding because independently compressed zstd
+  block payloads were being spliced into one frame. A regression was added to
+  `safe/tests/capi/thread_pool_driver.c` with a tar-like repeated payload.
+- `a5fddbea05335028163238fc3c267c823f09e985` made split MT jobs emit stored
+  blocks so worker-job output is safe to concatenate in frame order, and updated
+  the Rust MT overlap test to assert round-trip behavior instead of size deltas
+  from unsafe cross-job history.
+- The next validator run showed five CLI compression-ratio regressions caused
+  by applying stored blocks too broadly. `6fe88a3a63c13f992b12b9ce62ba98a3c744eb03`
+  narrowed the fallback to split MT frames only; single final MT jobs keep the
+  normal compressed payload path, restoring small repetitive CLI compression
+  while preserving the bsdtar fix.
+
+No validator checks were skipped.
+
+**Checks Executed**
+
+```bash
+cargo test --manifest-path safe/Cargo.toml --release --all-targets
+bash safe/scripts/run-advanced-mt-tests.sh
+bash safe/scripts/verify-link-compat.sh
+bash safe/scripts/verify-export-parity.sh
+rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe --glob '!target/**' --glob '!out/**'
+SAFELIBS_COMMIT_SHA=$(git rev-parse HEAD) bash scripts/build-debs.sh
+SAFELIBS_COMMIT_SHA=$(git rev-parse HEAD) SAFELIBS_VALIDATOR_DIR="$PWD/validator" bash scripts/run-validation-tests.sh
+```
+
+All listed checks passed for the final code-bearing source commit. The
+source-level forbidden-token scan had no maintained-source matches; generated
+build and validation artifacts under `safe/out` remain uncommitted.
