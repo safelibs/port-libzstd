@@ -6,8 +6,9 @@ use crate::{
         legacy,
     },
     ffi::types::{
-        ZSTD_DCtx, ZSTD_DDict, ZSTD_ErrorCode, ZSTD_dParameter, ZSTD_dictContentType_e,
-        ZSTD_dictLoadMethod_e, ZSTD_format_e, ZSTD_inBuffer, ZSTD_outBuffer,
+        allocate_with_custom_mem, free_with_custom_mem, ZSTD_DCtx, ZSTD_DDict, ZSTD_ErrorCode,
+        ZSTD_customMem, ZSTD_dParameter, ZSTD_dictContentType_e, ZSTD_dictLoadMethod_e,
+        ZSTD_format_e, ZSTD_inBuffer, ZSTD_outBuffer,
     },
 };
 use core::{ffi::c_void, mem::size_of};
@@ -132,6 +133,7 @@ impl DictionarySelection {
 
 #[derive(Clone, Debug)]
 pub(crate) struct DecoderDictionary {
+    custom_mem: ZSTD_customMem,
     storage: DecoderDictionaryStorage,
     pub dict_id: u32,
     pub formatted: bool,
@@ -164,6 +166,7 @@ impl DecoderDictionary {
             }
         };
         Ok(Self {
+            custom_mem: ZSTD_customMem::default(),
             storage: DecoderDictionaryStorage::owned(bytes),
             dict_id: if formatted {
                 crate::decompress::fse::formatted_dict_id(bytes)
@@ -388,6 +391,7 @@ impl BufferlessState {
 
 #[derive(Clone, Debug)]
 pub(crate) struct DecoderContext {
+    pub(crate) custom_mem: ZSTD_customMem,
     pub(crate) static_workspace_size: usize,
     pub format: ZSTD_format_e,
     pub max_window_size: usize,
@@ -403,6 +407,7 @@ pub(crate) struct DecoderContext {
 impl Default for DecoderContext {
     fn default() -> Self {
         Self {
+            custom_mem: ZSTD_customMem::default(),
             static_workspace_size: 0,
             format: ZSTD_format_e::ZSTD_f_zstd1,
             max_window_size: (1usize << frame::ZSTD_WINDOWLOG_LIMIT_DEFAULT) + 1,
@@ -695,7 +700,16 @@ pub(crate) fn with_dctx_mut<T>(
 }
 
 pub(crate) fn create_dctx() -> *mut ZSTD_DCtx {
-    Box::into_raw(Box::new(DecoderContext::default())).cast()
+    create_dctx_advanced(ZSTD_customMem::default())
+}
+
+pub(crate) fn create_dctx_advanced(custom_mem: ZSTD_customMem) -> *mut ZSTD_DCtx {
+    if !custom_mem.is_valid() {
+        return core::ptr::null_mut();
+    }
+    let mut dctx = DecoderContext::default();
+    dctx.custom_mem = custom_mem;
+    allocate_with_custom_mem(dctx, custom_mem).cast()
 }
 
 pub(crate) fn init_static_dctx(workspace: *mut c_void, workspace_size: usize) -> *mut ZSTD_DCtx {
@@ -723,9 +737,11 @@ pub(crate) fn free_dctx(ptr: *mut ZSTD_DCtx) -> usize {
     if let Some(dctx) = dctx_mut(ptr) {
         dctx.release_legacy_stream();
     }
-    // SAFETY: `ptr` originated from `create_dctx`.
+    let custom_mem = dctx_ref(ptr.cast_const())
+        .map(|dctx| dctx.custom_mem)
+        .unwrap_or_default();
     unsafe {
-        drop(Box::from_raw(ptr.cast::<DecoderContext>()));
+        free_with_custom_mem(ptr.cast::<DecoderContext>(), custom_mem);
     }
     0
 }
@@ -739,8 +755,25 @@ pub(crate) fn create_ddict_with_content_type(
     dict: &[u8],
     dict_content_type: ZSTD_dictContentType_e,
 ) -> Result<*mut ZSTD_DDict, ZSTD_ErrorCode> {
-    let ddict = DecoderDictionary::from_bytes_with_content_type(dict, dict_content_type)?;
-    Ok(Box::into_raw(Box::new(ddict)).cast())
+    create_ddict_with_custom_mem(dict, dict_content_type, ZSTD_customMem::default())
+}
+
+pub(crate) fn create_ddict_with_custom_mem(
+    dict: &[u8],
+    dict_content_type: ZSTD_dictContentType_e,
+    custom_mem: ZSTD_customMem,
+) -> Result<*mut ZSTD_DDict, ZSTD_ErrorCode> {
+    if !custom_mem.is_valid() {
+        return Err(ZSTD_ErrorCode::ZSTD_error_memory_allocation);
+    }
+    let mut ddict = DecoderDictionary::from_bytes_with_content_type(dict, dict_content_type)?;
+    ddict.custom_mem = custom_mem;
+    let ptr = allocate_with_custom_mem(ddict, custom_mem);
+    if ptr.is_null() {
+        Err(ZSTD_ErrorCode::ZSTD_error_memory_allocation)
+    } else {
+        Ok(ptr.cast())
+    }
 }
 
 pub(crate) fn init_static_ddict(
@@ -788,9 +821,11 @@ pub(crate) fn free_ddict(ptr: *mut ZSTD_DDict) -> usize {
     if ddict_ref(ptr.cast()).is_some_and(|ddict| ddict.workspace_size() != 0) {
         return 0;
     }
-    // SAFETY: `ptr` originated from `create_ddict`.
+    let custom_mem = ddict_ref(ptr.cast())
+        .map(|ddict| ddict.custom_mem)
+        .unwrap_or_default();
     unsafe {
-        drop(Box::from_raw(ptr.cast::<DecoderDictionary>()));
+        free_with_custom_mem(ptr.cast::<DecoderDictionary>(), custom_mem);
     }
     0
 }

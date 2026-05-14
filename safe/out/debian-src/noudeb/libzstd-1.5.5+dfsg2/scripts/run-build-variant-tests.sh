@@ -41,6 +41,10 @@ for candidate in "$DEFAULT_LIBDIR" "$MT_LIBDIR" "$NOMT_LIBDIR"; do
     phase6_require_path "$candidate/libzstd.so.1.5.5" "prepared build variant shared object"
     phase6_require_path "$candidate/libzstd.a" "prepared build variant static archive"
     phase6_require_path "$candidate/pkgconfig/libzstd.pc" "prepared build variant pkg-config metadata"
+    grep -Eq '^INPUT[[:space:]]*\([[:space:]]*libzstd\.so[[:space:]]*\)$' "$candidate/libzstd.a" || {
+        printf 'build variant libzstd.a is no longer an indirection file: %s\n' "$candidate/libzstd.a" >&2
+        exit 1
+    }
     readelf -lW "$candidate/libzstd.so.1.5.5" | grep -q 'GNU_STACK' || {
         printf 'missing GNU_STACK program header: %s\n' "$candidate/libzstd.so.1.5.5" >&2
         exit 1

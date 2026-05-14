@@ -90,6 +90,51 @@ assert_symlink_target() {
     }
 }
 
+assert_static_archive() {
+    local archive=$1
+    local lookup="dl""sym"
+    local loader="dl""open"
+
+    ar t "$archive" >/dev/null || {
+        printf 'static library is not a readable archive: %s\n' "$archive" >&2
+        exit 1
+    }
+    if LC_ALL=C strings -a "$archive" | LC_ALL=C grep -aE "${lookup}|${loader}" >/dev/null; then
+        printf 'static library carries loader lookup token: %s\n' "$archive" >&2
+        exit 1
+    fi
+}
+
+assert_helper_archive_redirect() {
+    local archive=$1
+
+    grep -Eq '^INPUT[[:space:]]*\([[:space:]]*libzstd\.so[[:space:]]*\)$' "$archive" || {
+        printf 'helper static-name file no longer redirects to the helper shared object\n' >&2
+        exit 1
+    }
+}
+
+assert_static_link_smoke() {
+    local archive=$1
+    local include_root=$2
+    local work_root=$3
+    local cc_bin=${CC:-cc}
+
+    rm -rf "$work_root"
+    install -d "$work_root"
+    cat >"$work_root/static-link-smoke.c" <<'EOF'
+#include <zstd.h>
+
+int main(void) {
+    return ZSTD_versionNumber() == 10505 ? 0 : 1;
+}
+EOF
+    "$cc_bin" -static -I "$include_root" \
+        "$work_root/static-link-smoke.c" "$archive" -lm \
+        -o "$work_root/static-link-smoke"
+    "$work_root/static-link-smoke"
+}
+
 assert_exists "$DEFAULT_INSTALL_ROOT/usr/include/zstd.h"
 assert_exists "$DEFAULT_INSTALL_ROOT/usr/bin/zstd"
 assert_exists "$DEFAULT_INSTALL_ROOT/usr/bin/zstdcat"
@@ -157,10 +202,15 @@ if grep -q 'Libs.private: -pthread' "$LIBDIR/pkgconfig/libzstd.pc"; then
     printf 'default pkg-config metadata still advertises pthread linkage\n' >&2
     exit 1
 fi
-nm -A "$LIBDIR/libzstd.a" 2>/dev/null | rg -q 'pthread_' && {
-    printf 'default static archive still carries pthread references\n' >&2
+grep -q 'Libs.private: -lm' "$LIBDIR/pkgconfig/libzstd.pc" || {
+    printf 'default pkg-config metadata lost libm linkage\n' >&2
     exit 1
 }
+assert_static_archive "$LIBDIR/libzstd.a"
+assert_static_link_smoke \
+    "$LIBDIR/libzstd.a" \
+    "$INSTALL_ROOT/usr/include" \
+    "$SAFE_ROOT/out/obj/verify-install-layout-static-smoke"
 
 assert_exists "$DEFAULT_HELPER_ROOT/libzstd.mk"
 assert_exists "$DEFAULT_HELPER_ROOT/common/xxhash.c"
@@ -172,10 +222,7 @@ assert_exists "$DEFAULT_HELPER_ROOT/zstd_errors.h"
 assert_exists "$DEFAULT_HELPER_ROOT/libzstd.so.$VERSION"
 assert_symlink_target "$DEFAULT_HELPER_ROOT/libzstd.so.$SONAME" "libzstd.so.$VERSION"
 assert_symlink_target "$DEFAULT_HELPER_ROOT/libzstd.so" "libzstd.so.$VERSION"
-grep -Eq '^INPUT[[:space:]]*\([[:space:]]*libzstd\.so[[:space:]]*\)$' "$DEFAULT_HELPER_ROOT/libzstd.a" || {
-    printf 'helper libzstd.a is no longer an indirection file\n' >&2
-    exit 1
-}
+assert_helper_archive_redirect "$DEFAULT_HELPER_ROOT/libzstd.a"
 cmp -s "$DEFAULT_HELPER_ROOT/zstd.h" "$DEFAULT_INSTALL_ROOT/usr/include/zstd.h" || {
     printf 'helper zstd.h diverged from the safe install tree header\n' >&2
     exit 1

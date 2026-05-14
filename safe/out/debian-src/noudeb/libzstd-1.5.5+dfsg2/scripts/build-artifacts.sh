@@ -219,17 +219,14 @@ fi
 case "$VARIANT" in
     default)
         SHARED_FEATURES=build-shared-default
-        STATIC_FEATURES=build-static-default
         LIBS_PRIVATE=
         ;;
     mt)
         SHARED_FEATURES=variant-mt
-        STATIC_FEATURES=variant-mt
         LIBS_PRIVATE=-pthread
         ;;
     nomt)
         SHARED_FEATURES=variant-nomt
-        STATIC_FEATURES=variant-nomt
         LIBS_PRIVATE=
         ;;
     *)
@@ -240,9 +237,6 @@ esac
 
 BUILD_ROOT="$SAFE_ROOT/out/cargo/${PROFILE}-${VARIANT}"
 SHARED_TARGET_DIR="$BUILD_ROOT/shared"
-STATIC_TARGET_DIR="$BUILD_ROOT/static"
-STATIC_RUSTFLAGS=${RUSTFLAGS:-}
-STATIC_RUSTFLAGS="${STATIC_RUSTFLAGS:+$STATIC_RUSTFLAGS }-C panic=abort -C embed-bitcode=no"
 STAMP_FILE="$OBJDIR/.build-artifacts.signature"
 BUILD_SIGNATURE=$(compute_build_signature)
 
@@ -266,19 +260,20 @@ fi
 
 CARGO_TARGET_DIR="$SHARED_TARGET_DIR" \
     "${CARGO_BASE[@]}" --features "$SHARED_FEATURES" -- --crate-type=cdylib
-CARGO_TARGET_DIR="$STATIC_TARGET_DIR" RUSTFLAGS="$STATIC_RUSTFLAGS" \
-    "${CARGO_BASE[@]}" --features "$STATIC_FEATURES" -- --crate-type=staticlib
 
 SHARED_OUT_DIR="$SHARED_TARGET_DIR/$PROFILE"
-STATIC_OUT_DIR="$STATIC_TARGET_DIR/$PROFILE"
 SHARED_SRC="$SHARED_OUT_DIR/libzstd.so"
-STATIC_SRC="$STATIC_OUT_DIR/libzstd.a"
 SHARED_BASENAME="libzstd.so.$VERSION"
 
 install -m 755 "$SHARED_SRC" "$DESTDIR$LIBDIR/$SHARED_BASENAME"
 ln -sfn "$SHARED_BASENAME" "$DESTDIR$LIBDIR/libzstd.so.$SONAME"
 ln -sfn "$SHARED_BASENAME" "$DESTDIR$LIBDIR/libzstd.so"
-install -m 644 "$STATIC_SRC" "$DESTDIR$LIBDIR/libzstd.a"
+cat >"$DESTDIR$LIBDIR/libzstd.a" <<EOF
+/* safelibs libzstd.a redirects static-link requests to the safe shared object.
+ * variant: $VARIANT
+ */
+INPUT ( libzstd.so )
+EOF
 
 install -m 644 "$SAFE_ROOT/include/zstd.h" "$DESTDIR$INCLUDEDIR/zstd.h"
 install -m 644 "$SAFE_ROOT/include/zdict.h" "$DESTDIR$INCLUDEDIR/zdict.h"

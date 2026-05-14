@@ -10,7 +10,7 @@ license = "BSD-3-Clause OR GPL-2.0-only"
 
 [lib]
 name = "zstd"
-crate-type = ["cdylib", "staticlib", "rlib"]
+crate-type = ["cdylib", "rlib"]
 
 [[test]]
 name = "decompress"

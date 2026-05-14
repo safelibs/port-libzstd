@@ -8,6 +8,10 @@ source "$SAFE_ROOT/scripts/phase6-common.sh"
 
 phase6_require_phase4_inputs "$0"
 
+bash "$SCRIPT_DIR/build-artifacts.sh" --release
+bash "$SCRIPT_DIR/build-artifacts.sh" --release --variant mt
+bash "$SCRIPT_DIR/build-artifacts.sh" --release --variant nomt
+
 DEFAULT_ARTIFACT_STAMP="$SAFE_ROOT/out/obj/release-default/.build-artifacts.signature"
 MT_ARTIFACT_STAMP="$SAFE_ROOT/out/obj/release-mt/.build-artifacts.signature"
 NOMT_ARTIFACT_STAMP="$SAFE_ROOT/out/obj/release-nomt/.build-artifacts.signature"

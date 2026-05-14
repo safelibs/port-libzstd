@@ -538,4 +538,5 @@ if [[ $INSTALL_CMAKE -eq 1 ]]; then
         "$DESTDIR$LIBDIR/cmake/zstd/zstdTargets-noconfig.cmake"
 fi
 
+rm -rf "$BUILD_ROOT"
 printf '%s\n' "$BUILD_SIGNATURE" >"$STAMP_FILE"

@@ -5,11 +5,11 @@ Version: 1.5.5+dfsg2-2build1.1+safelibs1
 Auto-Built-Package: debug-symbols
 Architecture: amd64
 Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
-Installed-Size: 184
+Installed-Size: 199
 Depends: libzstd1 (= 1.5.5+dfsg2-2build1.1+safelibs1)
 Section: debug
 Priority: optional
 Multi-Arch: same
 Description: debug symbols for libzstd1
-Build-Ids: 5afe73512d5a8a3b2f4aad96011d97f420a7a88f
+Build-Ids: 2bc5146ffd6888aed576d8712ff10cb74ef61a59
 Original-Maintainer: RPM packaging team <team+pkg-rpm@tracker.debian.org>

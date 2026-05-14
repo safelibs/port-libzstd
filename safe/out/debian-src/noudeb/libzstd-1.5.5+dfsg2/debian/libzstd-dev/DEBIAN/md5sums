@@ -5,7 +5,7 @@ f39ee478d54102b6cc18298188c223d7  usr/include/zstd_errors.h
 386c548923385819e5b21f5feb528c67  usr/lib/x86_64-linux-gnu/cmake/zstd/zstdConfigVersion.cmake
 70139945d1ec64441e6fecffbe4f9e60  usr/lib/x86_64-linux-gnu/cmake/zstd/zstdTargets-noconfig.cmake
 41e67bd8fe0d3b44e6e97c3c313e2f40  usr/lib/x86_64-linux-gnu/cmake/zstd/zstdTargets.cmake
-98ea74fb93d291b66c756f2a62d84ea9  usr/lib/x86_64-linux-gnu/libzstd.a
+27cf5eebf9fb165e0776fcb537ad4e1f  usr/lib/x86_64-linux-gnu/libzstd.a
 b0ae6ad931c336f6301d653b8622f699  usr/lib/x86_64-linux-gnu/pkgconfig/libzstd.pc
 261c9d2fc7e32f09314725705cddf068  usr/share/doc/libzstd-dev/changelog.Debian.gz
 8fe7daaecd3aa3f82dadb52251e1601d  usr/share/doc/libzstd-dev/copyright

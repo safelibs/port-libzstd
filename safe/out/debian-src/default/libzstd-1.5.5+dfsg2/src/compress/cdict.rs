@@ -4,9 +4,9 @@ use crate::{
     ffi::{
         compress::{
             adjust_cparams, cdict_size_estimate, cdict_size_estimate_advanced, create_cdict,
-            create_cdict_with_settings, free_cdict, load_dictionary, load_dictionary_advanced,
-            null_cdict, optional_src_slice, sizeof_cdict, to_result, validate_custom_mem,
-            with_cctx_mut, with_cctx_ref, with_cdict_ref, write_frame_to_dst,
+            create_cdict_with_custom_mem, create_cdict_with_settings, free_cdict, load_dictionary,
+            load_dictionary_advanced, null_cdict, optional_src_slice, sizeof_cdict, to_result,
+            validate_custom_mem, with_cctx_mut, with_cctx_ref, with_cdict_ref, write_frame_to_dst,
         },
         types::{
             ZSTD_CCtx, ZSTD_CCtx_params, ZSTD_CDict, ZSTD_CStream, ZSTD_customMem,
@@ -196,7 +196,7 @@ pub extern "C" fn ZSTD_createCDict_advanced(
     let Some(dict) = optional_src_slice(dict, dictSize) else {
         return null_cdict();
     };
-    create_cdict_with_settings(
+    create_cdict_with_custom_mem(
         dict,
         crate::ffi::types::ZSTD_CLEVEL_DEFAULT,
         adjust_cparams(
@@ -223,6 +223,7 @@ pub extern "C" fn ZSTD_createCDict_advanced(
         false,
         dictLoadMethod,
         dictContentType,
+        customMem,
     )
 }
 
@@ -333,7 +334,7 @@ pub extern "C" fn ZSTD_createCDict_advanced2(
     let Some(ctx) = context_from_cctx_params(_cctxParams) else {
         return null_cdict();
     };
-    create_cdict_with_settings(
+    create_cdict_with_custom_mem(
         dict,
         ctx.compression_level,
         adjust_cparams(
@@ -360,5 +361,6 @@ pub extern "C" fn ZSTD_createCDict_advanced2(
         ctx.enable_seq_producer_fallback,
         dictLoadMethod,
         dictContentType,
+        customMem,
     )
 }

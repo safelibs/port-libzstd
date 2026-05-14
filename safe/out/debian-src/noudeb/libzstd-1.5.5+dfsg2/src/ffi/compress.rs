@@ -32,6 +32,7 @@ use structured_zstd::encoding::{
 
 const ZSTD_MAGICNUMBER: u32 = 0xFD2F_B528;
 const BLOCK_HEADER_SIZE: usize = 3;
+const ZSTD_WINDOWLOG_MIN: u32 = 10;
 const XXH64_SEED: u64 = 0;
 const ZSTD_MAX_CLEVEL: c_int = 22;
 const ZSTD_MIN_CLEVEL: c_int = -(ZSTD_BLOCKSIZE_MAX as c_int);
@@ -924,6 +925,10 @@ pub(crate) fn min_clevel() -> c_int {
     ZSTD_MIN_CLEVEL
 }
 
+pub(crate) fn max_clevel() -> c_int {
+    ZSTD_MAX_CLEVEL
+}
+
 fn normalize_src_size_hint(src_size_hint: u64) -> u64 {
     if src_size_hint == 0 {
         ZSTD_CONTENTSIZE_UNKNOWN
@@ -1424,12 +1429,18 @@ fn build_frame_header(
             .saturating_add(ctx.stream.input.len().max(ctx.frame_block_size()))
             .max(ctx.frame_block_size())
     };
-    let mut window_size = required_window_size(window_requirement);
-    if content_size.is_none() {
-        window_size = window_size.max(1u64 << default_cparams().windowLog.min(31));
-    }
-    window_size = window_size.max(1u64 << ctx.cparams.windowLog.min(31));
-    let can_use_single_segment = content_size.is_some();
+    let configured_window_size = 1u64 << ctx.cparams.windowLog.min(31);
+    let mut window_size = if content_size.is_some() {
+        configured_window_size.max(required_window_size(external_history_len))
+    } else {
+        required_window_size(window_requirement)
+            .max(1u64 << default_cparams().windowLog.min(31))
+            .max(configured_window_size)
+    };
+    window_size = window_size.max(1u64 << ZSTD_WINDOWLOG_MIN);
+    let can_use_single_segment = content_size
+        .map(|src_size| external_history_len != 0 || (src_size as u64) <= configured_window_size)
+        .unwrap_or(false);
     if content_size_flag {
         if let Some(src_size) = content_size {
             if can_use_single_segment {
@@ -1571,11 +1582,21 @@ fn small_no_history_raw_payload(src: &[u8], ctx: &EncoderContext) -> Vec<u8> {
     payload
 }
 
+fn should_prepend_fast_empty_block(ctx: &EncoderContext, stream_mode: bool) -> bool {
+    let level = normalize_compression_level(ctx.compression_level);
+    if level == -1 || (stream_mode && level <= 1) {
+        return true;
+    }
+
+    stream_mode && ctx.cparams.strategy == ZSTD_strategy::ZSTD_fast && ctx.cparams.targetLength == 0
+}
+
 fn maybe_prepend_fast_empty_block(
-    level: c_int,
+    ctx: &EncoderContext,
+    stream_mode: bool,
     mut payload: Vec<u8>,
 ) -> Result<Vec<u8>, ZSTD_ErrorCode> {
-    if normalize_compression_level(level) != -1 {
+    if !should_prepend_fast_empty_block(ctx, stream_mode) {
         return Ok(payload);
     }
 
@@ -1786,7 +1807,8 @@ fn structured_payload(
         return Err(ZSTD_ErrorCode::ZSTD_error_GENERIC);
     }
     let payload = maybe_prepend_fast_empty_block(
-        ctx.compression_level,
+        ctx,
+        ctx.stream_mode || ctx.stream.frame_started,
         encoded[start..encoded.len() - trailer].to_vec(),
     )?;
 
@@ -2021,7 +2043,7 @@ fn append_stream_payload(
     if stream_uses_stateful_structured_encoder(ctx) {
         let mt_workers = configured_mt_workers(ctx);
         let job_size = (mt_workers > 0).then(|| mt_job_size(ctx));
-        let encoded = {
+        let mut encoded = {
             if ctx.stream.structured_encoder.is_none() {
                 ctx.stream.structured_encoder = Some(StreamStructuredEncoder::new(ctx)?);
             }
@@ -2045,6 +2067,9 @@ fn append_stream_payload(
                 encoded
             }
         };
+        if ctx.stream.emitted_input == 0 {
+            encoded = maybe_prepend_fast_empty_block(ctx, true, encoded)?;
+        }
         append_pending(&mut ctx.stream, &encoded);
         return Ok(());
     }

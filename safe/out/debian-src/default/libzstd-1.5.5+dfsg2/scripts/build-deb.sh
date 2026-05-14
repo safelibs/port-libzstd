@@ -133,6 +133,27 @@ build_outputs_present() {
     fi
 }
 
+prune_staged_build_cache() {
+    local stage_root=$1
+
+    [[ -d $stage_root ]] || return 0
+
+    rm -rf \
+        "$stage_root/out/cargo" \
+        "$stage_root/target"
+
+    find "$stage_root" -maxdepth 1 -type d -name 'obj-*' -print0 |
+        while IFS= read -r -d '' objdir; do
+            rm -f "$objdir/libzstd.a"
+        done
+
+    if [[ -d $stage_root/debian/.debhelper ]]; then
+        find "$stage_root/debian/.debhelper" -type d -name dbgsym-root -prune \
+            -exec rm -rf '{}' +
+        find "$stage_root/debian/.debhelper" -type f -name dbgsym-build-ids -delete
+    fi
+}
+
 reuse_existing_build() {
     local desired_signature=$1
     local -a meta=()
@@ -179,6 +200,7 @@ reuse_existing_build() {
         fi
     fi
 
+    prune_staged_build_cache "${meta[1]}"
     printf 'reusing up-to-date deb build: %s\n' "${meta[1]}"
     printf 'staged source tree: %s\n' "${meta[1]}"
     printf 'package outputs: %s\n' "${meta[2]}"
@@ -336,6 +358,8 @@ if [[ $SAFE_ENABLE_UDEB -eq 1 ]]; then
         '
     )
 fi
+
+prune_staged_build_cache "$STAGE_ROOT"
 
 find "$STAGE_PARENT" -maxdepth 1 -type f \
     \( -name '*.deb' -o -name '*.udeb' -o -name '*.changes' -o -name '*.buildinfo' \) \
