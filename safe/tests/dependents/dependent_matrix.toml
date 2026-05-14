@@ -1,6 +1,6 @@
 schema_version = 1
 phase_id = "impl_dependent_image_matrix"
-last_verified = "2026-05-13"
+last_verified = "2026-05-14"
 source_inventory = "dependents.json"
 top_level_release_gate = "safe/scripts/run-full-suite.sh"
 verification_helpers = [
