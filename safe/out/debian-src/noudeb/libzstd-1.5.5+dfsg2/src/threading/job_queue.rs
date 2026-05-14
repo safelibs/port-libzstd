@@ -1,7 +1,7 @@
 use std::{
     fmt,
     panic::{self, AssertUnwindSafe},
-    sync::{mpsc, Arc, Mutex},
+    sync::{mpsc, Arc, Condvar, Mutex},
     thread::{self, JoinHandle},
 };
 
@@ -19,22 +19,58 @@ pub(crate) enum JobError {
 }
 
 pub(crate) struct JobHandle<T> {
-    receiver: mpsc::Receiver<Result<T, JobError>>,
+    state: Arc<JobResult<T>>,
+}
+
+struct JobResult<T> {
+    result: Mutex<Option<Result<T, JobError>>>,
+    ready: Condvar,
+}
+
+impl<T> JobResult<T> {
+    fn new() -> Self {
+        Self {
+            result: Mutex::new(None),
+            ready: Condvar::new(),
+        }
+    }
+
+    fn store(&self, result: Result<T, JobError>) {
+        let mut guard = self
+            .result
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *guard = Some(result);
+        self.ready.notify_one();
+    }
 }
 
 impl<T> JobHandle<T> {
     pub(crate) fn try_wait(&mut self) -> Option<Result<T, JobError>> {
-        match self.receiver.try_recv() {
-            Ok(result) => Some(result),
-            Err(mpsc::TryRecvError::Empty) => None,
-            Err(mpsc::TryRecvError::Disconnected) => Some(Err(JobError::QueueClosed)),
-        }
+        let mut guard = self
+            .state
+            .result
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        guard.take()
     }
 
     pub(crate) fn wait(self) -> Result<T, JobError> {
-        match self.receiver.recv() {
-            Ok(result) => result,
-            Err(_) => Err(JobError::QueueClosed),
+        let mut guard = self
+            .state
+            .result
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        loop {
+            if let Some(result) = guard.take() {
+                return result;
+            }
+            guard = self
+                .state
+                .ready
+                .wait(guard)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
         }
     }
 }
@@ -85,17 +121,18 @@ impl JobQueue {
         F: FnOnce() -> T + Send + 'static,
         T: Send + 'static,
     {
-        let (sender, receiver) = mpsc::sync_channel(1);
+        let state = Arc::new(JobResult::new());
+        let task_state = Arc::clone(&state);
         let task = Box::new(move || {
             let result =
                 panic::catch_unwind(AssertUnwindSafe(job)).map_err(|_| JobError::WorkerPanicked);
-            let _ = sender.send(result);
+            task_state.store(result);
         });
 
         self.sender
             .send(Message::Run(task))
             .map_err(|_| JobError::QueueClosed)?;
-        Ok(JobHandle { receiver })
+        Ok(JobHandle { state })
     }
 }
 

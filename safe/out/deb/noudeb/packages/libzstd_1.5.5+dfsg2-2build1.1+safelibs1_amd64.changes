@@ -23,24 +23,24 @@ Changes:
      safe install tree, helper root, staged Debian source tree, and package
      outputs.
 Checksums-Sha1:
- ca15f8a84a61a8044c06baa013804c50113fce5c 2017878 libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
- 91f47d07f551608bf835aade8aaf020a53db7936 46592 libzstd1-dbgsym_1.5.5+dfsg2-2build1.1+safelibs1_amd64.ddeb
- 7a263a200abc4427c245c108e15caae3a87fb4ac 428454 libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
- f9c9bf9c2aa159f9b6a2331b6f51a88621cc11f0 10847 libzstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.buildinfo
+ 8a95c7704cfab2f811a2b609ca1a24f91886fdd1 2018962 libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
+ dbccf076b68fd732c27130d4e614286b766253c8 46370 libzstd1-dbgsym_1.5.5+dfsg2-2build1.1+safelibs1_amd64.ddeb
+ b82c976eb7dddfc27c4935fc204e54ca21cd5214 424010 libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
+ 5749505e9ec2cb9c7779c74105112f5b5f8d7cf4 10847 libzstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.buildinfo
  0e03283e91c9aa9152713582b904770b6254bd0c 659842 zstd-dbgsym_1.5.5+dfsg2-2build1.1+safelibs1_amd64.ddeb
  76af21c65e1b1fa167aae682da1c910f49160026 159324 zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
 Checksums-Sha256:
- 515790b8cc1f51ad6f53fe6406aa3bf69edff8047bffeb42fd15fe02995df567 2017878 libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
- d14f7c05ab25c2846078b8dc852fa2809e3a6955b9458ccb9b51be826aecfdcf 46592 libzstd1-dbgsym_1.5.5+dfsg2-2build1.1+safelibs1_amd64.ddeb
- 2f75985ae3c666c0842d41e3b6ac94c69759740c62463c0acd20ae8e35df7761 428454 libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
- 0450634a505b5b1e95d7ab2e4797621fa142277de457eb4d78b39c7660908748 10847 libzstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.buildinfo
+ ab41b0141feafcff6ab0551dc646e0a3a6b7f66e60c2fa8b3faedd97e2472ea0 2018962 libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
+ 1c2d9774d5088cfe5889777f83c382c339979cee6e62ade04ae5dc596e7772fd 46370 libzstd1-dbgsym_1.5.5+dfsg2-2build1.1+safelibs1_amd64.ddeb
+ ca28d57b2a2a8ac8582fc17b07e5a7e0178e477391d7c628d963e99409f944e2 424010 libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
+ 7a730719941a191a0ff5f3cb2506b274bf67ccb37cbbcc6262d7504b92108368 10847 libzstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.buildinfo
  c7fbb1ecb94f80d2dcd41a8e7c92fc589515d70d01140979c41029af56a94917 659842 zstd-dbgsym_1.5.5+dfsg2-2build1.1+safelibs1_amd64.ddeb
  8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 159324 zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
 Files:
- a4ef38032ca4fd04357f16e4e85c98e4 2017878 libdevel optional libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
- 3cc5a21ff61a418888f294e95eb15167 46592 debug optional libzstd1-dbgsym_1.5.5+dfsg2-2build1.1+safelibs1_amd64.ddeb
- fb42ceb1b6efa537fdc26b661a2a95f7 428454 libs optional libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
- 74e7fc8887d48a323368a5561b32cd45 10847 libs optional libzstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.buildinfo
+ ea269491b3105b65ef781e41ab3711ac 2018962 libdevel optional libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
+ 69c198876e3f0e97b22974778485dc81 46370 debug optional libzstd1-dbgsym_1.5.5+dfsg2-2build1.1+safelibs1_amd64.ddeb
+ 6b08a1e60448f696636b7773520cbac7 424010 libs optional libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
+ ba10a3354030fd9b6bfa695198c28e5f 10847 libs optional libzstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.buildinfo
  e15f26f45696bf663beb59a730347fcf 659842 debug optional zstd-dbgsym_1.5.5+dfsg2-2build1.1+safelibs1_amd64.ddeb
  1baf583ccbbd1f86a5ea9c6b290c81a8 159324 utils optional zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb
 Original-Maintainer: RPM packaging team <team+pkg-rpm@tracker.debian.org>

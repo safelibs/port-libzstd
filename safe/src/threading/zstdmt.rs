@@ -41,10 +41,15 @@ pub extern "C" fn ZSTD_getFrameProgression(cctx: *const ZSTD_CCtx) -> ZSTD_frame
                 active_workers as u32,
             )
         };
+        let produced = if workers == 0 || cctx.stream.mt_progress_includes_pending {
+            cctx.stream.produced_total as u64
+        } else {
+            cctx.stream.flushed_total as u64
+        };
         Ok(ZSTD_frameProgression {
             ingested,
             consumed: consumed.min(ingested),
-            produced: cctx.stream.flushed_total as u64,
+            produced,
             flushed: cctx.stream.flushed_total as u64,
             currentJobID: current_job_id,
             nbActiveWorkers: nb_active_workers,

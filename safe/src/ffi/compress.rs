@@ -287,6 +287,7 @@ pub(crate) struct StreamState {
     mt_jobs: VecDeque<MtPendingJob>,
     pub(crate) produced_total: usize,
     pub(crate) flushed_total: usize,
+    pub(crate) mt_progress_includes_pending: bool,
     pub(crate) mt_handoff_pending: bool,
     pub(crate) frame_started: bool,
     pub(crate) frame_finished: bool,
@@ -363,6 +364,7 @@ impl Default for StreamState {
             mt_jobs: VecDeque::new(),
             produced_total: 0,
             flushed_total: 0,
+            mt_progress_includes_pending: false,
             mt_handoff_pending: false,
             frame_started: false,
             frame_finished: false,
@@ -387,6 +389,7 @@ impl Clone for StreamState {
             mt_jobs: VecDeque::new(),
             produced_total: self.produced_total,
             flushed_total: self.flushed_total,
+            mt_progress_includes_pending: self.mt_progress_includes_pending,
             mt_handoff_pending: self.mt_handoff_pending,
             frame_started: self.frame_started,
             frame_finished: self.frame_finished,
@@ -409,6 +412,10 @@ impl core::fmt::Debug for StreamState {
             .field("mt_active_jobs", &self.mt_active_jobs)
             .field("produced_total", &self.produced_total)
             .field("flushed_total", &self.flushed_total)
+            .field(
+                "mt_progress_includes_pending",
+                &self.mt_progress_includes_pending,
+            )
             .field("mt_handoff_pending", &self.mt_handoff_pending)
             .field("frame_started", &self.frame_started)
             .field("frame_finished", &self.frame_finished)
@@ -432,6 +439,7 @@ impl StreamState {
         self.mt_jobs.clear();
         self.produced_total = 0;
         self.flushed_total = 0;
+        self.mt_progress_includes_pending = false;
         self.mt_handoff_pending = false;
         self.frame_started = false;
         self.frame_finished = false;
@@ -2228,6 +2236,7 @@ pub(crate) fn flush_stream_data(ctx: &mut EncoderContext) -> Result<(), ZSTD_Err
     if ctx.stream.frame_finished {
         return Err(ZSTD_ErrorCode::ZSTD_error_init_missing);
     }
+    ctx.stream.mt_progress_includes_pending = true;
     ensure_stream_header(ctx)?;
     finalize_deferred_stream_header(ctx)?;
     if mt_async_jobs_supported(ctx) {
@@ -2560,6 +2569,7 @@ fn complete_mt_payload_jobs(
         ctx.stream.emitted_input = end.min(ctx.stream.input.len());
         ctx.stream.mt_completed_jobs = ctx.stream.mt_completed_jobs.saturating_add(1);
         completed = true;
+        break;
     }
 
     ctx.stream.mt_active_jobs = ctx.stream.mt_jobs.len();
@@ -4081,6 +4091,7 @@ pub(crate) fn stage_stream_input(
     let input = unsafe { input.as_mut() }.ok_or(ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong)?;
     let src = optional_src_slice(input.src, input.size)
         .ok_or(ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong)?;
+    ctx.stream.mt_progress_includes_pending = !allow_backpressure;
     if allow_backpressure && mt_async_jobs_supported(ctx) {
         return stage_mt_continue_input(ctx, input, src);
     } else {
@@ -4096,6 +4107,7 @@ pub(crate) fn finalize_stream(ctx: &mut EncoderContext) -> Result<(), ZSTD_Error
     if ctx.stream.frame_finished {
         return Ok(());
     }
+    ctx.stream.mt_progress_includes_pending = true;
 
     if ctx.pledged_src_size != ZSTD_CONTENTSIZE_UNKNOWN
         && ctx.stream.input.len() != ctx.pledged_src_size as usize

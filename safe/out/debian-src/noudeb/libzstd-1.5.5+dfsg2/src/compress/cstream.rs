@@ -172,15 +172,20 @@ fn compress_stream2_impl(
         cctx.stream_mode = true;
         let mt_continue = matches!(endOp, ZSTD_EndDirective::ZSTD_e_continue);
         let consumed = stage_stream_input(cctx, input, mt_continue)?;
+        let mut emitted_continue_job = false;
         match endOp {
             ZSTD_EndDirective::ZSTD_e_end => finalize_stream(cctx)?,
             ZSTD_EndDirective::ZSTD_e_flush => flush_stream_data(cctx)?,
             ZSTD_EndDirective::ZSTD_e_continue => {
                 let _ = consumed;
-                let _ = emit_mt_continue_job(cctx)?;
+                emitted_continue_job = emit_mt_continue_job(cctx)?;
             }
         }
         flush_stream_output(cctx, output)?;
+        if mt_continue && !emitted_continue_job && stream_pending_bytes(cctx) == 0 {
+            let _ = emit_mt_continue_job(cctx)?;
+            flush_stream_output(cctx, output)?;
+        }
         Ok(stream_pending_bytes(cctx))
     }))
 }

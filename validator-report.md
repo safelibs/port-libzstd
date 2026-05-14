@@ -1104,3 +1104,132 @@ bash test-original.sh
 The validator runner internally executed the release build, original CLI helper
 build, Debian package build, validator unit tests, testcase manifest checks,
 the full libzstd port matrix, and proof generation. All listed commands passed.
+
+Phase 29 Implementation: impl_final_release_burn_down
+
+**Validator Checkout**
+
+- Date: 2026-05-14
+- Validator URL: https://github.com/safelibs/validator
+- Validator commit: be4251ee8324b38cc8bc41aa215133c7b6c61e47
+- Validator branch: main
+- `git -C validator pull --ff-only`: advanced from
+  `d1c08d01cd50b34a7aeb62c5630e28df0eb6cd97` to
+  `be4251ee8324b38cc8bc41aa215133c7b6c61e47`
+- Code commit validated by the port lock before this report update:
+  9bc266325a11abf2727664641c2bb7c48f4467a1
+- Local release tag used by the validator lock: build-9bc266325a11
+- Mode: port
+- Final validator runner: `bash safe/scripts/run-validator-libzstd.sh`
+
+**Skipped Validator Bug**
+
+The updated validator added
+`usage-libarchive-tools-zstd-r17-cli-m-flag-memory-limit-accepted`. The check
+expects `zstd -d -M128` to mean a 128 MB decompression memory limit, but
+upstream zstd 1.5.5 parses a bare `128` as bytes and exits with status 11
+(`Parameter is out of bound`). The same command failed with exit 11 using the
+system upstream `zstd` 1.5.5, so this is a validator expectation bug rather
+than a libzstd-safe regression.
+
+Skip artifacts were generated locally for the final validator rerun:
+
+- `safe/out/validator/skip.env`
+- `safe/out/validator/tests-filtered/`
+
+Only
+`usage-libarchive-tools-zstd-r17-cli-m-flag-memory-limit-accepted` was removed
+from the filtered test root. No validator source files were modified.
+
+**Override Packages**
+
+The final validator rerun used the canonical override packages staged under
+`safe/out/validator/override-debs/libzstd/`:
+
+| package | filename | architecture | size | sha256 |
+| --- | --- | --- | --- | --- |
+| libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 424010 | ca28d57b2a2a8ac8582fc17b07e5a7e0178e477391d7c628d963e99409f944e2 |
+| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 2018836 | 36aa6752b1643d2f5e3eed66e9b3aaddf48023af007c2125384e18e1bdcf63b5 |
+| zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
+
+The generated port lock at
+`safe/out/validator/artifacts/proof/port-debs-lock.json` records all three
+canonical packages as ported, zero unported original packages,
+`commit=9bc266325a11abf2727664641c2bb7c48f4467a1`,
+`release_tag=build-9bc266325a11`, and
+`tag_ref=refs/tags/build-9bc266325a11`.
+
+**Validator Summary**
+
+- Result summary: `safe/out/validator/artifacts/port/results/libzstd/summary.json`
+- Proof path: `safe/out/validator/artifacts/proof/port-validation-proof.json`
+- Port lock path: `safe/out/validator/artifacts/proof/port-debs-lock.json`
+- Cases: 266
+- Source cases: 5
+- Usage cases: 259
+- Regression cases: 2
+- Passed: 266
+- Failed: 0
+- Casts recorded: 266
+- Validator runner status: 0
+
+The unfiltered run against `safelibs/validator@be4251ee` executed 267 cases
+and failed only the validator-bug case documented above. After filtering just
+that case, the rerun passed every executed validator check. No libzstd-safe
+compatibility or safety failure remains in the validator results.
+
+**Fixes Applied**
+
+- `safe/src/compress/cstream.rs` now resubmits the initial MT continue job
+  after a tiny output buffer drains the frame header, so callers using
+  `ZSTD_e_continue` do not stall before any worker job starts.
+- `safe/src/ffi/compress.rs` and `safe/src/threading/zstdmt.rs` now separate
+  MT pending-output accounting from flushed-output accounting. Continue-mode
+  frame progression reports upstream-compatible flushed progress for adaptive
+  CLI behavior, while flush/end mode still exposes produced-but-not-flushed
+  worker output.
+- `safe/tests/rust/compress.rs` adds regression coverage for the tiny-output
+  MT continue path and strengthens the MT frame-progression regression.
+- `safe/tests/fixtures/regression/results-memoized.source-sha256` was
+  refreshed to
+  `07a6dc4a917ed947348774a5f555f7baf7c279edecbcc0011ae6e46e199b116a`.
+  The memoized upstream regression CSV still matched its 587 preserved rows.
+
+**Release Gate Summary**
+
+- `bash safe/scripts/run-full-suite.sh`: passed. The aggregator consumed the
+  existing Phase 4 and Phase 6 artifact roots, ran the preserved upstream
+  wrappers, performance smoke, and both downstream image legs. The downstream
+  compile and runtime matrix passed 12/12 applications in the built image.
+- `bash test-original.sh`: passed after the dependent image refresh and the
+  combined compile/runtime flow.
+- Forbidden runtime marker scan:
+  `rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe`
+  produced no matches.
+
+**Checks Executed**
+
+```bash
+git -C validator pull --ff-only
+bash safe/scripts/run-validator-libzstd.sh
+zstd --version
+tmp=$(mktemp -d)
+python3 -c 'import sys; sys.stdout.buffer.write(b"r17 memlimit payload row\n"*1000)' > "$tmp/payload.bin"
+zstd -q -o "$tmp/out.zst" "$tmp/payload.bin"
+zstd -dq -M128 -o "$tmp/decoded.bin" "$tmp/out.zst"
+printf 'original_system_zstd_status=%s\n' "$?"
+rm -rf "$tmp"
+bash safe/scripts/run-validator-libzstd.sh
+bash safe/scripts/build-artifacts.sh --release
+bash safe/scripts/build-original-cli-against-safe.sh
+bash safe/scripts/build-deb.sh
+bash safe/scripts/build-dependent-image.sh
+bash safe/scripts/run-full-suite.sh
+bash test-original.sh
+rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe || test $? -eq 1
+```
+
+The first validator run listed above was the unfiltered run that exposed the
+new validator-bug case. The second validator run used the local filtered test
+root and passed 266/266. The explicit build commands refreshed the canonical
+release-gate roots before the final full-suite and `test-original.sh` runs.

@@ -5,7 +5,7 @@ use std::{
 };
 
 #[cfg(libzstd_threading)]
-use zstd::threading::zstdmt;
+use zstd::threading::{pool, zstdmt};
 use zstd::{
     compress::{block as cblock, cctx, cctx_params, cdict, cstream, params, sequence_api},
     decompress::{dctx, ddict, dstream},
@@ -13,9 +13,9 @@ use zstd::{
         ZSTD_CCtx, ZSTD_CDict, ZSTD_CStream, ZSTD_EndDirective, ZSTD_ErrorCode,
         ZSTD_ResetDirective, ZSTD_Sequence, ZSTD_bounds, ZSTD_cParameter,
         ZSTD_compressionParameters, ZSTD_customMem, ZSTD_dParameter, ZSTD_dictContentType_e,
-        ZSTD_dictLoadMethod_e, ZSTD_frameHeader, ZSTD_frameParameters, ZSTD_inBuffer,
-        ZSTD_outBuffer, ZSTD_parameters, ZSTD_sequenceFormat_e, ZSTD_strategy, ZSTD_BLOCKSIZE_MAX,
-        ZSTD_CONTENTSIZE_UNKNOWN,
+        ZSTD_dictLoadMethod_e, ZSTD_frameHeader, ZSTD_frameParameters, ZSTD_frameProgression,
+        ZSTD_inBuffer, ZSTD_outBuffer, ZSTD_parameters, ZSTD_sequenceFormat_e, ZSTD_strategy,
+        ZSTD_BLOCKSIZE_MAX, ZSTD_CONTENTSIZE_UNKNOWN,
     },
 };
 
@@ -3214,8 +3214,8 @@ fn compress_stream2_mt_overlap_log_changes_job_boundary_output() {
 #[test]
 fn compress_stream2_mt_frame_progression_tracks_started_jobs() {
     let cctx_ptr = cctx::ZSTD_createCCtx();
-    let src = noise_bytes(5 * 1024 * 1024, 0xBAD5_EED);
-    let chunk_size = 128 * 1024;
+    let src = noise_bytes(8 * 1024 * 1024, 0xBAD5_EED);
+    let chunk_size = cstream::ZSTD_CStreamInSize();
     let mut offset = 0usize;
 
     assert!(
@@ -3275,6 +3275,11 @@ fn compress_stream2_mt_frame_progression_tracks_started_jobs() {
     );
 
     let mut saw_adaptive_progression = false;
+    let mut saw_adaptive_speedup_window = false;
+    let mut previous_correction = ZSTD_frameProgression::default();
+    let mut input_presented = 0u64;
+    let mut input_blocked = 0u64;
+    let mut last_job_id = 0u32;
     while offset < src.len() {
         let take = chunk_size.min(src.len() - offset);
         let mut input = ZSTD_inBuffer {
@@ -3295,24 +3300,50 @@ fn compress_stream2_mt_frame_progression_tracks_started_jobs() {
             ZSTD_EndDirective::ZSTD_e_continue,
         );
         check_result(remaining, "ZSTD_compressStream2(mt progression)");
+        input_presented = input_presented.saturating_add(1);
+        if input.pos == 0 {
+            input_blocked = input_blocked.saturating_add(1);
+        }
         offset += input.pos;
 
         let progression = zstdmt::ZSTD_getFrameProgression(cctx_ptr);
         if progression.currentJobID > 2 {
             saw_adaptive_progression = true;
-            assert_eq!(
-                progression.currentJobID, 3,
-                "MT progression should report the next job id once adaptive-mode warm-up is complete"
-            );
             assert!(
                 progression.consumed < progression.ingested,
                 "the active MT job should leave queued input visible in frame progression"
             );
-            assert_eq!(
-                progression.produced, progression.flushed,
-                "MT progression should report externally visible output for adaptive-mode speed checks"
-            );
-            break;
+        }
+        if progression.currentJobID > last_job_id {
+            if progression.currentJobID > 2 {
+                let newly_ingested = progression
+                    .ingested
+                    .saturating_sub(previous_correction.ingested);
+                let newly_consumed = progression
+                    .consumed
+                    .saturating_sub(previous_correction.consumed);
+                let newly_produced = progression
+                    .produced
+                    .saturating_sub(previous_correction.produced);
+                let newly_flushed = progression
+                    .flushed
+                    .saturating_sub(previous_correction.flushed);
+
+                if input_blocked > input_presented / 8
+                    && newly_ingested.saturating_mul(33) / 32 > newly_consumed
+                {
+                    assert!(
+                        newly_flushed.saturating_mul(33) / 32 > newly_produced,
+                        "MT progression should let CLI adaptive mode observe flushed output keeping up with produced output"
+                    );
+                    saw_adaptive_speedup_window = true;
+                    break;
+                }
+            }
+            previous_correction = progression;
+            last_job_id = progression.currentJobID;
+            input_presented = 0;
+            input_blocked = 0;
         }
     }
 
@@ -3320,7 +3351,115 @@ fn compress_stream2_mt_frame_progression_tracks_started_jobs() {
         saw_adaptive_progression,
         "expected MT progression to advance beyond the adaptive-mode warm-up threshold"
     );
+    assert!(
+        saw_adaptive_speedup_window,
+        "expected MT progression to reproduce the CLI adaptive-mode speed-up window"
+    );
     cctx::ZSTD_freeCCtx(cctx_ptr);
+}
+
+#[cfg(libzstd_threading)]
+#[test]
+fn mt_continue_starts_jobs_after_initial_header_flush() {
+    let pool_ptr = pool::ZSTD_createThreadPool(2);
+    let cctx_ptr = cctx::ZSTD_createCCtx();
+    let src = noise_bytes(256 * 1024, 0x51A7_E0);
+    let mut continue_dst = [0u8; 16];
+    let mut output = ZSTD_outBuffer {
+        dst: continue_dst.as_mut_ptr().cast(),
+        size: continue_dst.len(),
+        pos: 0,
+    };
+    let mut input = ZSTD_inBuffer {
+        src: src.as_ptr().cast(),
+        size: src.len(),
+        pos: 0,
+    };
+
+    assert!(!pool_ptr.is_null(), "failed to create thread pool");
+    assert!(
+        !cctx_ptr.is_null(),
+        "failed to create cctx for MT initial-header progression"
+    );
+    check_result(
+        pool::ZSTD_CCtx_refThreadPool(cctx_ptr, pool_ptr),
+        "ZSTD_CCtx_refThreadPool(mt initial-header progression)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_compressionLevel, 4),
+        "ZSTD_c_compressionLevel(mt initial-header progression)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_nbWorkers, 2),
+        "ZSTD_c_nbWorkers(mt initial-header progression)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_jobSize, 1 << 17),
+        "ZSTD_c_jobSize(mt initial-header progression)",
+    );
+
+    let remaining = cstream::ZSTD_compressStream2(
+        cctx_ptr,
+        &mut output,
+        &mut input,
+        ZSTD_EndDirective::ZSTD_e_continue,
+    );
+    check_result(
+        remaining,
+        "ZSTD_compressStream2(mt initial-header progression)",
+    );
+    assert_eq!(input.pos, src.len(), "MT continue should ingest all input");
+
+    let progression = zstdmt::ZSTD_getFrameProgression(cctx_ptr);
+    assert_eq!(progression.ingested, src.len() as u64);
+    assert!(
+        progression.consumed < progression.ingested,
+        "MT progression should report buffered or inflight input"
+    );
+    assert!(
+        progression.currentJobID >= 2,
+        "MT progression must expose jobs started after the initial header flush"
+    );
+    assert!(
+        (1..=2).contains(&progression.nbActiveWorkers),
+        "MT active worker accounting mismatch"
+    );
+
+    let mut flush_dst = [0u8; 64];
+    let mut flush_output = ZSTD_outBuffer {
+        dst: flush_dst.as_mut_ptr().cast(),
+        size: flush_dst.len(),
+        pos: 0,
+    };
+    let mut empty_input = ZSTD_inBuffer {
+        src: core::ptr::null(),
+        size: 0,
+        pos: 0,
+    };
+    let remaining = cstream::ZSTD_compressStream2(
+        cctx_ptr,
+        &mut flush_output,
+        &mut empty_input,
+        ZSTD_EndDirective::ZSTD_e_flush,
+    );
+    check_result(remaining, "ZSTD_compressStream2(mt initial-header flush)");
+
+    let progression = zstdmt::ZSTD_getFrameProgression(cctx_ptr);
+    assert!(
+        progression.produced > progression.flushed,
+        "MT flush should report generated bytes that remain pending"
+    );
+    assert!(
+        zstdmt::ZSTD_toFlushNow(cctx_ptr) > 0,
+        "ZSTD_toFlushNow should expose pending MT output"
+    );
+
+    check_result(
+        pool::ZSTD_CCtx_refThreadPool(cctx_ptr, core::ptr::null_mut()),
+        "ZSTD_CCtx_refThreadPool(clear mt initial-header progression)",
+    );
+    cctx::ZSTD_freeCCtx(cctx_ptr);
+    pool::ZSTD_freeThreadPool(pool_ptr);
 }
 
 #[test]
