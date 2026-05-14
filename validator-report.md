@@ -503,8 +503,15 @@ Phase 1 Validator Refresh: impl_safe_decompression_independence
 
 - Validator URL: https://github.com/safelibs/validator
 - Validator commit: d1c08d01cd50b34a7aeb62c5630e28df0eb6cd97
-- Local port commit recorded by proof: 2119196495154b812f60535c78e9a0b62b013ea8
+- Local port commit recorded by proof: b102f5706068ebea906327a91729d4a31662f2db
+- Local port release tag: build-b102f5706068
+- Local port tag ref: refs/tags/build-b102f5706068
 - Mode: port
+
+The proof-recorded commit `b102f5706068` contains the Phase 1 source fixes
+from `87b593e0f58e` plus the required regenerated `workflow.yaml` output.
+The validator was rerun after that workflow commit so the report proves the
+checked implementation state rather than the pre-commit base.
 
 **Package Inventory**
 
