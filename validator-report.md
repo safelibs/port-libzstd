@@ -592,13 +592,13 @@ Phase 9 Validator Run: impl_safe_advanced_abi_completion
 
 - Validator URL: https://github.com/safelibs/validator
 - Validator commit: d1c08d01cd50b34a7aeb62c5630e28df0eb6cd97
-- Local port commit validated: ca26cae18627942934de0347283e7da6e6651abb
-- Local port release tag: build-ca26cae18627
+- Code-bearing local port commit validated: e32836ef67be67d3ceedbebd18ab3c62613b6f82
+- Local port release tag: build-e32836ef67be
 - Mode: port
 - Invocation: `SAFELIBS_VALIDATOR_DIR="$PWD/validator" bash scripts/run-validation-tests.sh`
 
 The checkout already existed at `validator/`; `git -C validator pull --ff-only
-origin main` reported "Already up to date" before the run.
+origin main` reported "Already up to date" before the final run.
 
 **Package Inventory**
 
@@ -607,9 +607,14 @@ port lock recorded all canonical libzstd packages as ported.
 
 | package | filename | architecture | size | sha256 |
 | --- | --- | --- | --- | --- |
-| libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 378516 | 9aa05eb901199f328084bfe1a2438578e4a902da25648b29f7fceb4948f08442 |
-| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 3702236 | 42ec1f3a361556feb986e6e0990ea070044a5c655d6440b8d81dd913cfe59efa |
+| libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 378450 | 1d6861c8d38a586b093422518203773c6ca6ba1a14241e7ecbd4276c90214057 |
+| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 56944 | b989f4b0ea6b11f2a3f3acb5829badd7549da01167704a68edc804e1abbdde75 |
 | zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
+
+The regenerated port lock at `.work/validation/port-deb-lock.json` records
+`commit=e32836ef67be67d3ceedbebd18ab3c62613b6f82`,
+`release_tag=build-e32836ef67be`, and
+`tag_ref=refs/tags/build-e32836ef67be`.
 
 **Validator Summary**
 
@@ -640,11 +645,59 @@ rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe
 The export parity check verified 185 symbols against `libzstd.so`. The
 link-compat check rebuilt upstream-header objects and ran the upstream
 `zstreamtest`, `poolTests`, dictionary builder, sequence API, thread-pool, and
-streaming examples against the safe shared object. The source scan produced no
-matches for the banned upstream helper/loading paths.
+streaming examples against the safe shared object.
+
+Additional static-artifact checks also passed:
+
+```bash
+bash scripts/build-debs.sh
+bash safe/scripts/build-original-cli-against-safe.sh
+bash safe/scripts/build-artifacts.sh --release --variant mt
+bash safe/scripts/build-artifacts.sh --release --variant nomt
+bash safe/scripts/run-build-variant-tests.sh
+bash safe/scripts/verify-install-layout.sh
+bash safe/scripts/verify-install-layout.sh --debian
+```
+
+The fixed `rg` command emitted no match text. Because the `load_upstream!`
+literal makes this ripgrep version return status 0 even with no output, the
+run also split the scan into `rg -n
+'SAFE_UPSTREAM_LIB|dlopen|dlsym|upstream-phase4' safe` and `grep -R -n
+--exclude-dir=out --exclude-dir=target --exclude-dir=.git 'load_upstream!'
+safe`; both returned status 1. The package payload scan extracted every
+`dist/*.deb` and found no `SAFE_UPSTREAM_LIB`, `dlopen`, `dlsym`, or
+`upstream-phase4` strings.
 
 **Failures Found and Fixes Applied**
 
-No validator failures were found in this phase. No libzstd-safe code changes,
-new regression tests, validator skips, or validator-suite modifications were
-needed.
+No validator failures were found in this phase. The checker bounce identified
+a verifier failure instead: generated and packaged static artifacts still
+contained `dlsym` through Rust `staticlib` output, because the static archive
+bundled Rust standard-library objects.
+
+Fixes applied in `e32836ef67be67d3ceedbebd18ab3c62613b6f82`:
+
+- Removed `staticlib` from `safe/Cargo.toml` so normal release/test builds no
+  longer regenerate `safe/target/release/libzstd.a`.
+- Stopped building a Rust static archive in `safe/scripts/build-artifacts.sh`.
+  The installed `libzstd.a` is now a GNU ld linker script pointing to
+  `libzstd.so`; the `mt` and `nomt` variants keep distinct metadata comments
+  so variant checks still prove they were rebuilt.
+- Excluded the text linker script from Debian stripping in `safe/debian/rules`.
+- Added install-layout and build-variant assertions that fail if `libzstd.a`
+  stops being an indirection file.
+- Added `safe/.ignore` entries for generated `target/` and `out/` trees so the
+  phase's broad source scan does not report Rust build-cache binaries; shipping
+  package payloads are checked explicitly as described above.
+- Updated `safe/docs/unsafe-audit.md` to document the static archive policy.
+
+The packaged `libzstd-dev` payload now contains:
+
+```text
+/* safelibs libzstd.a redirects static-link requests to the safe shared object.
+ * variant: default
+ */
+INPUT ( libzstd.so )
+```
+
+No validator checks were skipped, and the validator suite was not modified.
