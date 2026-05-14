@@ -834,3 +834,85 @@ SAFELIBS_COMMIT_SHA=$(git rev-parse HEAD) SAFELIBS_VALIDATOR_DIR="$PWD/validator
 All listed pass/fail commands passed. The `nm` and `strings` probes above are
 expected to print no matches and return non-zero through `rg`; they were run
 with `|| true` while checking that no output was produced.
+
+Phase 9 Bounce Resolution: advanced custom allocator ABI
+
+**Validator Checkout**
+
+- Validator URL: https://github.com/safelibs/validator
+- Validator commit: d1c08d01cd50b34a7aeb62c5630e28df0eb6cd97
+- Final code-bearing source commit validated: f9e484313cff3864e9617c44b0d3a3b5a36fb7b2
+- Local release tag used by the final validator lock: build-f9e484313cff
+- Mode: port
+- Invocation: `SAFELIBS_COMMIT_SHA=$(git rev-parse HEAD) SAFELIBS_VALIDATOR_DIR="$PWD/validator" bash scripts/run-validation-tests.sh`
+
+This section is a report-only update after validating commit
+`f9e484313cff3864e9617c44b0d3a3b5a36fb7b2`. The subsequent report commit does
+not alter build inputs.
+
+**Package Inventory**
+
+The root build hook produced these canonical override packages in `dist/`:
+
+| package | filename | architecture | size | sha256 |
+| --- | --- | --- | --- | --- |
+| libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 428454 | 2f75985ae3c666c0842d41e3b6ac94c69759740c62463c0acd20ae8e35df7761 |
+| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 2018182 | a1b97fc6ea9e99fc765b6a97f4faf2c31d394e0f4d6bd064bb993b2dd38cd10c |
+| zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
+
+The generated port lock recorded all three canonical packages as ported and
+zero unported original packages.
+
+**Validator Summary**
+
+- Log root: `.work/validation/artifacts/port/logs/libzstd/`
+- Result summary: `.work/validation/artifacts/port/results/libzstd/summary.json`
+- Port lock path: `.work/validation/port-deb-lock.json`
+- Cases: 257
+- Source cases: 5
+- Usage cases: 250
+- Regression cases: 2
+- Passed: 257
+- Failed: 0
+- Casts recorded: 0
+
+**Failures Found And Fixed**
+
+- `check_safe_advanced_abi_software_tester` found that the documented
+  `ZSTD_customMem` advanced ABI still rejected non-null allocator callbacks.
+  `f9e484313cff` implements complete allocator-pair validation and
+  allocator-backed Rust-owned handle allocation/free for CCtx, CStream, CDict,
+  DCtx, DStream, and DDict advanced constructors.
+- The same commit preserves the destination allocator identity when copying
+  compression contexts, so a copied context is freed through the allocator that
+  created its handle.
+- `safe/tests/rust/compress.rs` now has regression coverage for successful
+  create/free through custom allocators and for rejecting incomplete allocator
+  pairs without invoking the callback.
+- `safe/PORT.md` was updated to remove the stale note that custom allocators
+  were unsupported.
+
+No validator checks were skipped.
+
+**Checks Executed**
+
+```bash
+cargo fmt --manifest-path safe/Cargo.toml --check
+git diff --check -- safe/PORT.md safe/src/ffi/types.rs safe/src/ffi/compress.rs safe/src/ffi/decompress.rs safe/src/compress/cctx.rs safe/src/compress/cstream.rs safe/src/compress/cdict.rs safe/src/decompress/dctx.rs safe/src/decompress/dstream.rs safe/src/decompress/ddict.rs safe/tests/rust/compress.rs
+cargo test --manifest-path safe/Cargo.toml --release --test compress advanced_custom_allocators -- --nocapture
+cargo test --manifest-path safe/Cargo.toml --release --all-targets
+bash safe/scripts/run-advanced-mt-tests.sh
+bash safe/scripts/verify-export-parity.sh
+make -C safe/tests/link-compat clean >/dev/null && make -C safe/tests/link-compat run SAFE_ROOT="$PWD/safe" REPO_ROOT="$PWD"
+/usr/bin/rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe
+SAFELIBS_COMMIT_SHA=$(git rev-parse HEAD) bash scripts/build-debs.sh
+nm -D -u "$extracted_libzstd1/usr/lib/x86_64-linux-gnu/libzstd.so.1.5.5" | /usr/bin/rg 'dl(sym|open)|dlsym|dlopen' || true
+nm -u "$extracted_libzstd_dev/usr/lib/x86_64-linux-gnu/libzstd.a" | /usr/bin/rg 'dl(sym|open)|dlsym|dlopen' || true
+cc -static original/libzstd-1.5.5+dfsg2/debian/tests/ztest/pkg-make/ztest.c -Ioriginal/libzstd-1.5.5+dfsg2/lib -o "$tmp_root/static-ztest" "$extracted_libzstd_dev/usr/lib/x86_64-linux-gnu/libzstd.a" -lm
+SAFELIBS_COMMIT_SHA=$(git rev-parse HEAD) SAFELIBS_VALIDATOR_DIR="$PWD/validator" bash scripts/run-validation-tests.sh
+```
+
+All listed pass/fail commands passed. The `nm` probes are expected to print no
+matches and return non-zero through `/usr/bin/rg`; they were run with `|| true`
+while checking that no output was produced. The package static-link smoke linked
+and ran the upstream ztest probe against the packaged `libzstd.a`.
