@@ -6,27 +6,34 @@ Advanced ABI, Dict-Builder, Threading, and Build Purge
 
 `impl_safe_advanced_abi_completion`
 
-# Phase Rebase Note
-
-This phase consumes the Phase 1 ownership rebase and completes advanced ABI,
-threading, static-context, sequence, and dictionary-builder coverage without
-reintroducing decompression-side dynamic loading.
-
 # Preexisting Inputs
 
 - `safe/abi/export_map.toml`
 - `safe/tests/upstream_test_matrix.toml`
-- `safe/src/compress/`
+- `safe/src/compress/block.rs`
+- `safe/src/compress/cctx.rs`
+- `safe/src/compress/cstream.rs`
+- `safe/src/compress/frame.rs`
+- `safe/src/compress/literals.rs`
+- `safe/src/compress/ldm.rs`
+- `safe/src/compress/match_state.rs`
+- `safe/src/compress/params.rs`
+- `safe/src/compress/sequences.rs`
+- `safe/src/compress/strategies/double_fast.rs`
+- `safe/src/compress/strategies/fast.rs`
+- `safe/src/compress/strategies/lazy.rs`
+- `safe/src/compress/strategies/opt.rs`
 - `safe/src/ffi/compress.rs`
 - `safe/tests/rust/compress.rs`
-- `safe/tests/capi/`
+- `safe/tests/capi/roundtrip_smoke.c`
+- `safe/tests/capi/bigdict_driver.c`
+- `safe/tests/capi/invalid_dictionaries_driver.c`
+- `safe/tests/capi/zstream_driver.c`
+- `safe/tests/capi/paramgrill_driver.c`
+- `safe/tests/capi/external_matchfinder_driver.c`
 - `safe/scripts/run-capi-roundtrip.sh`
 - `safe/build.rs`
-- `safe/include/zstd.h`
-- `safe/include/zdict.h`
-- `safe/include/zstd_errors.h`
 - `safe/src/ffi/advanced.rs`
-- `safe/src/ffi/legacy_shim.c`
 - `safe/src/compress/cctx_params.rs`
 - `safe/src/compress/cdict.rs`
 - `safe/src/compress/sequence_api.rs`
@@ -46,27 +53,17 @@ reintroducing decompression-side dynamic loading.
 - `safe/tests/link-compat/run_zstreamtest.c`
 - `safe/scripts/run-advanced-mt-tests.sh`
 - `safe/scripts/verify-link-compat.sh`
+- `safe/scripts/verify-export-parity.sh`
 - `safe/docs/unsafe-audit.md`
-- `original/libzstd-1.5.5+dfsg2/lib/dictBuilder/`
-- `original/libzstd-1.5.5+dfsg2/lib/common/pool.c`
-- `original/libzstd-1.5.5+dfsg2/lib/common/threading.c`
-- `original/libzstd-1.5.5+dfsg2/lib/compress/zstdmt_compress.c`
+- `original/libzstd-1.5.5+dfsg2/lib/dictBuilder/*`
+- `original/libzstd-1.5.5+dfsg2/lib/common/pool.*`
+- `original/libzstd-1.5.5+dfsg2/lib/common/threading.*`
+- `original/libzstd-1.5.5+dfsg2/lib/compress/zstdmt_compress.*`
 - `original/libzstd-1.5.5+dfsg2/tests/poolTests.c`
 - `original/libzstd-1.5.5+dfsg2/tests/zstreamtest.c`
 - `original/libzstd-1.5.5+dfsg2/tests/fuzz/sequence_compression_api.c`
-- `.plan/workflow-structure.yaml`
-- `workflow.yaml`
-- `safe/Cargo.toml`
-- `safe/abi/original.exports.txt`
-- `safe/abi/original.soname.txt`
-- `safe/scripts/verify-export-parity.sh`
-- `original/libzstd-1.5.5+dfsg2/lib/common/pool.h`
-- `original/libzstd-1.5.5+dfsg2/lib/common/threading.h`
-- `original/libzstd-1.5.5+dfsg2/lib/compress/zstdmt_compress.h`
 - `original/libzstd-1.5.5+dfsg2/examples/streaming_compression_thread_pool.c`
 - `original/libzstd-1.5.5+dfsg2/examples/streaming_memory_usage.c`
-
-The upstream helper sources are reference inputs only. The final safe library must not keep `upstream-phase4` as a shipping helper archive.
 
 # New Outputs
 
@@ -97,50 +94,57 @@ The upstream helper sources are reference inputs only. The final safe library mu
 # File Changes
 
 - Remove `compile_upstream_phase4_helpers()` and the generated hidden helper archive from `safe/build.rs`.
-- Remove `dlopen()`, `dlsym()`, and the `load_upstream!` macro from `safe/src/ffi/compress.rs`.
+- Remove `dlopen()` / `dlsym()` and the `load_upstream!` macro from `safe/src/ffi/compress.rs`.
 - Port advanced parameter, dictionary, static-context, sequence API, threading, and dictionary-builder entry points to Rust.
-- Preserve only the truly required legacy shim C boundary, with `safe/src/ffi/legacy_shim.c` as the ceiling rather than a baseline for more C.
+- Preserve only the truly required legacy shim C boundary.
+- Keep link compatibility for objects compiled against upstream headers.
 
 # Implementation Details
 
-- `safe/build.rs` must still emit cfgs, SONAME, variant selection, and the legacy shim build if needed, but it must stop compiling and linking upstream `common/*.c`, `compress/*.c`, `decompress/*.c`, and `dictBuilder/*.c` as hidden helpers.
+- `safe/build.rs` must still emit cfgs, SONAME, and the legacy shim build if needed, but it must stop compiling and linking `common/*.c`, `compress/*.c`, `decompress/*.c`, and `dictBuilder/*.c` as hidden helpers.
 - `safe/src/compress/cctx_params.rs`, `safe/src/compress/cdict.rs`, `safe/src/compress/sequence_api.rs`, and `safe/src/compress/static_ctx.rs` must stop forwarding to `libzstd_safe_internal_*` helper symbols and become Rust-owned implementations that preserve the public ABI.
-- `safe/src/threading/*.rs` must preserve shared-library multithread defaults and `-mt` / `-nomt` behavior already modeled by `safe/build.rs`.
-- `safe/src/dict_builder/*.rs` must port COVER, FastCover, divsufsort, and zdict behavior into Rust or Rust-side glue with remaining unsafe limited to ABI buffer handling.
-- Link compatibility must hold for objects compiled against upstream headers; exported symbols, SONAME, and parameter ABI stay exact.
-- Preserve the fixed Phase 1 ownership rebase; later metadata edits must not re-shift preexisting `owning_phase` values.
+- `safe/src/threading/*.rs` must preserve the shared-library multithread default and `-mt` / `-nomt` behavior already modeled by `safe/build.rs` and the upstream lib Makefile contract.
+- `safe/src/dict_builder/*.rs` must port COVER/FastCover/divsufsort/zdict behavior into Rust or Rust-side glue that keeps remaining unsafe limited to ABI buffer handling.
+- Link compatibility must still hold for objects compiled against upstream headers, so the exported symbol list, SONAME, and parameter ABI must stay exact.
+- Preserve the Phase 1 ownership rebase; this phase may update statuses and metadata in place but must not re-shift preexisting `owning_phase` values.
 
 # Verification Phases
 
 - Phase ID: `script_safe_advanced_abi_completion`
-  - Type: `check`
-  - `bounce_target`: `impl_safe_advanced_abi_completion`
-  - Purpose: verify advanced APIs, dictionary builders, multithreaded entry points, export parity, and link compatibility after helper-archive removal.
-  - Commands:
-    - `bash safe/scripts/run-advanced-mt-tests.sh`
-    - `bash safe/scripts/verify-link-compat.sh`
-    - `bash safe/scripts/verify-export-parity.sh`
-    - `cargo test --manifest-path safe/Cargo.toml --release --all-targets`
-    - `rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe`
+- Type: `check`
+- `bounce_target`: `impl_safe_advanced_abi_completion`
+- Purpose: verify advanced APIs, dictionary builders, multithreaded entry points, export parity, and link compatibility after helper-archive removal.
+- Required Preexisting Inputs: the implement phase's preexisting inputs plus the new outputs listed above.
+- Commands:
+  - `bash safe/scripts/run-advanced-mt-tests.sh`
+  - `bash safe/scripts/verify-link-compat.sh`
+  - `bash safe/scripts/verify-export-parity.sh`
+  - `cargo test --manifest-path safe/Cargo.toml --release --all-targets`
+  - `rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe`
+
 - Phase ID: `check_safe_advanced_abi_software_tester`
-  - Type: `check`
-  - `bounce_target`: `impl_safe_advanced_abi_completion`
-  - Purpose: review advanced API semantics, new regressions, and multithreaded coverage.
-  - Commands: none; perform source, test, and evidence review.
+- Type: `check`
+- `bounce_target`: `impl_safe_advanced_abi_completion`
+- Purpose: review advanced API semantics, new regressions, and multithreaded coverage.
+- Required Preexisting Inputs: the implement phase's preexisting inputs plus the new outputs listed above.
+- Commands:
+  - no fixed shell commands; inspect the changed files, artifacts, script verifier output, and git history for the required commit
+
 - Phase ID: `check_safe_advanced_abi_senior_tester`
-  - Type: `check`
-  - `bounce_target`: `impl_safe_advanced_abi_completion`
-  - Purpose: review that the shipping library no longer depends on `dlopen()` or the `upstream-phase4` helper archive.
-  - Commands: none; perform senior implementation, ABI, and build-boundary review.
+- Type: `check`
+- `bounce_target`: `impl_safe_advanced_abi_completion`
+- Purpose: review that the shipping library no longer depends on `dlopen()` or the `upstream-phase4` helper archive.
+- Required Preexisting Inputs: the implement phase's preexisting inputs plus the new outputs listed above.
+- Commands:
+  - no fixed shell commands; inspect the changed files, artifacts, script verifier output, and git history for the required commit
 
 # Success Criteria
 
-- `safe/build.rs` no longer produces or links the hidden upstream helper archive.
-- Advanced, dictionary-builder, sequence, static-context, and threading surfaces are native to the safe crate.
-- Export parity and link compatibility pass.
-- The only remaining C is justified ABI-boundary or legacy-format glue and is documented.
-- All listed verifier commands pass or any failure is fixed before yielding.
+- No shipping path depends on `SAFE_UPSTREAM_LIB`, `load_upstream!`, `dlopen()`, `dlsym()`, or `upstream-phase4`.
+- Advanced ABI, dictionary-builder, static-context, sequence API, and multithreaded APIs are implemented in safe-side Rust or justified ABI glue.
+- Export parity and link compatibility still pass.
+- The crate feature matrix and Phase 1 metadata rebase remain stable.
 
 # Git Commit Requirement
 
-The implementer must commit the Phase 3 work to git before yielding. That commit must exist before any verifier phase for `impl_safe_advanced_abi_completion` runs.
+The implementer must commit all Phase 3 work to git before yielding. That commit must exist before `script_safe_advanced_abi_completion`, `check_safe_advanced_abi_software_tester`, and `check_safe_advanced_abi_senior_tester` run.
