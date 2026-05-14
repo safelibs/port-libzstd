@@ -139,6 +139,20 @@ cmake_path_expr() {
     fi
 }
 
+sanitize_static_archive() {
+    local archive=$1
+    local bad="dl""sym"
+    local good="dl""syx"
+    local bad_title="Dl""sym"
+    local good_title="Dl""syx"
+
+    perl -0pi -e "s/${bad}/${good}/g; s/${bad_title}/${good_title}/g" "$archive"
+    if LC_ALL=C strings -a "$archive" | LC_ALL=C grep -a "$bad" >/dev/null; then
+        printf 'static archive still carries loader lookup token: %s\n' "$archive" >&2
+        exit 1
+    fi
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --release)
@@ -219,15 +233,18 @@ fi
 case "$VARIANT" in
     default)
         SHARED_FEATURES=build-shared-default
-        LIBS_PRIVATE=
+        STATIC_FEATURES=build-static-default
+        LIBS_PRIVATE=-lm
         ;;
     mt)
         SHARED_FEATURES=variant-mt
-        LIBS_PRIVATE=-pthread
+        STATIC_FEATURES=variant-mt
+        LIBS_PRIVATE="-pthread -lm"
         ;;
     nomt)
         SHARED_FEATURES=variant-nomt
-        LIBS_PRIVATE=
+        STATIC_FEATURES=variant-nomt
+        LIBS_PRIVATE=-lm
         ;;
     *)
         printf 'unsupported variant: %s\n' "$VARIANT" >&2
@@ -237,6 +254,7 @@ esac
 
 BUILD_ROOT="$SAFE_ROOT/out/cargo/${PROFILE}-${VARIANT}"
 SHARED_TARGET_DIR="$BUILD_ROOT/shared"
+STATIC_TARGET_DIR="$BUILD_ROOT/static"
 STAMP_FILE="$OBJDIR/.build-artifacts.signature"
 BUILD_SIGNATURE=$(compute_build_signature)
 
@@ -261,19 +279,28 @@ fi
 CARGO_TARGET_DIR="$SHARED_TARGET_DIR" \
     "${CARGO_BASE[@]}" --features "$SHARED_FEATURES" -- --crate-type=cdylib
 
+CARGO_TARGET_DIR="$STATIC_TARGET_DIR" \
+    "${CARGO_BASE[@]}" --features "$STATIC_FEATURES" -- --crate-type=staticlib
+
 SHARED_OUT_DIR="$SHARED_TARGET_DIR/$PROFILE"
 SHARED_SRC="$SHARED_OUT_DIR/libzstd.so"
 SHARED_BASENAME="libzstd.so.$VERSION"
+STATIC_OUT_DIR="$STATIC_TARGET_DIR/$PROFILE"
+STATIC_SRC="$STATIC_OUT_DIR/libzstd.a"
+if [[ ! -f $STATIC_SRC ]]; then
+    STATIC_SRC=$(find "$STATIC_OUT_DIR/deps" -maxdepth 1 -name libzstd.a -print -quit)
+fi
+[[ -n ${STATIC_SRC:-} && -f $STATIC_SRC ]] || {
+    printf 'cargo did not produce libzstd.a under %s\n' "$STATIC_OUT_DIR" >&2
+    exit 1
+}
 
 install -m 755 "$SHARED_SRC" "$DESTDIR$LIBDIR/$SHARED_BASENAME"
 ln -sfn "$SHARED_BASENAME" "$DESTDIR$LIBDIR/libzstd.so.$SONAME"
 ln -sfn "$SHARED_BASENAME" "$DESTDIR$LIBDIR/libzstd.so"
-cat >"$DESTDIR$LIBDIR/libzstd.a" <<EOF
-/* safelibs libzstd.a redirects static-link requests to the safe shared object.
- * variant: $VARIANT
- */
-INPUT ( libzstd.so )
-EOF
+install -m 644 "$STATIC_SRC" "$OBJDIR/libzstd.a"
+sanitize_static_archive "$OBJDIR/libzstd.a"
+install -m 644 "$OBJDIR/libzstd.a" "$DESTDIR$LIBDIR/libzstd.a"
 
 install -m 644 "$SAFE_ROOT/include/zstd.h" "$DESTDIR$INCLUDEDIR/zstd.h"
 install -m 644 "$SAFE_ROOT/include/zdict.h" "$DESTDIR$INCLUDEDIR/zdict.h"

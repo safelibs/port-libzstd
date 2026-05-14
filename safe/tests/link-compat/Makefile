@@ -9,6 +9,11 @@ RUNTIME_DIR := $(BUILD_DIR)/runtime
 SHARED_LIB := $(SAFE_ROOT)/target/release/libzstd.so
 RUNTIME_LIB := $(RUNTIME_DIR)/libzstd.so.1
 LD_PATH := $(RUNTIME_DIR)$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH}
+MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH 2>/dev/null || echo x86_64-linux-gnu)
+STATIC_INSTALL_ROOT := $(BUILD_DIR)/static-install
+STATIC_OBJ_DIR := $(BUILD_DIR)/static-obj
+STATIC_LIBDIR := $(STATIC_INSTALL_ROOT)/usr/lib/$(MULTIARCH)
+STATIC_LIB := $(STATIC_LIBDIR)/libzstd.a
 
 CARGO ?= cargo
 CC ?= cc
@@ -39,9 +44,10 @@ BINARIES := \
 	$(BIN_DIR)/streaming_compression_thread_pool_safe \
 	$(BIN_DIR)/dict_builder_driver_safe \
 	$(BIN_DIR)/sequence_api_driver_safe \
-	$(BIN_DIR)/thread_pool_driver_safe
+	$(BIN_DIR)/thread_pool_driver_safe \
+	$(BIN_DIR)/pkg_make_ztest_static
 
-.PHONY: all safe-lib objects binaries run clean workdirs
+.PHONY: all safe-lib static-artifacts objects binaries run clean workdirs
 
 all: run
 
@@ -51,6 +57,9 @@ workdirs:
 safe-lib: | workdirs
 	$(CARGO) rustc --manifest-path $(SAFE_ROOT)/Cargo.toml $(SAFE_CARGO_ARGS)
 	ln -sf $(SHARED_LIB) $(RUNTIME_LIB)
+
+static-artifacts: | workdirs
+	bash $(SAFE_ROOT)/scripts/build-artifacts.sh --release --destdir $(STATIC_INSTALL_ROOT) --objdir $(STATIC_OBJ_DIR)
 
 objects: $(OBJECTS)
 
@@ -116,6 +125,9 @@ $(BIN_DIR)/sequence_api_driver_safe: $(OBJ_DIR)/sequence_api_driver.o safe-lib |
 $(BIN_DIR)/thread_pool_driver_safe: $(OBJ_DIR)/thread_pool_driver.o safe-lib | workdirs
 	$(CC) $< -o $@ $(LINK_FLAGS)
 
+$(BIN_DIR)/pkg_make_ztest_static: $(OBJ_DIR)/pkg_make_ztest.o static-artifacts | workdirs
+	$(CC) -static $< -o $@ $(STATIC_LIB) -lm
+
 $(WORK_DIR)/input-one.txt $(WORK_DIR)/input-two.txt: | workdirs
 	python3 -c 'from pathlib import Path; import random; work = Path("$(WORK_DIR)"); work.mkdir(parents=True, exist_ok=True); alphabet = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"; random.seed(0x11112222); (work / "input-one.txt").write_bytes(bytes(alphabet[random.randrange(len(alphabet))] for _ in range(144 * 1024 + 9))); random.seed(0x33334444); (work / "input-two.txt").write_bytes(bytes(alphabet[random.randrange(len(alphabet))] for _ in range(112 * 1024 + 21)))'
 
@@ -127,6 +139,7 @@ run: binaries $(WORK_DIR)/input-one.txt $(WORK_DIR)/input-two.txt
 	LD_LIBRARY_PATH=$(LD_PATH) $(BIN_DIR)/dict_builder_driver_safe
 	LD_LIBRARY_PATH=$(LD_PATH) $(BIN_DIR)/sequence_api_driver_safe
 	LD_LIBRARY_PATH=$(LD_PATH) $(BIN_DIR)/thread_pool_driver_safe
+	$(BIN_DIR)/pkg_make_ztest_static
 	LD_LIBRARY_PATH=$(LD_PATH) $(BIN_DIR)/streaming_memory_usage_safe
 	cd $(WORK_DIR) && LD_LIBRARY_PATH=$(LD_PATH) $(BIN_DIR)/streaming_compression_thread_pool_safe 2 3 input-one.txt input-two.txt
 

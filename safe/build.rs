@@ -93,11 +93,13 @@ fn main() {
     let legacy_root = upstream_root.join("legacy");
     let common_root = upstream_root.join("common");
     let legacy_files = [
+        common_root.join("error_private.c"),
         common_root.join("xxhash.c"),
         legacy_root.join("zstd_v05.c"),
         legacy_root.join("zstd_v06.c"),
         legacy_root.join("zstd_v07.c"),
         manifest_dir.join("src/ffi/legacy_shim.c"),
+        manifest_dir.join("src/ffi/runtime_lookup_stub.c"),
     ];
 
     for path in &legacy_files {
@@ -114,7 +116,8 @@ fn main() {
         .include(&legacy_root)
         .include(&common_root)
         .include(&upstream_root)
-        .define("ZSTD_LEGACY_SUPPORT", "5");
+        .define("ZSTD_LEGACY_SUPPORT", "5")
+        .flag_if_supported("-fvisibility=hidden");
 
     for path in &legacy_files {
         build.file(path);

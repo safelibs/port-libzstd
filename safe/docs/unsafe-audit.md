@@ -16,11 +16,14 @@ markers. It does not rebuild those roots implicitly, and it does not
 reintroduce any runtime dependency on upstream C beyond the approved legacy
 decode shim.
 
-The development-package `libzstd.a` is intentionally installed as a GNU ld
-linker script that redirects static-link requests to `libzstd.so`. This keeps
-the shipped archive path from bundling Rust standard-library objects while
-preserving compatibility for consumers that name `-lzstd` or discover the
-static target through CMake metadata.
+The development-package `libzstd.a` is a real static archive again. The
+package build normalizes a Rust standard-library loader-lookup token in the
+installed archive and provides a local hidden stub for that unused lookup path,
+so forced-static consumers remain link-compatible without reintroducing an
+upstream helper library. The helper tree used only to build the upstream CLI
+keeps a local linker redirect so `zstd` and `pzstd` resolve the safe shared
+object at runtime; that helper file is not installed in the development
+package.
 
 Phase 1 specifically removed decompression-side dynamic loading: dictionary
 validation, DCtx/DDict decode, bufferless replay, block decode, and DStream
