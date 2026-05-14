@@ -1116,9 +1116,10 @@ Phase 29 Implementation: impl_final_release_burn_down
 - `git -C validator pull --ff-only`: advanced from
   `d1c08d01cd50b34a7aeb62c5630e28df0eb6cd97` to
   `be4251ee8324b38cc8bc41aa215133c7b6c61e47`
-- Code commit validated by the port lock before this report update:
-  9bc266325a11abf2727664641c2bb7c48f4467a1
-- Local release tag used by the validator lock: build-9bc266325a11
+- Traceability rule: the local proof artifacts under
+  `safe/out/validator/artifacts/proof/` are generated after the final commit
+  and are the authoritative record for `commit`, `release_tag`, and `tag_ref`.
+  The report does not hard-code those self-referential fields.
 - Mode: port
 - Final validator runner: `bash safe/scripts/run-validator-libzstd.sh`
 
@@ -1154,10 +1155,11 @@ The final validator rerun used the canonical override packages staged under
 
 The generated port lock at
 `safe/out/validator/artifacts/proof/port-debs-lock.json` records all three
-canonical packages as ported, zero unported original packages,
-`commit=9bc266325a11abf2727664641c2bb7c48f4467a1`,
-`release_tag=build-9bc266325a11`, and
-`tag_ref=refs/tags/build-9bc266325a11`.
+canonical packages as ported and zero unported original packages. After this
+report-only traceability repair is committed, `bash
+safe/scripts/run-validator-libzstd.sh` is rerun so that the lock and proof
+record the final `git rev-parse HEAD` value and derived
+`refs/tags/build-<HEAD[:12]>` tag ref.
 
 **Validator Summary**
 
@@ -1177,6 +1179,15 @@ The unfiltered run against `safelibs/validator@be4251ee` executed 267 cases
 and failed only the validator-bug case documented above. After filtering just
 that case, the rerun passed every executed validator check. No libzstd-safe
 compatibility or safety failure remains in the validator results.
+
+**Traceability Repair**
+
+The first Phase 29 report commit bundled source changes and report text after a
+validator run whose proof lock still named the pre-phase commit. The final
+repair is report-only, and the validator is rerun after that repair commit so
+the untracked proof artifacts in `safe/out/validator/artifacts/proof/` record
+the same commit as current `HEAD`. The safe source, tests, and tracked release
+artifacts remain unchanged by this report-only repair.
 
 **Fixes Applied**
 
@@ -1227,9 +1238,13 @@ bash safe/scripts/build-dependent-image.sh
 bash safe/scripts/run-full-suite.sh
 bash test-original.sh
 rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe || test $? -eq 1
+git rev-parse HEAD
+bash safe/scripts/run-validator-libzstd.sh
 ```
 
 The first validator run listed above was the unfiltered run that exposed the
 new validator-bug case. The second validator run used the local filtered test
-root and passed 266/266. The explicit build commands refreshed the canonical
-release-gate roots before the final full-suite and `test-original.sh` runs.
+root and passed 266/266. The final validator command is the post-commit
+traceability rerun; it refreshes the local proof lock against current `HEAD`.
+The explicit build commands refreshed the canonical release-gate roots before
+the final full-suite and `test-original.sh` runs.
