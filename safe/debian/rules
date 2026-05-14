@@ -89,7 +89,7 @@ override_dh_fixperms:
 	fi
 
 override_dh_strip:
-	dh_strip -a
+	dh_strip -a -Xlibzstd.a
 	if [ -f $(UDEB_MARKER) ]; then \
 		dh_strip -p$(UDEB_PACKAGE); \
 	fi

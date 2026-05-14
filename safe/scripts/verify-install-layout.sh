@@ -161,6 +161,10 @@ nm -A "$LIBDIR/libzstd.a" 2>/dev/null | rg -q 'pthread_' && {
     printf 'default static archive still carries pthread references\n' >&2
     exit 1
 }
+grep -Eq '^INPUT[[:space:]]*\([[:space:]]*libzstd\.so[[:space:]]*\)$' "$LIBDIR/libzstd.a" || {
+    printf 'installed libzstd.a is no longer an indirection file\n' >&2
+    exit 1
+}
 
 assert_exists "$DEFAULT_HELPER_ROOT/libzstd.mk"
 assert_exists "$DEFAULT_HELPER_ROOT/common/xxhash.c"

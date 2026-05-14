@@ -1,6 +1,6 @@
 # Unsafe Audit
 
-Last reviewed: 2026-05-13
+Last reviewed: 2026-05-14
 
 The shipping `libzstd` no longer relies on dynamic loader symbol resolution,
 an environment-selected upstream helper library, or a hidden helper-object
@@ -15,6 +15,12 @@ checks that the shipping safe tree has not regained the old upstream-loader
 markers. It does not rebuild those roots implicitly, and it does not
 reintroduce any runtime dependency on upstream C beyond the approved legacy
 decode shim.
+
+The development-package `libzstd.a` is intentionally installed as a GNU ld
+linker script that redirects static-link requests to `libzstd.so`. This keeps
+the shipped archive path from bundling Rust standard-library objects while
+preserving compatibility for consumers that name `-lzstd` or discover the
+static target through CMake metadata.
 
 Phase 1 specifically removed decompression-side dynamic loading: dictionary
 validation, DCtx/DDict decode, bufferless replay, block decode, and DStream
