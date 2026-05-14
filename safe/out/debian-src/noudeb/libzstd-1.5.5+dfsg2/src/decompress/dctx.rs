@@ -11,10 +11,6 @@ use crate::{
 };
 use core::ffi::{c_int, c_void};
 
-fn custom_mem_supported(custom_mem: ZSTD_customMem) -> bool {
-    custom_mem.customAlloc.is_none() && custom_mem.customFree.is_none()
-}
-
 fn decode_into(
     dst: *mut c_void,
     dst_capacity: usize,
@@ -355,10 +351,10 @@ pub extern "C" fn ZSTD_estimateDCtxSize() -> usize {
 
 #[no_mangle]
 pub extern "C" fn ZSTD_createDCtx_advanced(customMem: ZSTD_customMem) -> *mut ZSTD_DCtx {
-    if !custom_mem_supported(customMem) {
+    if !customMem.is_valid() {
         return core::ptr::null_mut();
     }
-    decompress::create_dctx()
+    decompress::create_dctx_advanced(customMem)
 }
 
 #[no_mangle]

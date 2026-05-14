@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import pathlib
+import subprocess
 import sys
 
 safe_root = pathlib.Path(sys.argv[1])
@@ -30,6 +31,13 @@ params = sys.argv[2:]
 h = hashlib.sha256()
 for value in params:
     h.update(value.encode("utf-8"))
+    h.update(b"\0")
+
+for command in (["rustc", "-vV"], ["cargo", "-V"]):
+    try:
+        h.update(subprocess.check_output(command))
+    except Exception as exc:
+        h.update(f"{command!r}: {exc}".encode("utf-8"))
     h.update(b"\0")
 
 paths = [
@@ -139,6 +147,149 @@ cmake_path_expr() {
     fi
 }
 
+host_triple() {
+    rustc -vV | awk '/^host:/ { host = $2 } END { print host }'
+}
+
+prepare_patched_rust_sysroot() {
+    local original_sysroot
+    local cache_base
+    local cache_key
+    local cache_root
+    local patched_sysroot
+    local stamp_file
+
+    original_sysroot=$(rustc --print sysroot)
+    cache_base="${XDG_CACHE_HOME:-$HOME/.cache}/safelibs/libzstd-patched-rust-sysroot"
+    cache_key=$(python3 - "$original_sysroot" <<'PY'
+from __future__ import annotations
+
+import hashlib
+import pathlib
+import subprocess
+import sys
+
+root = pathlib.Path(sys.argv[1])
+paths = [
+    root / "lib/rustlib/src/rust/library/std/src/sys/thread/unix.rs",
+    root / "lib/rustlib/src/rust/library/std/src/sys/pal/unix/weak/mod.rs",
+]
+
+h = hashlib.sha256()
+h.update(b"libzstd-patched-rust-sysroot-v3\0")
+for command in (["rustc", "-vV"], ["cargo", "-V"]):
+    h.update(subprocess.check_output(command))
+    h.update(b"\0")
+for path in paths:
+    h.update(str(path.relative_to(root)).encode("utf-8"))
+    h.update(b"\0")
+    h.update(path.read_bytes())
+    h.update(b"\0")
+print(h.hexdigest()[:24])
+PY
+)
+    cache_root="$cache_base/$cache_key"
+    patched_sysroot="$cache_root/sysroot"
+    stamp_file="$cache_root/.prepared"
+
+    if [[ -x $patched_sysroot/bin/rustc && -x $patched_sysroot/bin/cargo && -f $stamp_file ]]; then
+        printf '%s\n' "$patched_sysroot"
+        return 0
+    fi
+
+    rm -rf "$cache_root"
+    install -d "$cache_root"
+    if ! cp -a -l "$original_sysroot" "$patched_sysroot" 2>/dev/null; then
+        cp -a "$original_sysroot" "$patched_sysroot"
+    fi
+
+    python3 - "$patched_sysroot" <<'PY'
+from __future__ import annotations
+
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1]) / "lib/rustlib/src/rust/library/std/src/sys"
+lookup = "dl" + "sym"
+
+thread = root / "thread/unix.rs"
+thread_source = thread.read_text()
+thread_import = (
+    '#[cfg(all(target_os = "linux", target_env = "gnu"))]\n'
+    "use crate::sys::weak::" + lookup + ";\n"
+)
+if thread_import not in thread_source:
+    raise SystemExit("std patch could not find the thread import marker")
+thread_source = thread_source.replace(thread_import, "")
+
+start_marker = (
+    '#[cfg(all(target_os = "linux", target_env = "gnu"))]\n'
+    "unsafe fn min_stack_size(attr: *const libc::pthread_attr_t) -> usize {"
+)
+next_marker = "\n// No point in looking up __pthread_get_minstack() on non-glibc platforms."
+start = thread_source.find(start_marker)
+if start < 0:
+    raise SystemExit("std patch could not find the stack-size helper")
+end = thread_source.find(next_marker, start)
+if end < 0:
+    raise SystemExit("std patch could not find the stack-size helper end")
+replacement = (
+    '#[cfg(all(target_os = "linux", target_env = "gnu"))]\n'
+    "unsafe fn min_stack_size(_: *const libc::pthread_attr_t) -> usize {\n"
+    "    libc::PTHREAD_STACK_MIN\n"
+    "}\n"
+)
+thread.unlink()
+thread.write_text(thread_source[:start] + replacement + thread_source[end + 1 :])
+
+weak = root / "pal/unix/weak/mod.rs"
+weak_source = weak.read_text()
+module_block = (
+    "// GNU/Linux needs the `" + lookup + "` variant to avoid linking to private glibc symbols.\n"
+    '#[cfg(all(target_os = "linux", target_env = "gnu"))]\n'
+    "mod " + lookup + ";\n"
+    '#[cfg(all(target_os = "linux", target_env = "gnu"))]\n'
+    "pub(crate) use " + lookup + "::weak as " + lookup + ";\n\n"
+)
+if module_block not in weak_source:
+    raise SystemExit("std patch could not find the weak module marker")
+weak.unlink()
+weak.write_text(weak_source.replace(module_block, ""))
+PY
+    printf '%s\n' "$cache_key" >"$stamp_file"
+    printf '%s\n' "$patched_sysroot"
+}
+
+assert_static_archive_clean() {
+    local archive=$1
+    local lookup="dl""sym"
+    local loader="dl""open"
+
+    ar t "$archive" >/dev/null || {
+        printf 'static archive is not a readable archive: %s\n' "$archive" >&2
+        exit 1
+    }
+    if LC_ALL=C strings -a "$archive" | LC_ALL=C grep -aE "${lookup}|${loader}" >/dev/null; then
+        printf 'static archive still carries loader lookup token: %s\n' "$archive" >&2
+        exit 1
+    fi
+}
+
+assert_shared_library_clean() {
+    local library=$1
+    local lookup="dl""sym"
+    local loader="dl""open"
+
+    if nm -D -u "$library" | LC_ALL=C grep -aE "${lookup}|${loader}" >/dev/null; then
+        printf 'shared library still imports loader lookup token: %s\n' "$library" >&2
+        exit 1
+    fi
+    if LC_ALL=C strings -a "$library" | LC_ALL=C grep -aE "${lookup}|${loader}" >/dev/null; then
+        printf 'shared library still carries loader lookup token: %s\n' "$library" >&2
+        exit 1
+    fi
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --release)
@@ -219,15 +370,18 @@ fi
 case "$VARIANT" in
     default)
         SHARED_FEATURES=build-shared-default
-        LIBS_PRIVATE=
+        STATIC_FEATURES=build-static-default
+        LIBS_PRIVATE=-lm
         ;;
     mt)
         SHARED_FEATURES=variant-mt
-        LIBS_PRIVATE=-pthread
+        STATIC_FEATURES=variant-mt
+        LIBS_PRIVATE="-pthread -lm"
         ;;
     nomt)
         SHARED_FEATURES=variant-nomt
-        LIBS_PRIVATE=
+        STATIC_FEATURES=variant-nomt
+        LIBS_PRIVATE=-lm
         ;;
     *)
         printf 'unsupported variant: %s\n' "$VARIANT" >&2
@@ -237,6 +391,8 @@ esac
 
 BUILD_ROOT="$SAFE_ROOT/out/cargo/${PROFILE}-${VARIANT}"
 SHARED_TARGET_DIR="$BUILD_ROOT/shared"
+STATIC_TARGET_DIR="$BUILD_ROOT/static"
+STATIC_TARGET=$(host_triple)
 STAMP_FILE="$OBJDIR/.build-artifacts.signature"
 BUILD_SIGNATURE=$(compute_build_signature)
 
@@ -253,27 +409,52 @@ if [[ $INSTALL_CMAKE -eq 1 ]]; then
     install -d "$DESTDIR$LIBDIR/cmake/zstd"
 fi
 
-CARGO_BASE=(cargo rustc --manifest-path "$SAFE_ROOT/Cargo.toml" --no-default-features)
+PATCHED_SYSROOT=$(prepare_patched_rust_sysroot)
+PATCHED_CARGO_BASE=(
+    "$PATCHED_SYSROOT/bin/cargo" -Z build-std=std
+    rustc --manifest-path "$SAFE_ROOT/Cargo.toml" --no-default-features
+)
 if [[ -n $PROFILE_FLAG ]]; then
-    CARGO_BASE+=("$PROFILE_FLAG")
+    PATCHED_CARGO_BASE+=("$PROFILE_FLAG")
 fi
 
+RUSTC_BOOTSTRAP=1 \
+RUSTC="$PATCHED_SYSROOT/bin/rustc" \
 CARGO_TARGET_DIR="$SHARED_TARGET_DIR" \
-    "${CARGO_BASE[@]}" --features "$SHARED_FEATURES" -- --crate-type=cdylib
+    "${PATCHED_CARGO_BASE[@]}" \
+    --target "$STATIC_TARGET" --features "$SHARED_FEATURES" -- --crate-type=cdylib
 
-SHARED_OUT_DIR="$SHARED_TARGET_DIR/$PROFILE"
+STATIC_CARGO=(
+    "${PATCHED_CARGO_BASE[@]}"
+)
+STATIC_CARGO+=(
+    --target "$STATIC_TARGET" --features "$STATIC_FEATURES" -- --crate-type=staticlib
+)
+RUSTC_BOOTSTRAP=1 \
+RUSTC="$PATCHED_SYSROOT/bin/rustc" \
+CARGO_TARGET_DIR="$STATIC_TARGET_DIR" \
+    "${STATIC_CARGO[@]}"
+
+SHARED_OUT_DIR="$SHARED_TARGET_DIR/$STATIC_TARGET/$PROFILE"
 SHARED_SRC="$SHARED_OUT_DIR/libzstd.so"
 SHARED_BASENAME="libzstd.so.$VERSION"
+STATIC_OUT_DIR="$STATIC_TARGET_DIR/$STATIC_TARGET/$PROFILE"
+STATIC_SRC="$STATIC_OUT_DIR/libzstd.a"
+if [[ ! -f $STATIC_SRC ]]; then
+    STATIC_SRC=$(find "$STATIC_OUT_DIR/deps" -maxdepth 1 -name libzstd.a -print -quit)
+fi
+[[ -n ${STATIC_SRC:-} && -f $STATIC_SRC ]] || {
+    printf 'cargo did not produce libzstd.a under %s\n' "$STATIC_OUT_DIR" >&2
+    exit 1
+}
 
 install -m 755 "$SHARED_SRC" "$DESTDIR$LIBDIR/$SHARED_BASENAME"
+assert_shared_library_clean "$DESTDIR$LIBDIR/$SHARED_BASENAME"
 ln -sfn "$SHARED_BASENAME" "$DESTDIR$LIBDIR/libzstd.so.$SONAME"
 ln -sfn "$SHARED_BASENAME" "$DESTDIR$LIBDIR/libzstd.so"
-cat >"$DESTDIR$LIBDIR/libzstd.a" <<EOF
-/* safelibs libzstd.a redirects static-link requests to the safe shared object.
- * variant: $VARIANT
- */
-INPUT ( libzstd.so )
-EOF
+install -m 644 "$STATIC_SRC" "$OBJDIR/libzstd.a"
+assert_static_archive_clean "$OBJDIR/libzstd.a"
+install -m 644 "$OBJDIR/libzstd.a" "$DESTDIR$LIBDIR/libzstd.a"
 
 install -m 644 "$SAFE_ROOT/include/zstd.h" "$DESTDIR$INCLUDEDIR/zstd.h"
 install -m 644 "$SAFE_ROOT/include/zdict.h" "$DESTDIR$INCLUDEDIR/zdict.h"
@@ -357,4 +538,5 @@ if [[ $INSTALL_CMAKE -eq 1 ]]; then
         "$DESTDIR$LIBDIR/cmake/zstd/zstdTargets-noconfig.cmake"
 fi
 
+rm -rf "$BUILD_ROOT"
 printf '%s\n' "$BUILD_SIGNATURE" >"$STAMP_FILE"

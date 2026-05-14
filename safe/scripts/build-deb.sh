@@ -128,9 +128,52 @@ build_outputs_present() {
         compgen -G "$package_dir/${pkg}_*.deb" >/dev/null || return 1
     done
 
+    static_archive_valid_in_tree "$install_root" || return 1
+    dev_package_static_archive_valid "$package_dir" || return 1
+
     if [[ $enable_udeb -eq 1 ]]; then
         compgen -G "$package_dir/libzstd1-udeb_*.udeb" >/dev/null || return 1
     fi
+}
+
+archive_is_valid() {
+    local archive=$1
+
+    [[ -f $archive ]] || return 1
+    ar t "$archive" >/dev/null 2>&1
+}
+
+static_archive_valid_in_tree() {
+    local root=$1
+    local static_archive
+
+    static_archive="$root/usr/lib/$MULTIARCH/libzstd.a"
+    if [[ ! -f $static_archive ]]; then
+        static_archive="$root/usr/lib/libzstd.a"
+    fi
+    archive_is_valid "$static_archive"
+}
+
+dev_package_static_archive_valid() {
+    local package_dir=$1
+    local ok
+    local tmpdir
+    local -a matches=()
+
+    shopt -s nullglob
+    matches=("$package_dir"/libzstd-dev_*.deb)
+    shopt -u nullglob
+    [[ ${#matches[@]} -eq 1 ]] || return 1
+
+    tmpdir=$(mktemp -d)
+    ok=0
+    if ! dpkg-deb -x "${matches[0]}" "$tmpdir"; then
+        ok=1
+    else
+        static_archive_valid_in_tree "$tmpdir" || ok=1
+    fi
+    rm -rf "$tmpdir"
+    return "$ok"
 }
 
 prune_staged_build_cache() {

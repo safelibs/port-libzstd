@@ -128,8 +128,72 @@ build_outputs_present() {
         compgen -G "$package_dir/${pkg}_*.deb" >/dev/null || return 1
     done
 
+    static_archive_valid_in_tree "$install_root" || return 1
+    dev_package_static_archive_valid "$package_dir" || return 1
+
     if [[ $enable_udeb -eq 1 ]]; then
         compgen -G "$package_dir/libzstd1-udeb_*.udeb" >/dev/null || return 1
+    fi
+}
+
+archive_is_valid() {
+    local archive=$1
+
+    [[ -f $archive ]] || return 1
+    ar t "$archive" >/dev/null 2>&1
+}
+
+static_archive_valid_in_tree() {
+    local root=$1
+    local static_archive
+
+    static_archive="$root/usr/lib/$MULTIARCH/libzstd.a"
+    if [[ ! -f $static_archive ]]; then
+        static_archive="$root/usr/lib/libzstd.a"
+    fi
+    archive_is_valid "$static_archive"
+}
+
+dev_package_static_archive_valid() {
+    local package_dir=$1
+    local ok
+    local tmpdir
+    local -a matches=()
+
+    shopt -s nullglob
+    matches=("$package_dir"/libzstd-dev_*.deb)
+    shopt -u nullglob
+    [[ ${#matches[@]} -eq 1 ]] || return 1
+
+    tmpdir=$(mktemp -d)
+    ok=0
+    if ! dpkg-deb -x "${matches[0]}" "$tmpdir"; then
+        ok=1
+    else
+        static_archive_valid_in_tree "$tmpdir" || ok=1
+    fi
+    rm -rf "$tmpdir"
+    return "$ok"
+}
+
+prune_staged_build_cache() {
+    local stage_root=$1
+
+    [[ -d $stage_root ]] || return 0
+
+    rm -rf \
+        "$stage_root/out/cargo" \
+        "$stage_root/target"
+
+    find "$stage_root" -maxdepth 1 -type d -name 'obj-*' -print0 |
+        while IFS= read -r -d '' objdir; do
+            rm -f "$objdir/libzstd.a"
+        done
+
+    if [[ -d $stage_root/debian/.debhelper ]]; then
+        find "$stage_root/debian/.debhelper" -type d -name dbgsym-root -prune \
+            -exec rm -rf '{}' +
+        find "$stage_root/debian/.debhelper" -type f -name dbgsym-build-ids -delete
     fi
 }
 
@@ -179,6 +243,7 @@ reuse_existing_build() {
         fi
     fi
 
+    prune_staged_build_cache "${meta[1]}"
     printf 'reusing up-to-date deb build: %s\n' "${meta[1]}"
     printf 'staged source tree: %s\n' "${meta[1]}"
     printf 'package outputs: %s\n' "${meta[2]}"
@@ -336,6 +401,8 @@ if [[ $SAFE_ENABLE_UDEB -eq 1 ]]; then
         '
     )
 fi
+
+prune_staged_build_cache "$STAGE_ROOT"
 
 find "$STAGE_PARENT" -maxdepth 1 -type f \
     \( -name '*.deb' -o -name '*.udeb' -o -name '*.changes' -o -name '*.buildinfo' \) \

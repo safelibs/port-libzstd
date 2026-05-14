@@ -3,7 +3,7 @@ Source: libzstd
 Version: 1.5.5+dfsg2-2build1.1+safelibs1
 Architecture: amd64
 Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
-Installed-Size: 285
+Installed-Size: 8659
 Depends: libzstd1 (= 1.5.5+dfsg2-2build1.1+safelibs1)
 Section: libdevel
 Priority: optional

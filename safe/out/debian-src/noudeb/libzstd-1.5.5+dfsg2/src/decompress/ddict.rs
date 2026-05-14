@@ -11,10 +11,6 @@ use crate::{
 };
 use core::ffi::c_void;
 
-fn custom_mem_supported(custom_mem: ZSTD_customMem) -> bool {
-    custom_mem.customAlloc.is_none() && custom_mem.customFree.is_none()
-}
-
 // DDict entry points are part of the Phase 1 native decompression boundary:
 // dictionaries are validated and retained by Rust-owned decoder state.
 
@@ -150,7 +146,7 @@ pub extern "C" fn ZSTD_createDDict_advanced(
     dictContentType: ZSTD_dictContentType_e,
     customMem: ZSTD_customMem,
 ) -> *mut ZSTD_DDict {
-    if !custom_mem_supported(customMem) {
+    if !customMem.is_valid() {
         return core::ptr::null_mut();
     }
     let Some(dict_bytes) = decompress::optional_src_slice(dict, dictSize) else {
@@ -158,7 +154,7 @@ pub extern "C" fn ZSTD_createDDict_advanced(
     };
     match dictLoadMethod {
         ZSTD_dictLoadMethod_e::ZSTD_dlm_byCopy | ZSTD_dictLoadMethod_e::ZSTD_dlm_byRef => {
-            decompress::create_ddict_with_content_type(dict_bytes, dictContentType)
+            decompress::create_ddict_with_custom_mem(dict_bytes, dictContentType, customMem)
                 .unwrap_or(core::ptr::null_mut())
         }
     }

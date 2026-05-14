@@ -9,12 +9,72 @@ DEFAULT_METADATA_FILE="$SAFE_ROOT/out/deb/default/metadata.env"
 NOUDEB_METADATA_FILE="$SAFE_ROOT/out/deb/noudeb/metadata.env"
 source "$SAFE_ROOT/scripts/phase6-common.sh"
 
+archive_is_valid() {
+    local archive=$1
+
+    [[ -f $archive ]] || return 1
+    ar t "$archive" >/dev/null 2>&1
+}
+
+profile_static_archive_valid() {
+    local package_dir=$1
+    local install_root=${2:-}
+    local archive
+    local dev_deb
+    local ok
+    local tmpdir
+    local -a matches=()
+
+    if [[ -n $install_root ]]; then
+        archive="$install_root/usr/lib/$MULTIARCH/libzstd.a"
+        if [[ ! -f $archive ]]; then
+            archive="$install_root/usr/lib/libzstd.a"
+        fi
+        archive_is_valid "$archive" || return 1
+    fi
+
+    [[ -d $package_dir ]] || return 1
+    shopt -s nullglob
+    matches=("$package_dir"/libzstd-dev_*.deb)
+    shopt -u nullglob
+    [[ ${#matches[@]} -eq 1 ]] || return 1
+
+    dev_deb=${matches[0]}
+    tmpdir=$(mktemp -d)
+    ok=0
+    if ! dpkg-deb -x "$dev_deb" "$tmpdir"; then
+        ok=1
+    else
+        archive="$tmpdir/usr/lib/$MULTIARCH/libzstd.a"
+        if [[ ! -f $archive ]]; then
+            archive="$tmpdir/usr/lib/libzstd.a"
+        fi
+        archive_is_valid "$archive" || ok=1
+    fi
+    rm -rf "$tmpdir"
+    return "$ok"
+}
+
+validate_profile_static_archive() {
+    local profile=$1
+    local package_dir=$2
+    local install_root=$3
+
+    profile_static_archive_valid "$package_dir" "$install_root" || {
+        printf '%s profile libzstd-dev does not ship a real static archive\n' "$profile" >&2
+        exit 1
+    }
+}
+
 phase6_require_phase4_inputs "$0"
+
+DEB_BUILD_PROFILES=noudeb bash "$SCRIPT_DIR/build-deb.sh"
 phase6_require_path "$NOUDEB_METADATA_FILE" "noudeb Debian package metadata"
 
 DEFAULT_PACKAGE_DIR=
 DEFAULT_INSTALL_ROOT=
 NOUDEB_PACKAGE_DIR=
+NOUDEB_INSTALL_ROOT=
 DEFAULT_INSTALL_SO=
 if [[ -f $DEFAULT_METADATA_FILE ]]; then
     # shellcheck disable=SC1090
@@ -31,6 +91,7 @@ if [[ -f $NOUDEB_METADATA_FILE ]]; then
     # shellcheck disable=SC1090
     source "$NOUDEB_METADATA_FILE"
     NOUDEB_PACKAGE_DIR=$PACKAGE_DIR
+    NOUDEB_INSTALL_ROOT=$INSTALL_ROOT
 fi
 STAMP_FILE=$(phase6_stamp_path verify-deb-profiles)
 if phase6_stamp_is_fresh \
@@ -42,13 +103,19 @@ if phase6_stamp_is_fresh \
     "$DEFAULT_PACKAGE_DIR" \
     "$NOUDEB_PACKAGE_DIR" \
     "$DEFAULT_INSTALL_SO" \
+    "$SCRIPT_DIR/build-artifacts.sh" \
+    "$SCRIPT_DIR/build-deb.sh" \
     && phase6_tracked_repo_paths_are_fresh \
         "$STAMP_FILE" \
         "$SAFE_ROOT/Cargo.toml" \
         "$SAFE_ROOT/include" \
         "$SAFE_ROOT/src" \
+        "$SAFE_ROOT/scripts/build-artifacts.sh" \
         "$SAFE_ROOT/scripts/build-deb.sh" \
-        "$REPO_ROOT/original/libzstd-1.5.5+dfsg2/debian"
+        "$SAFE_ROOT/scripts/build-original-cli-against-safe.sh" \
+        "$REPO_ROOT/original/libzstd-1.5.5+dfsg2/debian" \
+    && profile_static_archive_valid "$DEFAULT_PACKAGE_DIR" "$DEFAULT_INSTALL_ROOT" \
+    && profile_static_archive_valid "$NOUDEB_PACKAGE_DIR" "$NOUDEB_INSTALL_ROOT"
 then
     phase6_log "Debian profile verification already fresh; skipping rerun"
     exit 0
@@ -63,6 +130,7 @@ DEFAULT_CANONICAL_HELPER_ROOT=$CANONICAL_HELPER_ROOT
 # shellcheck disable=SC1090
 source "$SAFE_ROOT/out/deb/noudeb/metadata.env"
 NOUDEB_PACKAGE_DIR=$PACKAGE_DIR
+NOUDEB_INSTALL_ROOT=$INSTALL_ROOT
 
 [[ -d $DEFAULT_CANONICAL_INSTALL_ROOT ]] || {
     printf 'missing canonical install root: %s\n' "$DEFAULT_CANONICAL_INSTALL_ROOT" >&2
@@ -93,6 +161,9 @@ if compgen -G "$NOUDEB_PACKAGE_DIR/libzstd1-udeb_*.udeb" >/dev/null; then
     printf 'noudeb profile unexpectedly emitted libzstd1-udeb\n' >&2
     exit 1
 fi
+
+validate_profile_static_archive default "$DEFAULT_PACKAGE_DIR" "$DEFAULT_INSTALL_ROOT"
+validate_profile_static_archive noudeb "$NOUDEB_PACKAGE_DIR" "$NOUDEB_INSTALL_ROOT"
 
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
