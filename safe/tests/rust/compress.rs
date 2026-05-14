@@ -1724,6 +1724,29 @@ fn advanced_parameter_apis_reject_invalid_cparams() {
 }
 
 #[test]
+fn compression_level_bounds_are_native_and_consistent() {
+    let level_bounds = params::ZSTD_cParam_getBounds(ZSTD_cParameter::ZSTD_c_compressionLevel);
+    let strategy_bounds = params::ZSTD_cParam_getBounds(ZSTD_cParameter::ZSTD_c_strategy);
+    let bad_bounds = params::ZSTD_cParam_getBounds(ZSTD_cParameter::ZSTD_c_experimentalParam13);
+
+    assert_eq!(level_bounds.error, 0);
+    assert_eq!(level_bounds.lowerBound, params::ZSTD_minCLevel());
+    assert_eq!(level_bounds.upperBound, params::ZSTD_maxCLevel());
+    assert!(level_bounds.lowerBound < 0);
+    assert!(level_bounds.upperBound >= params::ZSTD_defaultCLevel());
+
+    assert_eq!(strategy_bounds.error, 0);
+    assert!(strategy_bounds.lowerBound <= ZSTD_strategy::ZSTD_fast as c_int);
+    assert!(strategy_bounds.upperBound >= ZSTD_strategy::ZSTD_btultra2 as c_int);
+
+    expect_error_code(
+        bad_bounds.error,
+        ZSTD_ErrorCode::ZSTD_error_parameter_unsupported,
+        "ZSTD_cParam_getBounds(unsupported)",
+    );
+}
+
+#[test]
 fn compress_streaming_and_parameter_helpers_roundtrip() {
     let src = sample_bytes(192 * 1024 + 37);
     let compressible = compressible_sample(96 * 1024 + 29);

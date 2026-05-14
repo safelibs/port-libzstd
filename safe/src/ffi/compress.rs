@@ -925,6 +925,10 @@ pub(crate) fn min_clevel() -> c_int {
     ZSTD_MIN_CLEVEL
 }
 
+pub(crate) fn max_clevel() -> c_int {
+    ZSTD_MAX_CLEVEL
+}
+
 fn normalize_src_size_hint(src_size_hint: u64) -> u64 {
     if src_size_hint == 0 {
         ZSTD_CONTENTSIZE_UNKNOWN
