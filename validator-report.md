@@ -1027,3 +1027,80 @@ All listed commands passed in the final run. The adaptive CLI reproducer was
 also checked manually against the installed safe `zstd` binary and confirmed to
 emit the expected lighter-compression transition with and without
 `--no-progress`.
+
+Phase 25 Implementation: impl_compat_regressions_and_fixes
+
+**Validator Checkout**
+
+- Date: 2026-05-14
+- Validator URL: https://github.com/safelibs/validator
+- Validator commit: d1c08d01cd50b34a7aeb62c5630e28df0eb6cd97
+- Validator branch: main
+- `git -C validator pull --ff-only`: already up to date
+- Code commit validated by the port lock: 71f9924d0d144de2eca85aba67b8a0601ef85a13
+- Local release tag used by the validator lock: build-71f9924d0d14
+- Mode: port
+- Final validator runner: `bash safe/scripts/run-validator-libzstd.sh`
+
+The validator was run from the local checkout at `validator/` per the phase
+request. The runner reused the canonical Phase 4 artifact roots, staged only
+the three canonical libzstd packages under
+`safe/out/validator/override-debs/libzstd/`, and generated proof artifacts
+under `safe/out/validator/artifacts/proof/`.
+
+**Override Packages**
+
+| package | filename | architecture | size | sha256 |
+| --- | --- | --- | --- | --- |
+| libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 424378 | b35e3002268b14e41fcccfad9fb47e92e425ff8a451467d7d89b9d7830e870f9 |
+| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 2019998 | e40eb78dab1a59b6c0f1797a2e70a59833b93c4a6783b1bc1ab4926e5e186611 |
+| zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
+
+The generated port lock recorded all three canonical packages as ported and
+zero unported original packages.
+
+**Validator Summary**
+
+- Result summary: `safe/out/validator/artifacts/port/results/libzstd/summary.json`
+- Proof path: `safe/out/validator/artifacts/proof/port-validation-proof.json`
+- Port lock path: `safe/out/validator/artifacts/proof/port-debs-lock.json`
+- Cases: 257
+- Source cases: 5
+- Usage cases: 250
+- Regression cases: 2
+- Passed: 257
+- Failed: 0
+- Casts recorded: 257
+- Validator runner status: 0
+
+**Dependent Matrix Summary**
+
+- Dependent image: `safelibs-libzstd-dependents:ubuntu24.04`
+- Compile matrix: 12/12 probes passed (`apt`, `dpkg`, `rsync`, `systemd`,
+  `libarchive`, `btrfs-progs`, `squashfs-tools`, `qemu`, `curl`, `tiff`,
+  `rpm`, `zarchive`)
+- Runtime matrix: all 12 dependent runtime applications passed
+- `test-original.sh`: passed after rebuilding the dependent image and running
+  the combined compile/runtime flow
+
+**Failures Found And Fixed**
+
+No new validator, dependent compile, or dependent runtime failures were found
+in this phase. No new compatibility reproducer was required, no validator check
+was skipped, and no `safe/src/` or unsafe-audit update was needed.
+
+**Checks Executed**
+
+```bash
+git -C validator pull --ff-only
+bash safe/scripts/run-validator-libzstd.sh
+bash safe/scripts/build-dependent-image.sh
+bash safe/scripts/run-dependent-matrix.sh --compile-only
+bash safe/scripts/run-dependent-matrix.sh --runtime-only
+bash safe/scripts/run-validator-regressions.sh
+bash test-original.sh
+```
+
+The validator runner internally executed the release build, original CLI helper
+build, Debian package build, validator unit tests, testcase manifest checks,
+the full libzstd port matrix, and proof generation. All listed commands passed.
