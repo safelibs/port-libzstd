@@ -13,8 +13,8 @@ use zstd::{
         ZSTD_CCtx, ZSTD_CDict, ZSTD_CStream, ZSTD_EndDirective, ZSTD_ErrorCode,
         ZSTD_ResetDirective, ZSTD_Sequence, ZSTD_bounds, ZSTD_cParameter,
         ZSTD_compressionParameters, ZSTD_customMem, ZSTD_dParameter, ZSTD_dictContentType_e,
-        ZSTD_dictLoadMethod_e, ZSTD_frameParameters, ZSTD_inBuffer, ZSTD_outBuffer,
-        ZSTD_parameters, ZSTD_sequenceFormat_e, ZSTD_strategy, ZSTD_BLOCKSIZE_MAX,
+        ZSTD_dictLoadMethod_e, ZSTD_frameHeader, ZSTD_frameParameters, ZSTD_inBuffer,
+        ZSTD_outBuffer, ZSTD_parameters, ZSTD_sequenceFormat_e, ZSTD_strategy, ZSTD_BLOCKSIZE_MAX,
         ZSTD_CONTENTSIZE_UNKNOWN,
     },
 };
@@ -334,6 +334,46 @@ fn decompress_exact(compressed: &[u8], expected: &[u8]) {
     check_result(decoded_size, "ZSTD_decompress");
     assert_eq!(decoded_size, expected.len());
     assert_eq!(decoded, expected);
+}
+
+fn decompress_stream_exact(compressed: &[u8], expected: &[u8]) {
+    let zds = dstream::ZSTD_createDStream();
+    assert!(!zds.is_null(), "failed to create dstream");
+    check_result(dstream::ZSTD_initDStream(zds), "ZSTD_initDStream");
+
+    let mut decoded = vec![0u8; expected.len() + 64];
+    let mut input = ZSTD_inBuffer {
+        src: compressed.as_ptr().cast(),
+        size: compressed.len(),
+        pos: 0,
+    };
+    let mut produced = 0usize;
+    let mut finished = false;
+
+    while !finished {
+        let mut out = ZSTD_outBuffer {
+            dst: decoded[produced..].as_mut_ptr().cast(),
+            size: decoded.len() - produced,
+            pos: 0,
+        };
+        let ret = dstream::ZSTD_decompressStream(zds, &mut out, &mut input);
+        check_result(ret, "ZSTD_decompressStream");
+        produced += out.pos;
+        assert!(
+            produced <= expected.len(),
+            "stream decode produced too much data"
+        );
+        finished = ret == 0;
+        assert!(
+            finished || out.pos != 0 || input.pos < input.size,
+            "stream decode stalled before frame completion"
+        );
+    }
+
+    assert_eq!(input.pos, input.size);
+    assert_eq!(produced, expected.len());
+    assert_eq!(&decoded[..produced], expected);
+    dstream::ZSTD_freeDStream(zds);
 }
 
 fn decompress_with_prefix_exact(compressed: &[u8], prefix: &[u8], expected: &[u8]) {
@@ -2429,6 +2469,151 @@ fn streaming_decompress_rejects_corrupted_frame_for_libarchive_integrity_flag() 
         "ZSTD_decompressStream accepted a corrupted frame (last ret={last_ret})"
     );
     dstream::ZSTD_freeDStream(zds);
+}
+
+#[test]
+fn streaming_repetitive_stdout_frame_decodes_with_safe_decoder() {
+    let src = b"r13 stdin pipeline payload row\n".repeat(1024);
+    let zcs = cstream::ZSTD_createCStream();
+    assert!(!zcs.is_null());
+    check_result(cstream::ZSTD_initCStream(zcs, 3), "ZSTD_initCStream");
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(zcs.cast(), ZSTD_cParameter::ZSTD_c_checksumFlag, 1),
+        "ZSTD_c_checksumFlag(stdin pipeline fixture)",
+    );
+
+    let mut compressed = vec![0u8; cstream::ZSTD_CStreamOutSize()];
+    let mut input = ZSTD_inBuffer {
+        src: src.as_ptr().cast(),
+        size: src.len(),
+        pos: 0,
+    };
+    let mut output = ZSTD_outBuffer {
+        dst: compressed.as_mut_ptr().cast(),
+        size: compressed.len(),
+        pos: 0,
+    };
+    check_result(
+        cstream::ZSTD_compressStream(zcs, &mut output, &mut input),
+        "ZSTD_compressStream(stdin pipeline fixture)",
+    );
+    assert_eq!(input.pos, input.size);
+    loop {
+        let remaining = cstream::ZSTD_endStream(zcs, &mut output);
+        check_result(remaining, "ZSTD_endStream(stdin pipeline fixture)");
+        if remaining == 0 {
+            break;
+        }
+    }
+    compressed.truncate(output.pos);
+    cstream::ZSTD_freeCStream(zcs);
+
+    decompress_exact(&compressed, &src);
+    decompress_stream_exact(&compressed, &src);
+}
+
+#[test]
+fn long_window_frames_decode_with_matching_window_log() {
+    let src = b"r14 long-window=21 payload row\n".repeat(80_000);
+    let cctx_ptr = cctx::ZSTD_createCCtx();
+    assert!(!cctx_ptr.is_null());
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_windowLog, 21),
+        "ZSTD_c_windowLog(long window fixture)",
+    );
+    check_result(
+        cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_checksumFlag, 1),
+        "ZSTD_c_checksumFlag(long window fixture)",
+    );
+    let mut compressed = vec![0u8; cctx::ZSTD_compressBound(src.len())];
+    let compressed_size = cctx::ZSTD_compress2(
+        cctx_ptr,
+        compressed.as_mut_ptr().cast(),
+        compressed.len(),
+        src.as_ptr().cast(),
+        src.len(),
+    );
+    check_result(compressed_size, "ZSTD_compress2(long window fixture)");
+    compressed.truncate(compressed_size);
+    cctx::ZSTD_freeCCtx(cctx_ptr);
+
+    let mut header = ZSTD_frameHeader::default();
+    check_result(
+        zstd::common::frame::ZSTD_getFrameHeader(
+            &mut header,
+            compressed.as_ptr().cast(),
+            compressed.len(),
+        ),
+        "ZSTD_getFrameHeader(long window fixture)",
+    );
+    assert!(
+        header.windowSize <= (1 << 21),
+        "windowSize {} exceeds --long=21 decode limit",
+        header.windowSize
+    );
+
+    let dctx_ptr = dctx::ZSTD_createDCtx();
+    assert!(!dctx_ptr.is_null());
+    check_result(
+        dctx::ZSTD_DCtx_setMaxWindowSize(dctx_ptr, 1 << 21),
+        "ZSTD_DCtx_setMaxWindowSize(long window fixture)",
+    );
+    let mut decoded = vec![0u8; src.len()];
+    let decoded_size = dctx::ZSTD_decompressDCtx(
+        dctx_ptr,
+        decoded.as_mut_ptr().cast(),
+        decoded.len(),
+        compressed.as_ptr().cast(),
+        compressed.len(),
+    );
+    check_result(decoded_size, "ZSTD_decompressDCtx(long window fixture)");
+    assert_eq!(decoded_size, src.len());
+    assert_eq!(decoded, src);
+    dctx::ZSTD_freeDCtx(dctx_ptr);
+}
+
+#[test]
+fn level_19_beats_level_1_on_repetitive_source() {
+    let src = b"r16 repetitive zstd payload row alpha bravo charlie\n".repeat(4000);
+    let compress_at_level = |level| {
+        let cctx_ptr = cctx::ZSTD_createCCtx();
+        assert!(!cctx_ptr.is_null());
+        let cparams = params::ZSTD_getCParams(level, src.len() as u64, 0);
+        check_result(
+            cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_contentSizeFlag, 1),
+            "ZSTD_c_contentSizeFlag(level fixture)",
+        );
+        check_result(
+            cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_checksumFlag, 1),
+            "ZSTD_c_checksumFlag(level fixture)",
+        );
+        check_result(
+            cctx_params::ZSTD_CCtx_setCParams(cctx_ptr, cparams),
+            "ZSTD_CCtx_setCParams(level fixture)",
+        );
+        check_result(
+            cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_nbWorkers, 1),
+            "ZSTD_c_nbWorkers(level fixture)",
+        );
+        check_result(
+            cctx::ZSTD_CCtx_setPledgedSrcSize(cctx_ptr, src.len() as u64),
+            "ZSTD_CCtx_setPledgedSrcSize(level fixture)",
+        );
+        let (compressed, _) = compress_stream2_continue_then_end(cctx_ptr, &src, 4096);
+        cctx::ZSTD_freeCCtx(cctx_ptr);
+        compressed
+    };
+
+    let l1 = compress_at_level(1);
+    let l19 = compress_at_level(19);
+    assert!(
+        l19.len() < l1.len(),
+        "expected -19 ({}) < -1 ({})",
+        l19.len(),
+        l1.len()
+    );
+    decompress_exact(&l1, &src);
+    decompress_exact(&l19, &src);
 }
 
 #[test]

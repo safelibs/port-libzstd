@@ -496,3 +496,85 @@ cat safe/out/validator/artifacts/port/results/libzstd/summary.json
 cat safe/out/validator/artifacts/proof/port-debs-lock.json
 ls safe/out/validator/artifacts/proof/port-validation-proof.json
 ```
+
+Phase 1 Validator Refresh: impl_safe_decompression_independence
+
+**Validator Checkout**
+
+- Validator URL: https://github.com/safelibs/validator
+- Validator commit: d1c08d01cd50b34a7aeb62c5630e28df0eb6cd97
+- Local port commit recorded by proof: 2119196495154b812f60535c78e9a0b62b013ea8
+- Mode: port
+
+**Package Inventory**
+
+| package | filename | architecture | size | sha256 |
+| --- | --- | --- | --- | --- |
+| libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 378504 | 7784c488f23f89fbd553bd4101dfbec5afd24d17a2f96c6788b8e11a51c0db73 |
+| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 3702308 | bfa599399e3bb7f340d7d8d43accc2bd9e15235cfe1531c449e03a542d8dd6dc |
+| zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
+
+**Validator Summary**
+
+- Summary path: `safe/out/validator/artifacts/port/results/libzstd/summary.json`
+- Proof path: `safe/out/validator/artifacts/proof/port-validation-proof.json`
+- Cases: 257
+- Source cases: 5
+- Usage cases: 250
+- Regression cases: 2
+- Passed: 257
+- Failed: 0
+- Casts: 257
+- Validator runner status: 0
+
+**Failures Found and Fixes Applied**
+
+Initial refresh runs against `safelibs/validator@d1c08d01` exposed three
+validator failures in the expanded libarchive usage matrix:
+
+- `usage-libarchive-tools-zstd-r13-cli-stdin-c-pipeline`: the safe CLI
+  emitted a valid small compressed frame, but `ZSTD_decompressStream`
+  decoded the frame through the relaxed oxiarc-first block replay path and
+  produced a short prefix before failing the checksum. The fix makes relaxed
+  no-dictionary streaming replay prefer the native structured decoder, while
+  strict one-shot decoding validates oxiarc output before accepting it.
+- `usage-libarchive-tools-zstd-r14-cli-long-window-21`: a known-size frame
+  larger than the configured `--long=21` window was being encoded as a
+  single-segment frame, making the advertised window equal to the full
+  content size. The fix keeps known-size frames non-single-segment when the
+  source exceeds the configured window.
+- `usage-libarchive-tools-zstd-r16-cli-level-1-vs-19-size-monotonic`: the
+  multithreaded streaming path used by the CLI can carry level-1 behavior
+  via explicit cparams and bypassed the small fast-mode size distinction.
+  The fix applies the empty leading block to the stateful structured encoder
+  on the first emitted job when the effective cparams are level-1 fast mode.
+
+Regression coverage added in `safe/tests/rust/compress.rs`:
+
+- `streaming_repetitive_stdout_frame_decodes_with_safe_decoder` now checks
+  both one-shot and `ZSTD_decompressStream` decode for the stdin-pipeline
+  frame shape.
+- `long_window_frames_decode_with_matching_window_log` asserts `--long=21`
+  compatible window metadata and safe DCtx decode.
+- `level_19_beats_level_1_on_repetitive_source` now uses cparams,
+  `nbWorkers=1`, pledged size, and split `ZSTD_compressStream2` calls to
+  mirror the CLI path.
+
+No validator checks were skipped.
+
+**Commands Run**
+
+```bash
+git -C validator rev-parse HEAD
+cargo test --manifest-path safe/Cargo.toml --release --test compress
+cargo test --manifest-path safe/Cargo.toml --release --test decompress
+bash safe/scripts/run-capi-decompression.sh
+bash safe/scripts/verify-export-parity.sh
+bash safe/scripts/verify-baseline-contract.sh
+rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym' \
+    safe/src/decompress safe/src/ffi/decompress.rs safe/scripts/run-capi-decompression.sh
+env -u DEB_BUILD_PROFILES bash safe/scripts/build-deb.sh
+bash safe/scripts/run-validator-libzstd.sh
+jq -c '{cases,source_cases,usage_cases,regression_cases,passed,failed,casts}' \
+    safe/out/validator/artifacts/port/results/libzstd/summary.json
+```
