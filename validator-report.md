@@ -751,3 +751,86 @@ SAFELIBS_COMMIT_SHA=$(git rev-parse HEAD) SAFELIBS_VALIDATOR_DIR="$PWD/validator
 All listed checks passed for the final code-bearing source commit. The
 source-level forbidden-token scan had no maintained-source matches; generated
 build and validation artifacts under `safe/out` remain uncommitted.
+
+Phase 9 Bounce Resolution: shared loader import and MT overlap
+
+**Validator Checkout**
+
+- Validator URL: https://github.com/safelibs/validator
+- Validator commit: d1c08d01cd50b34a7aeb62c5630e28df0eb6cd97
+- Final code-bearing source commit validated: c435398ce26774ffc6d7b0369bdc5d6d98018aeb
+- Local release tag used by the final validator lock: build-c435398ce267
+- Mode: port
+- Invocation: `SAFELIBS_COMMIT_SHA=$(git rev-parse HEAD) SAFELIBS_VALIDATOR_DIR="$PWD/validator" bash scripts/run-validation-tests.sh`
+
+This section is a report-only update after validating commit
+`c435398ce26774ffc6d7b0369bdc5d6d98018aeb`. The subsequent report commit does
+not alter build inputs.
+
+**Package Inventory**
+
+The root build hook produced these canonical override packages in `dist/`:
+
+| package | filename | architecture | size | sha256 |
+| --- | --- | --- | --- | --- |
+| libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 426880 | 0e293db0b916eb2f8f945516bdd9128daf5329951a1f560424709a047e430a5a |
+| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 2015298 | f59f023b85cdbf5df3fb576dfee2cde3c8d81557bb2288581a482b11cf000577 |
+| zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
+
+The generated port lock recorded all three canonical packages as ported and
+zero unported original packages.
+
+**Validator Summary**
+
+- Log root: `.work/validation/artifacts/port/logs/libzstd/`
+- Result summary: `.work/validation/artifacts/port/results/libzstd/summary.json`
+- Port lock path: `.work/validation/port-deb-lock.json`
+- Cases: 257
+- Source cases: 5
+- Usage cases: 250
+- Regression cases: 2
+- Passed: 257
+- Failed: 0
+- Casts recorded: 0
+
+**Failures Found And Fixed**
+
+- `check_safe_advanced_abi_software_tester` found that the packaged runtime
+  shared object still imported the dynamic-loader lookup path. `c435398ce267`
+  now builds both the shared object and static archive through the patched Rust
+  sysroot path and fails the artifact build if the installed shared object
+  carries a loader lookup import or string token.
+- The same check found that split MT jobs no longer applied overlap history.
+  `c435398ce267` restores bounded overlap history for the first overlap-bearing
+  split job while keeping the earlier stored-block safety fallback for the
+  remaining independent split jobs.
+- `safe/tests/rust/compress.rs` now has a regression that compares full,
+  default, and no-overlap MT output sizes after round-trip validation, so a
+  pure stored-block fallback across the job boundary fails.
+
+No validator checks were skipped.
+
+**Checks Executed**
+
+```bash
+cargo fmt --manifest-path safe/Cargo.toml
+bash -n safe/scripts/build-artifacts.sh
+cargo test --manifest-path safe/Cargo.toml --release --test compress compress_stream2_mt_overlap_log_changes_job_boundary_output -- --nocapture
+bash safe/scripts/build-artifacts.sh --release --destdir "$tmp_root/install" --objdir "$tmp_root/obj" --no-install-cmake
+nm -D -u "$tmp_root/install/usr/lib/x86_64-linux-gnu/libzstd.so.1.5.5" | rg 'dl.?sym|dl.?open' || true
+strings -a "$tmp_root/install/usr/lib/x86_64-linux-gnu/libzstd.so.1.5.5" | rg 'dl.?sym|dl.?open' || true
+nm -u "$tmp_root/install/usr/lib/x86_64-linux-gnu/libzstd.a" | rg 'dl.?sym|dl.?open' || true
+bash safe/scripts/run-advanced-mt-tests.sh
+bash safe/scripts/verify-link-compat.sh
+bash safe/scripts/verify-export-parity.sh
+cargo test --manifest-path safe/Cargo.toml --release --all-targets
+rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe
+SAFELIBS_COMMIT_SHA=$(git rev-parse HEAD) bash scripts/build-debs.sh
+nm -D -u "$extracted_libzstd1/usr/lib/x86_64-linux-gnu/libzstd.so.1.5.5" | rg 'dl.?sym|dl.?open' || true
+nm -u "$extracted_libzstd_dev/usr/lib/x86_64-linux-gnu/libzstd.a" | rg 'dl.?sym|dl.?open' || true
+SAFELIBS_COMMIT_SHA=$(git rev-parse HEAD) SAFELIBS_VALIDATOR_DIR="$PWD/validator" bash scripts/run-validation-tests.sh
+```
+
+All listed pass/fail commands passed. The `nm` and `strings` probes above are
+expected to print no matches and return non-zero through `rg`; they were run
+with `|| true` while checking that no output was produced.
