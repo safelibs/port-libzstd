@@ -189,6 +189,11 @@ fn dict_fixture_path() -> PathBuf {
         .join("../original/libzstd-1.5.5+dfsg2/tests/golden-dictionaries/http-dict-missing-symbols")
 }
 
+fn http_fixture_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../original/libzstd-1.5.5+dfsg2/tests/golden-compression/http")
+}
+
 fn sample_bytes(size: usize) -> Vec<u8> {
     let fragments = [
         b"{\"tenant\":\"alpha\",\"region\":\"west\",\"kind\":\"session\",\"payload\":\"".as_slice(),
@@ -1060,6 +1065,170 @@ fn compress_stream2_continue_flush_then_end(
     }
 
     (compressed, flushed_output)
+}
+
+#[cfg(libzstd_threading)]
+#[test]
+fn mt_stream_flush_overlap_payload_roundtrips_fuzz_http_prefix() {
+    let fixture = fs::read(http_fixture_path()).expect("read upstream http fuzz fixture");
+    let src = &fixture[..701];
+    let cctx_ptr = cctx::ZSTD_createCCtx();
+    let mut compressed = Vec::new();
+    let chunks = [
+        (44usize, ZSTD_EndDirective::ZSTD_e_continue),
+        (312, ZSTD_EndDirective::ZSTD_e_continue),
+        (124, ZSTD_EndDirective::ZSTD_e_continue),
+        (61, ZSTD_EndDirective::ZSTD_e_continue),
+        (117, ZSTD_EndDirective::ZSTD_e_continue),
+        (5, ZSTD_EndDirective::ZSTD_e_flush),
+        (26, ZSTD_EndDirective::ZSTD_e_continue),
+        (1, ZSTD_EndDirective::ZSTD_e_continue),
+        (7, ZSTD_EndDirective::ZSTD_e_flush),
+        (1, ZSTD_EndDirective::ZSTD_e_continue),
+        (3, ZSTD_EndDirective::ZSTD_e_continue),
+    ];
+    let stream_out_capacity = cctx::ZSTD_compressBound(src.len()) * 8 + ZSTD_BLOCKSIZE_MAX;
+
+    assert!(!cctx_ptr.is_null(), "failed to create compression context");
+    check_result(
+        cctx::ZSTD_CCtx_reset(
+            cctx_ptr,
+            ZSTD_ResetDirective::ZSTD_reset_session_and_parameters,
+        ),
+        "ZSTD_CCtx_reset(mt fuzz reproducer)",
+    );
+    for (param, value) in [
+        (ZSTD_cParameter::ZSTD_c_compressionLevel, 11),
+        (ZSTD_cParameter::ZSTD_c_windowLog, 19),
+        (ZSTD_cParameter::ZSTD_c_hashLog, 20),
+        (ZSTD_cParameter::ZSTD_c_chainLog, 17),
+        (ZSTD_cParameter::ZSTD_c_searchLog, 5),
+        (ZSTD_cParameter::ZSTD_c_minMatch, 5),
+        (ZSTD_cParameter::ZSTD_c_targetLength, 100),
+        (
+            ZSTD_cParameter::ZSTD_c_strategy,
+            ZSTD_strategy::ZSTD_greedy as c_int,
+        ),
+        (ZSTD_cParameter::ZSTD_c_contentSizeFlag, 1),
+        (ZSTD_cParameter::ZSTD_c_checksumFlag, 0),
+        (ZSTD_cParameter::ZSTD_c_dictIDFlag, 0),
+        (ZSTD_cParameter::ZSTD_c_enableLongDistanceMatching, 0),
+        (ZSTD_cParameter::ZSTD_c_nbWorkers, 2),
+    ] {
+        check_result(
+            cctx::ZSTD_CCtx_setParameter(cctx_ptr, param, value),
+            "ZSTD_CCtx_setParameter(mt fuzz reproducer)",
+        );
+    }
+
+    let mut offset = 0usize;
+    for (len, end_op) in chunks {
+        let mut consumed = 0usize;
+        let mut idle_iterations = 0usize;
+        while consumed < len {
+            let mut input = ZSTD_inBuffer {
+                src: src[offset + consumed..offset + len].as_ptr().cast(),
+                size: len - consumed,
+                pos: 0,
+            };
+            let mut out_buf = vec![0u8; stream_out_capacity];
+            let mut output = ZSTD_outBuffer {
+                dst: out_buf.as_mut_ptr().cast(),
+                size: out_buf.len(),
+                pos: 0,
+            };
+            let remaining =
+                cstream::ZSTD_compressStream2(cctx_ptr, &mut output, &mut input, end_op);
+            check_result(remaining, "ZSTD_compressStream2(mt fuzz reproducer)");
+            if input.pos == 0 && output.pos == 0 {
+                assert_ne!(
+                    remaining, 0,
+                    "ZSTD_compressStream2 made no progress while reporting completion"
+                );
+                idle_iterations += 1;
+                assert!(
+                    idle_iterations < 1000,
+                    "ZSTD_compressStream2 stayed pending without consuming or emitting output"
+                );
+                std::thread::yield_now();
+                continue;
+            }
+            idle_iterations = 0;
+            assert!(
+                input.pos != 0 || output.pos != 0,
+                "ZSTD_compressStream2 made no progress while replaying the MT fuzz reproducer"
+            );
+            compressed.extend_from_slice(&out_buf[..output.pos]);
+            consumed += input.pos;
+        }
+        offset += len;
+    }
+    assert_eq!(offset, src.len());
+
+    let mut first_end = true;
+    loop {
+        let mut input = ZSTD_inBuffer {
+            src: core::ptr::null(),
+            size: 0,
+            pos: 0,
+        };
+        let out_capacity = if first_end { stream_out_capacity } else { 4096 };
+        first_end = false;
+        let mut out_buf = vec![0u8; out_capacity];
+        let mut output = ZSTD_outBuffer {
+            dst: out_buf.as_mut_ptr().cast(),
+            size: out_buf.len(),
+            pos: 0,
+        };
+        let remaining = cstream::ZSTD_compressStream2(
+            cctx_ptr,
+            &mut output,
+            &mut input,
+            ZSTD_EndDirective::ZSTD_e_end,
+        );
+        check_result(remaining, "ZSTD_compressStream2(mt fuzz reproducer end)");
+        compressed.extend_from_slice(&out_buf[..output.pos]);
+        if remaining == 0 {
+            break;
+        }
+    }
+
+    decompress_exact(&compressed, src);
+    cctx::ZSTD_freeCCtx(cctx_ptr);
+}
+
+#[cfg(libzstd_threading)]
+#[test]
+fn mt_fast_level_remains_larger_than_level_one_for_cli_fixture() {
+    fn compress_with_level(src: &[u8], level: c_int) -> Vec<u8> {
+        let cctx_ptr = cctx::ZSTD_createCCtx();
+        assert!(!cctx_ptr.is_null(), "failed to create cctx");
+        check_result(
+            cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_compressionLevel, level),
+            "ZSTD_c_compressionLevel(level ordering)",
+        );
+        check_result(
+            cctx::ZSTD_CCtx_setParameter(cctx_ptr, ZSTD_cParameter::ZSTD_c_nbWorkers, 1),
+            "ZSTD_c_nbWorkers(level ordering)",
+        );
+        let compressed = compress_stream2_end_only(cctx_ptr, src);
+        cctx::ZSTD_freeCCtx(cctx_ptr);
+        compressed
+    }
+
+    let fixture = fs::read(http_fixture_path()).expect("read upstream http fixture");
+    let src = &fixture[..fixture.len().min(4096)];
+    let fast = compress_with_level(src, -1);
+    let level_one = compress_with_level(src, 1);
+
+    decompress_exact(&fast, src);
+    decompress_exact(&level_one, src);
+    assert!(
+        level_one.len() < fast.len(),
+        "upstream CLI levels expect -1/--fast=1 to be larger than level 1: fast={} level1={}",
+        fast.len(),
+        level_one.len()
+    );
 }
 
 #[test]
@@ -3105,7 +3274,7 @@ fn compress_stream2_mt_frame_progression_tracks_started_jobs() {
         "frame progression must not advance currentJobID before an MT job starts"
     );
 
-    let mut saw_started_job = false;
+    let mut saw_adaptive_progression = false;
     while offset < src.len() {
         let take = chunk_size.min(src.len() - offset);
         let mut input = ZSTD_inBuffer {
@@ -3129,23 +3298,27 @@ fn compress_stream2_mt_frame_progression_tracks_started_jobs() {
         offset += input.pos;
 
         let progression = zstdmt::ZSTD_getFrameProgression(cctx_ptr);
-        if progression.currentJobID > 0 {
-            saw_started_job = true;
+        if progression.currentJobID > 2 {
+            saw_adaptive_progression = true;
             assert_eq!(
-                progression.currentJobID, 1,
-                "the first reported MT job should stay aligned with the first started job"
+                progression.currentJobID, 3,
+                "MT progression should report the next job id once adaptive-mode warm-up is complete"
             );
             assert!(
                 progression.consumed < progression.ingested,
                 "the active MT job should leave queued input visible in frame progression"
+            );
+            assert_eq!(
+                progression.produced, progression.flushed,
+                "MT progression should report externally visible output for adaptive-mode speed checks"
             );
             break;
         }
     }
 
     assert!(
-        saw_started_job,
-        "expected MT progression to report a started job after sustained streaming input"
+        saw_adaptive_progression,
+        "expected MT progression to advance beyond the adaptive-mode warm-up threshold"
     );
     cctx::ZSTD_freeCCtx(cctx_ptr);
 }

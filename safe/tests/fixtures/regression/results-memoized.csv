@@ -1,7 +1,7 @@
 Data,                             Config,                           Method,                           Total compressed size
 silesia.tar,level -5,compress simple,10875699
 silesia.tar,level -3,compress simple,9627237
-silesia.tar,level -1,compress simple,5407128
+silesia.tar,level -1,compress simple,5407134
 silesia.tar,level 0,compress simple,5097508
 silesia.tar,level 1,compress simple,5407125
 silesia.tar,level 3,compress simple,5097508
@@ -15,7 +15,7 @@ silesia.tar,level 16,compress simple,5020225
 silesia.tar,level 19,compress simple,5019857
 github.tar,level -5,compress simple,617083
 github.tar,level -3,compress simple,522928
-github.tar,level -1,compress simple,51168
+github.tar,level -1,compress simple,51174
 github.tar,level 0,compress simple,44535
 github.tar,level 1,compress simple,51165
 github.tar,level 3,compress simple,44535
@@ -29,7 +29,7 @@ github.tar,level 16,compress simple,42204
 github.tar,level 19,compress simple,41932
 silesia,level -5,compress cctx,10667077
 silesia,level -3,compress cctx,9851910
-silesia,level -1,compress cctx,5400396
+silesia,level -1,compress cctx,5400402
 silesia,level 0,compress cctx,5089096
 silesia,level 1,compress cctx,5400360
 silesia,level 3,compress cctx,5089096
@@ -44,7 +44,7 @@ silesia,level 19,compress cctx,5007955
 silesia,no source size,compress cctx,5089096
 silesia.tar,level -5,compress cctx,10875699
 silesia.tar,level -3,compress cctx,9627237
-silesia.tar,level -1,compress cctx,5407128
+silesia.tar,level -1,compress cctx,5407134
 silesia.tar,level 0,compress cctx,5097508
 silesia.tar,level 1,compress cctx,5407125
 silesia.tar,level 3,compress cctx,5097508
@@ -61,7 +61,7 @@ github,level -5,compress cctx,168049
 github,level -5 with dict,compress cctx,50270
 github,level -3,compress cctx,168049
 github,level -3 with dict,compress cctx,50270
-github,level -1,compress cctx,169549
+github,level -1,compress cctx,169555
 github,level -1 with dict,compress cctx,51770
 github,level 0,compress cctx,165904
 github,level 0 with dict,compress cctx,40909
@@ -91,7 +91,7 @@ github.tar,level -5,compress cctx,617083
 github.tar,level -5 with dict,compress cctx,49269
 github.tar,level -3,compress cctx,522928
 github.tar,level -3 with dict,compress cctx,49269
-github.tar,level -1,compress cctx,51168
+github.tar,level -1,compress cctx,51174
 github.tar,level -1 with dict,compress cctx,49272
 github.tar,level 0,compress cctx,44535
 github.tar,level 0 with dict,compress cctx,42974
@@ -119,7 +119,7 @@ github.tar,no source size,compress cctx,44535
 github.tar,no source size with dict,compress cctx,42974
 silesia,level -5,zstdcli,10667125
 silesia,level -3,zstdcli,9851958
-silesia,level -1,zstdcli,5400444
+silesia,level -1,zstdcli,5400450
 silesia,level 0,zstdcli,5076338
 silesia,level 1,zstdcli,5385642
 silesia,level 3,zstdcli,5076338
@@ -140,7 +140,7 @@ silesia,small chain log,zstdcli,5076338
 silesia,explicit params,zstdcli,5086729
 silesia.tar,level -5,zstdcli,6138416
 silesia.tar,level -3,zstdcli,5980528
-silesia.tar,level -1,zstdcli,5405192
+silesia.tar,level -1,zstdcli,5405198
 silesia.tar,level 0,zstdcli,5083361
 silesia.tar,level 1,zstdcli,5394023
 silesia.tar,level 3,zstdcli,5083361
@@ -164,7 +164,7 @@ github,level -5,zstdcli,170049
 github,level -5 with dict,zstdcli,52270
 github,level -3,zstdcli,170049
 github,level -3 with dict,zstdcli,52270
-github,level -1,zstdcli,171549
+github,level -1,zstdcli,171555
 github,level -1 with dict,zstdcli,53770
 github,level 0,zstdcli,167904
 github,level 0 with dict,zstdcli,42909
@@ -199,7 +199,7 @@ github.tar,level -5,zstdcli,617087
 github.tar,level -5 with dict,zstdcli,49273
 github.tar,level -3,zstdcli,522932
 github.tar,level -3 with dict,zstdcli,49273
-github.tar,level -1,zstdcli,51172
+github.tar,level -1,zstdcli,51178
 github.tar,level -1 with dict,zstdcli,49276
 github.tar,level 0,zstdcli,44555
 github.tar,level 0 with dict,zstdcli,42711
@@ -234,7 +234,7 @@ github.tar,small chain log,zstdcli,44555
 github.tar,explicit params,zstdcli,44223
 silesia,level -5,advanced one pass,10667077
 silesia,level -3,advanced one pass,9851910
-silesia,level -1,advanced one pass,5400396
+silesia,level -1,advanced one pass,5400402
 silesia,level 0,advanced one pass,5089096
 silesia,level 1,advanced one pass,5400360
 silesia,level 3,advanced one pass,5089096
@@ -256,7 +256,7 @@ silesia,small chain log,advanced one pass,5089096
 silesia,explicit params,advanced one pass,5089108
 silesia.tar,level -5,advanced one pass,10875699
 silesia.tar,level -3,advanced one pass,9627237
-silesia.tar,level -1,advanced one pass,5407128
+silesia.tar,level -1,advanced one pass,5407134
 silesia.tar,level 0,advanced one pass,5097508
 silesia.tar,level 1,advanced one pass,5407125
 silesia.tar,level 3,advanced one pass,5097508
@@ -280,7 +280,7 @@ github,level -5,advanced one pass,168049
 github,level -5 with dict,advanced one pass,50270
 github,level -3,advanced one pass,168049
 github,level -3 with dict,advanced one pass,50270
-github,level -1,advanced one pass,169549
+github,level -1,advanced one pass,169555
 github,level -1 with dict,advanced one pass,51770
 github,level 0,advanced one pass,165904
 github,level 0 with dict,advanced one pass,40909
@@ -317,7 +317,7 @@ github.tar,level -5,advanced one pass,617083
 github.tar,level -5 with dict,advanced one pass,49269
 github.tar,level -3,advanced one pass,522928
 github.tar,level -3 with dict,advanced one pass,49269
-github.tar,level -1,advanced one pass,51168
+github.tar,level -1,advanced one pass,51174
 github.tar,level -1 with dict,advanced one pass,49272
 github.tar,level 0,advanced one pass,44535
 github.tar,level 0 with dict,advanced one pass,42974
@@ -352,7 +352,7 @@ github.tar,small chain log,advanced one pass,44535
 github.tar,explicit params,advanced one pass,44536
 silesia,level -5,advanced one pass small out,10667077
 silesia,level -3,advanced one pass small out,9851910
-silesia,level -1,advanced one pass small out,5400396
+silesia,level -1,advanced one pass small out,5400402
 silesia,level 0,advanced one pass small out,5089096
 silesia,level 1,advanced one pass small out,5400360
 silesia,level 3,advanced one pass small out,5089096
@@ -374,7 +374,7 @@ silesia,small chain log,advanced one pass small out,5089096
 silesia,explicit params,advanced one pass small out,5089108
 silesia.tar,level -5,advanced one pass small out,10875699
 silesia.tar,level -3,advanced one pass small out,9627237
-silesia.tar,level -1,advanced one pass small out,5407128
+silesia.tar,level -1,advanced one pass small out,5407134
 silesia.tar,level 0,advanced one pass small out,5097508
 silesia.tar,level 1,advanced one pass small out,5407125
 silesia.tar,level 3,advanced one pass small out,5097508
@@ -398,7 +398,7 @@ github,level -5,advanced one pass small out,168049
 github,level -5 with dict,advanced one pass small out,50270
 github,level -3,advanced one pass small out,168049
 github,level -3 with dict,advanced one pass small out,50270
-github,level -1,advanced one pass small out,169549
+github,level -1,advanced one pass small out,169555
 github,level -1 with dict,advanced one pass small out,51770
 github,level 0,advanced one pass small out,165904
 github,level 0 with dict,advanced one pass small out,40909
@@ -435,7 +435,7 @@ github.tar,level -5,advanced one pass small out,617083
 github.tar,level -5 with dict,advanced one pass small out,49269
 github.tar,level -3,advanced one pass small out,522928
 github.tar,level -3 with dict,advanced one pass small out,49269
-github.tar,level -1,advanced one pass small out,51168
+github.tar,level -1,advanced one pass small out,51174
 github.tar,level -1 with dict,advanced one pass small out,49272
 github.tar,level 0,advanced one pass small out,44535
 github.tar,level 0 with dict,advanced one pass small out,42974
@@ -470,7 +470,7 @@ github.tar,small chain log,advanced one pass small out,44535
 github.tar,explicit params,advanced one pass small out,44536
 silesia,level -5,advanced streaming,10667077
 silesia,level -3,advanced streaming,9851910
-silesia,level -1,advanced streaming,5400396
+silesia,level -1,advanced streaming,5400402
 silesia,level 0,advanced streaming,5089096
 silesia,level 1,advanced streaming,5400360
 silesia,level 3,advanced streaming,5089096
@@ -492,7 +492,7 @@ silesia,small chain log,advanced streaming,5089096
 silesia,explicit params,advanced streaming,5089108
 silesia.tar,level -5,advanced streaming,10875699
 silesia.tar,level -3,advanced streaming,9627237
-silesia.tar,level -1,advanced streaming,5407128
+silesia.tar,level -1,advanced streaming,5407134
 silesia.tar,level 0,advanced streaming,5097508
 silesia.tar,level 1,advanced streaming,5407125
 silesia.tar,level 3,advanced streaming,5097508
@@ -516,7 +516,7 @@ github,level -5,advanced streaming,168049
 github,level -5 with dict,advanced streaming,50270
 github,level -3,advanced streaming,168049
 github,level -3 with dict,advanced streaming,50270
-github,level -1,advanced streaming,169549
+github,level -1,advanced streaming,169555
 github,level -1 with dict,advanced streaming,51770
 github,level 0,advanced streaming,165904
 github,level 0 with dict,advanced streaming,40909
@@ -553,7 +553,7 @@ github.tar,level -5,advanced streaming,617083
 github.tar,level -5 with dict,advanced streaming,49269
 github.tar,level -3,advanced streaming,522928
 github.tar,level -3 with dict,advanced streaming,49269
-github.tar,level -1,advanced streaming,51168
+github.tar,level -1,advanced streaming,51174
 github.tar,level -1 with dict,advanced streaming,49272
 github.tar,level 0,advanced streaming,44535
 github.tar,level 0 with dict,advanced streaming,42974

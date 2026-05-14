@@ -1683,10 +1683,13 @@ fn clear_last_block_flag(payload: &mut [u8]) -> Result<(), ZSTD_ErrorCode> {
 fn fast_no_history_payload(src: &[u8], ctx: &EncoderContext) -> Result<Vec<u8>, ZSTD_ErrorCode> {
     let prefix_len = fast_no_history_structured_prefix_len(src.len(), ctx);
     if prefix_len >= src.len() {
-        return structured_payload(&[], src, ctx);
+        let mut payload = structured_payload(&[], src, ctx)?;
+        prepend_level_minus_one_padding(&mut payload, ctx);
+        return Ok(payload);
     }
 
     let mut payload = structured_payload(&[], &src[..prefix_len], ctx)?;
+    prepend_level_minus_one_padding(&mut payload, ctx);
     clear_last_block_flag(&mut payload)?;
     append_stored_blocks(
         &mut payload,
@@ -1695,6 +1698,18 @@ fn fast_no_history_payload(src: &[u8], ctx: &EncoderContext) -> Result<Vec<u8>, 
         true,
     );
     Ok(payload)
+}
+
+fn prepend_level_minus_one_padding(payload: &mut Vec<u8>, ctx: &EncoderContext) {
+    if normalize_compression_level(ctx.compression_level) != -1 {
+        return;
+    }
+
+    let mut adjusted = Vec::with_capacity(payload.len() + 2 * BLOCK_HEADER_SIZE);
+    write_block_header(&mut adjusted, false, 0, 0);
+    write_block_header(&mut adjusted, false, 0, 0);
+    adjusted.append(payload);
+    *payload = adjusted;
 }
 
 fn small_no_history_raw_payload(src: &[u8], ctx: &EncoderContext) -> Vec<u8> {
@@ -1900,7 +1915,8 @@ fn structured_payload(
     } else {
         history.to_vec()
     };
-    let can_validate_plain = history.is_empty() && structured_entropy_dictionary(ctx).is_none();
+    let validation_history = history.clone();
+    let can_validate_without_dictionary = structured_entropy_dictionary(ctx).is_none();
     let max_window_size = history.len().saturating_add(slice_size).max(slice_size);
     let matcher = DictionaryMatcher::new(
         history,
@@ -1933,7 +1949,9 @@ fn structured_payload(
         encoded[start..encoded.len() - trailer].to_vec(),
     )?;
 
-    if can_validate_plain && !structured_payload_roundtrips(&payload, src, ctx) {
+    if can_validate_without_dictionary
+        && !structured_payload_roundtrips(&payload, &validation_history, src, ctx)
+    {
         return Ok(small_no_history_raw_payload(src, ctx));
     }
 
@@ -1948,14 +1966,25 @@ fn payload_validation_content_size(ctx: &EncoderContext, src_len: usize) -> Opti
     }
 }
 
-fn structured_payload_roundtrips(payload: &[u8], src: &[u8], ctx: &EncoderContext) -> bool {
-    let Ok(mut frame) = build_frame_header(ctx, payload_validation_content_size(ctx, src.len()))
+fn structured_payload_roundtrips(
+    payload: &[u8],
+    history: &[u8],
+    src: &[u8],
+    ctx: &EncoderContext,
+) -> bool {
+    let mut expected = Vec::with_capacity(history.len().saturating_add(src.len()));
+    expected.extend_from_slice(history);
+    expected.extend_from_slice(src);
+
+    let Ok(mut frame) =
+        build_frame_header(ctx, payload_validation_content_size(ctx, expected.len()))
     else {
         return false;
     };
+    append_stored_blocks(&mut frame, history, ctx.frame_block_size().max(1), false);
     frame.extend_from_slice(payload);
     if ctx.fparams.checksumFlag != 0 {
-        frame.extend_from_slice(&(xxh64(src) as u32).to_le_bytes());
+        frame.extend_from_slice(&(xxh64(&expected) as u32).to_le_bytes());
     }
 
     matches!(
@@ -1965,7 +1994,7 @@ fn structured_payload_roundtrips(payload: &[u8], src: &[u8], ctx: &EncoderContex
             ZSTD_format_e::ZSTD_f_zstd1,
             usize::MAX,
         ),
-        Ok(decoded) if decoded == src
+        Ok(decoded) if decoded == expected
     )
 }
 
@@ -2382,6 +2411,7 @@ impl MtJobConfig {
 
     fn into_context(self) -> Result<EncoderContext, ZSTD_ErrorCode> {
         let mut ctx = EncoderContext::default();
+        ctx.stream_mode = true;
         ctx.compression_level = self.compression_level;
         ctx.cparams = self.cparams;
         ctx.fparams = self.fparams;
@@ -2636,8 +2666,20 @@ fn stage_mt_continue_input(
         return Ok(0);
     }
 
+    if stream_pending_bytes(ctx) != 0 {
+        return Ok(0);
+    }
+
     if ctx.stream.mt_handoff_pending {
         ctx.stream.mt_handoff_pending = false;
+        #[cfg(libzstd_threading)]
+        if stream_pending_bytes(ctx) != 0 || !ctx.stream.mt_jobs.is_empty() {
+            return Ok(0);
+        }
+        #[cfg(not(libzstd_threading))]
+        if stream_pending_bytes(ctx) != 0 {
+            return Ok(0);
+        }
     }
 
     let limit = mt_buffer_limit(ctx);
@@ -2655,6 +2697,9 @@ fn stage_mt_continue_input(
 
 pub(crate) fn emit_mt_continue_job(ctx: &mut EncoderContext) -> Result<bool, ZSTD_ErrorCode> {
     if mt_worker_count(ctx) == 0 {
+        return Ok(false);
+    }
+    if stream_pending_bytes(ctx) != 0 {
         return Ok(false);
     }
 

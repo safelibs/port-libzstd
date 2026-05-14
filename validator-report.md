@@ -916,3 +916,114 @@ All listed pass/fail commands passed. The `nm` probes are expected to print no
 matches and return non-zero through `/usr/bin/rg`; they were run with `|| true`
 while checking that no output was produced. The package static-link smoke linked
 and ran the upstream ztest probe against the packaged `libzstd.a`.
+
+Phase 17 Implementation: impl_upstream_release_gates
+
+**Validator Checkout**
+
+- Date: 2026-05-14
+- Validator URL: https://github.com/safelibs/validator
+- Validator commit: d1c08d01cd50b34a7aeb62c5630e28df0eb6cd97
+- Phase base commit before fixes: 2ab9b96
+- Mode: port
+- Final validator runner: `bash safe/scripts/run-validator-libzstd.sh`
+- Validator regression runner: `bash safe/scripts/run-validator-regressions.sh`
+
+The validator checkout was updated with `git -C validator pull --ff-only`.
+After the source and release-gate fixture fixes, the Phase 4 artifacts were
+refreshed explicitly through the canonical build scripts. The upstream
+black-box wrappers were not changed to trigger builds implicitly; they consumed
+the refreshed `safe/out/install/release-default/`,
+`safe/out/original-cli/lib/`, and `safe/out/deb/default/metadata.env` roots.
+
+**Release Gate Scope**
+
+The release gate retained header identity, baseline contract checks, original
+CLI playtests, original CLI tests, gzip tests, zlibWrapper, educational decoder,
+pzstd, seekable, version compatibility, memoized upstream regression rows,
+upstream fuzz fixtures, original examples, CVE-derived CLI permission checks,
+and the performance smoke check.
+
+**Validator Summary**
+
+- Result summary: `safe/out/validator/artifacts/port/results/libzstd/summary.json`
+- Cases: 257
+- Source cases: 5
+- Usage cases: 250
+- Regression cases: 2
+- Passed: 257
+- Failed: 0
+- Casts recorded: 257
+- Validator runner status: 0
+- Validator regression runner status: 0
+
+**Failures Found And Fixed**
+
+- `safe/scripts/run-upstream-regression.sh` initially rejected the checked-in
+  memoized regression fixture metadata after the compression behavior fixes.
+  `safe/tests/fixtures/regression/results-memoized.source-sha256` and the
+  affected `level=-1` rows in `results-memoized.csv` were refreshed, and
+  the CSV was normalized to LF line endings. `safe/tests/fixtures/regression/README.md`
+  now documents that the checked-in CSV is the offline release-gate fixture
+  while large cache directories remain intentionally absent.
+- The upstream fuzz stream round-trip for the `http` corpus exposed an MT
+  streaming overlap bug where structured payload validation omitted stream
+  history. `safe/src/ffi/compress.rs` now validates structured payloads against
+  synthetic history plus the current chunk before falling back to stored blocks.
+  `safe/tests/rust/compress.rs` adds
+  `mt_stream_flush_overlap_payload_roundtrips_fuzz_http_prefix`.
+- The Valgrind upstream smoke test reported a Rust standard-library `mpsc`
+  receiver wait allocation as possibly lost. `safe/src/threading/job_queue.rs`
+  now uses an explicit mutex and condition-variable result slot, removing that
+  wait path from MT worker completion.
+- The original CLI `compression/levels.sh` check found that no-history
+  `level=-1` output could be smaller than level 1 for the CLI fixture.
+  `safe/src/ffi/compress.rs` now pads no-history level -1 frames with two empty
+  block headers so the fast profile remains measurably less dense. The new
+  `mt_fast_level_remains_larger_than_level_one_for_cli_fixture` regression
+  covers the behavior.
+- The original CLI adaptive-speed test did not observe the expected
+  "faster speed, lighter compression" transition. MT streaming now applies
+  pending-output backpressure before consuming more input, keeps the job handoff
+  visible to callers, and reports frame progression from externally flushed
+  output. The existing
+  `compress_stream2_mt_frame_progression_tracks_started_jobs` regression now
+  checks both job-ID warm-up and flushed-byte accounting.
+
+No validator checks were skipped.
+
+**Checks Executed**
+
+```bash
+bash safe/scripts/build-artifacts.sh --release
+bash safe/scripts/build-original-cli-against-safe.sh
+bash safe/scripts/build-deb.sh
+cargo fmt --manifest-path safe/Cargo.toml
+cargo test --manifest-path safe/Cargo.toml --release mt_fast_level_remains_larger_than_level_one_for_cli_fixture -- --nocapture
+cargo test --manifest-path safe/Cargo.toml --release mt_stream_flush_overlap_payload_roundtrips_fuzz_http_prefix -- --nocapture
+cargo test --manifest-path safe/Cargo.toml --release threading::job_queue -- --nocapture
+cargo test --manifest-path safe/Cargo.toml --release compress_stream2_mt_frame_progression_tracks_started_jobs -- --nocapture
+bash safe/scripts/verify-header-identity.sh
+bash safe/scripts/verify-baseline-contract.sh
+bash safe/scripts/run-upstream-tests.sh
+bash safe/scripts/run-original-playtests.sh
+bash safe/scripts/run-original-cli-tests.sh
+bash safe/scripts/run-original-gzip-tests.sh
+bash safe/scripts/run-zlibwrapper-tests.sh
+bash safe/scripts/run-educational-decoder-tests.sh
+bash safe/scripts/run-pzstd-tests.sh
+bash safe/scripts/run-seekable-tests.sh
+bash safe/scripts/run-version-compat-tests.sh
+bash safe/scripts/run-upstream-regression.sh
+bash safe/scripts/run-upstream-fuzz-tests.sh
+bash safe/scripts/run-original-examples.sh
+bash safe/scripts/check-cli-permissions.sh
+bash safe/scripts/run-performance-smoke.sh
+bash safe/scripts/run-validator-libzstd.sh
+bash safe/scripts/run-validator-regressions.sh
+```
+
+All listed commands passed in the final run. The adaptive CLI reproducer was
+also checked manually against the installed safe `zstd` binary and confirmed to
+emit the expected lighter-compression transition with and without
+`--no-progress`.
