@@ -585,3 +585,66 @@ bash safe/scripts/run-validator-libzstd.sh
 jq -c '{cases,source_cases,usage_cases,regression_cases,passed,failed,casts}' \
     safe/out/validator/artifacts/port/results/libzstd/summary.json
 ```
+
+Phase 9 Validator Run: impl_safe_advanced_abi_completion
+
+**Validator Checkout**
+
+- Validator URL: https://github.com/safelibs/validator
+- Validator commit: d1c08d01cd50b34a7aeb62c5630e28df0eb6cd97
+- Local port commit validated: ca26cae18627942934de0347283e7da6e6651abb
+- Local port release tag: build-ca26cae18627
+- Mode: port
+- Invocation: `SAFELIBS_VALIDATOR_DIR="$PWD/validator" bash scripts/run-validation-tests.sh`
+
+The checkout already existed at `validator/`; `git -C validator pull --ff-only
+origin main` reported "Already up to date" before the run.
+
+**Package Inventory**
+
+The local build produced these override packages in `dist/` and the validator
+port lock recorded all canonical libzstd packages as ported.
+
+| package | filename | architecture | size | sha256 |
+| --- | --- | --- | --- | --- |
+| libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 378516 | 9aa05eb901199f328084bfe1a2438578e4a902da25648b29f7fceb4948f08442 |
+| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 3702236 | 42ec1f3a361556feb986e6e0990ea070044a5c655d6440b8d81dd913cfe59efa |
+| zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
+
+**Validator Summary**
+
+- Summary path: `.work/validation/artifacts/port/results/libzstd/summary.json`
+- Port lock path: `.work/validation/port-deb-lock.json`
+- Cases: 257
+- Source cases: 5
+- Usage cases: 250
+- Regression cases: 2
+- Passed: 257
+- Failed: 0
+- Casts: 0
+- Unported original packages: 0
+
+**Phase 9 ABI Checks**
+
+The advanced ABI verifier commands required by
+`.plan/phases/03-safe-advanced-abi-completion.md` all passed:
+
+```bash
+bash safe/scripts/run-advanced-mt-tests.sh
+bash safe/scripts/verify-link-compat.sh
+bash safe/scripts/verify-export-parity.sh
+cargo test --manifest-path safe/Cargo.toml --release --all-targets
+rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe
+```
+
+The export parity check verified 185 symbols against `libzstd.so`. The
+link-compat check rebuilt upstream-header objects and ran the upstream
+`zstreamtest`, `poolTests`, dictionary builder, sequence API, thread-pool, and
+streaming examples against the safe shared object. The source scan produced no
+matches for the banned upstream helper/loading paths.
+
+**Failures Found and Fixes Applied**
+
+No validator failures were found in this phase. No libzstd-safe code changes,
+new regression tests, validator skips, or validator-suite modifications were
+needed.
