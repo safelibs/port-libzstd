@@ -1150,7 +1150,7 @@ The final validator rerun used the canonical override packages staged under
 | package | filename | architecture | size | sha256 |
 | --- | --- | --- | --- | --- |
 | libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 424010 | ca28d57b2a2a8ac8582fc17b07e5a7e0178e477391d7c628d963e99409f944e2 |
-| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 2018836 | 36aa6752b1643d2f5e3eed66e9b3aaddf48023af007c2125384e18e1bdcf63b5 |
+| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 2019134 | 52da3af337ed0fcbe54bde420bb9995847b74836bcd196b3aaba0559db1a8bed |
 | zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
 
 The generated port lock at
@@ -1188,6 +1188,37 @@ repair is report-only, and the validator is rerun after that repair commit so
 the untracked proof artifacts in `safe/out/validator/artifacts/proof/` record
 the same commit as current `HEAD`. The safe source, tests, and tracked release
 artifacts remain unchanged by this report-only repair.
+
+**Software Tester Bounce: Debian Profile Gate**
+
+The checker found that `safe/scripts/run-full-suite.sh` called
+`safe/scripts/verify-deb-profiles.sh`, and that helper was still producing
+`safe/out/deb/noudeb/` by running `DEB_BUILD_PROFILES=noudeb bash
+safe/scripts/build-deb.sh` internally. That violated the final-gate contract:
+the aggregator must consume existing artifact roots and not hide refresh work
+behind verifier helpers.
+
+The fix makes `verify-deb-profiles.sh` a pure verifier. It now requires
+prebuilt `safe/out/deb/noudeb/metadata.env`, validates `BUILD_TAG=noudeb`,
+`PROFILES=noudeb`, and `SAFE_ENABLE_UDEB=0`, checks the default and noudeb
+package sets and static archives, and emits an explicit refresh hint if the
+noudeb profile is absent. It no longer executes `build-deb.sh`.
+
+The Debian profile roots were refreshed explicitly before the final gate:
+
+```bash
+bash safe/scripts/build-artifacts.sh --release
+bash safe/scripts/build-original-cli-against-safe.sh
+bash safe/scripts/build-deb.sh
+DEB_BUILD_PROFILES=noudeb bash safe/scripts/build-deb.sh
+bash safe/scripts/build-dependent-image.sh
+```
+
+After that explicit refresh, `bash safe/scripts/verify-deb-profiles.sh`
+completed with no build output, and `bash safe/scripts/run-full-suite.sh`
+reported `Debian profile verification already fresh; skipping rerun` at the
+profile step. The full suite and `bash test-original.sh` both passed against
+the refreshed artifacts.
 
 **Fixes Applied**
 
@@ -1234,7 +1265,9 @@ bash safe/scripts/run-validator-libzstd.sh
 bash safe/scripts/build-artifacts.sh --release
 bash safe/scripts/build-original-cli-against-safe.sh
 bash safe/scripts/build-deb.sh
+DEB_BUILD_PROFILES=noudeb bash safe/scripts/build-deb.sh
 bash safe/scripts/build-dependent-image.sh
+bash safe/scripts/verify-deb-profiles.sh
 bash safe/scripts/run-full-suite.sh
 bash test-original.sh
 rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe || test $? -eq 1

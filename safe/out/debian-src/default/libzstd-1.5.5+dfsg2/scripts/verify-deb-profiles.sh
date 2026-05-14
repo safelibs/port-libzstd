@@ -9,6 +9,24 @@ DEFAULT_METADATA_FILE="$SAFE_ROOT/out/deb/default/metadata.env"
 NOUDEB_METADATA_FILE="$SAFE_ROOT/out/deb/noudeb/metadata.env"
 source "$SAFE_ROOT/scripts/phase6-common.sh"
 
+noudeb_refresh_hint() {
+    cat >&2 <<EOF
+rerun the explicit noudeb Debian refresh before verification:
+  DEB_BUILD_PROFILES=noudeb bash safe/scripts/build-deb.sh
+EOF
+}
+
+require_noudeb_path() {
+    local path=${1:?missing path}
+    local description=${2:-$path}
+
+    [[ -e $path ]] || {
+        printf 'missing required prebuilt noudeb artifact (%s): %s\n' "$description" "$path" >&2
+        noudeb_refresh_hint
+        exit 1
+    }
+}
+
 archive_is_valid() {
     local archive=$1
 
@@ -67,9 +85,7 @@ validate_profile_static_archive() {
 }
 
 phase6_require_phase4_inputs "$0"
-
-DEB_BUILD_PROFILES=noudeb bash "$SCRIPT_DIR/build-deb.sh"
-phase6_require_path "$NOUDEB_METADATA_FILE" "noudeb Debian package metadata"
+require_noudeb_path "$NOUDEB_METADATA_FILE" "noudeb Debian package metadata"
 
 DEFAULT_PACKAGE_DIR=
 DEFAULT_INSTALL_ROOT=
@@ -90,6 +106,21 @@ fi
 if [[ -f $NOUDEB_METADATA_FILE ]]; then
     # shellcheck disable=SC1090
     source "$NOUDEB_METADATA_FILE"
+    [[ ${BUILD_TAG:-} == noudeb ]] || {
+        printf 'noudeb metadata has unexpected BUILD_TAG: %s\n' "${BUILD_TAG:-}" >&2
+        noudeb_refresh_hint
+        exit 1
+    }
+    [[ ${PROFILES:-} == noudeb ]] || {
+        printf 'noudeb metadata has unexpected PROFILES: %s\n' "${PROFILES:-}" >&2
+        noudeb_refresh_hint
+        exit 1
+    }
+    [[ ${SAFE_ENABLE_UDEB:-} == 0 ]] || {
+        printf 'noudeb metadata unexpectedly enables udeb output\n' >&2
+        noudeb_refresh_hint
+        exit 1
+    }
     NOUDEB_PACKAGE_DIR=$PACKAGE_DIR
     NOUDEB_INSTALL_ROOT=$INSTALL_ROOT
 fi
@@ -129,6 +160,21 @@ DEFAULT_CANONICAL_INSTALL_ROOT=$CANONICAL_INSTALL_ROOT
 DEFAULT_CANONICAL_HELPER_ROOT=$CANONICAL_HELPER_ROOT
 # shellcheck disable=SC1090
 source "$SAFE_ROOT/out/deb/noudeb/metadata.env"
+[[ ${BUILD_TAG:-} == noudeb ]] || {
+    printf 'noudeb metadata has unexpected BUILD_TAG: %s\n' "${BUILD_TAG:-}" >&2
+    noudeb_refresh_hint
+    exit 1
+}
+[[ ${PROFILES:-} == noudeb ]] || {
+    printf 'noudeb metadata has unexpected PROFILES: %s\n' "${PROFILES:-}" >&2
+    noudeb_refresh_hint
+    exit 1
+}
+[[ ${SAFE_ENABLE_UDEB:-} == 0 ]] || {
+    printf 'noudeb metadata unexpectedly enables udeb output\n' >&2
+    noudeb_refresh_hint
+    exit 1
+}
 NOUDEB_PACKAGE_DIR=$PACKAGE_DIR
 NOUDEB_INSTALL_ROOT=$INSTALL_ROOT
 
