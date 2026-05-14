@@ -30,9 +30,9 @@ dependencies = [
 
 [[package]]
 name = "oxiarc-core"
-version = "0.2.5"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "903576b292b0e9b920f155a30c4735886b1caecdaa628d09586b3ac40afdd74a"
+checksum = "8c3a93341d720329f503b2743970f11695ac25dc0661ccc94cb43e077545e23a"
 dependencies = [
  "thiserror",
 ]
