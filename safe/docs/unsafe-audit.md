@@ -16,12 +16,12 @@ markers. It does not rebuild those roots implicitly, and it does not
 reintroduce any runtime dependency on upstream C beyond the approved legacy
 decode shim.
 
-The development-package `libzstd.a` is a real static archive again. The
-package build compiles static artifacts through a cached copy of the active
-Rust sysroot with the GNU thread minimum-stack helper reduced to
-`PTHREAD_STACK_MIN`. That removes Rust standard-library weak loader lookup
-code before object generation, so forced-static consumers remain
-link-compatible without post-build archive editing or an upstream helper library.
+The package build emits both the shared object and the development-package
+`libzstd.a` from a cached copy of the active Rust sysroot with the GNU thread
+minimum-stack helper reduced to `PTHREAD_STACK_MIN`. That removes Rust
+standard-library weak loader lookup code before object generation, so both
+runtime consumers and forced-static consumers remain link-compatible without
+post-build binary editing or an upstream helper library.
 The helper tree used only to build the upstream CLI
 keeps a local linker redirect so `zstd` and `pzstd` resolve the safe shared
 object at runtime; that helper file is not installed in the development

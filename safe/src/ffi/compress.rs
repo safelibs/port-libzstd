@@ -2365,9 +2365,27 @@ fn mt_worker_count(_ctx: &EncoderContext) -> usize {
 }
 
 #[cfg(libzstd_threading)]
+fn mt_job_history(ctx: &EncoderContext, start: usize) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    let mut history = compression_history(ctx)?
+        .map(Cow::into_owned)
+        .unwrap_or_default();
+    let history_limit = ctx.window_size().max(1);
+    trim_history(&mut history, history_limit);
+
+    let overlap = mt_overlap_bytes(ctx).min(history_limit);
+    if overlap != 0 && start != 0 {
+        let keep = overlap.min(start).min(ctx.stream.input.len());
+        history.extend_from_slice(&ctx.stream.input[start - keep..start]);
+        trim_history(&mut history, history_limit);
+    }
+
+    Ok(history)
+}
+
+#[cfg(libzstd_threading)]
 fn encode_mt_payload_job(
     config: MtJobConfig,
-    _history: Vec<u8>,
+    history: Vec<u8>,
     chunk: Vec<u8>,
     last_block: bool,
 ) -> Result<Vec<u8>, ZSTD_ErrorCode> {
@@ -2377,7 +2395,7 @@ fn encode_mt_payload_job(
 
     if compress_payload {
         let already_prepends_without_stream = should_prepend_fast_empty_block(&ctx, false);
-        let mut payload = payload_with_history(&[], &chunk, &ctx)?;
+        let mut payload = payload_with_history(&history, &chunk, &ctx)?;
         if !last_block && !payload.is_empty() {
             clear_last_block_flag(&mut payload)?;
         }
@@ -2475,14 +2493,18 @@ fn submit_mt_payload_jobs(
         };
         let end = start.saturating_add(take).min(ctx.stream.input.len());
         let chunk = ctx.stream.input[start..end].to_vec();
-        // Worker jobs are emitted into a single frame in chunk order. Keeping each job
-        // independent avoids back-references into history that the block encoder cannot
-        // currently prove are aligned with the decoder's cross-job history.
-        let history = Vec::new();
-        let compress_payload = last_block
+        let single_final_payload = last_block
             && start == 0
             && end == ctx.stream.input.len()
             && ctx.stream.mt_jobs.is_empty();
+        let overlap_payload =
+            start != 0 && ctx.stream.mt_started_jobs == 1 && mt_overlap_bytes(ctx) != 0;
+        let compress_payload = single_final_payload || overlap_payload;
+        let history = if overlap_payload {
+            mt_job_history(ctx, start)?
+        } else {
+            Vec::new()
+        };
         let config = MtJobConfig::from_context(
             ctx,
             start == 0 && should_prepend_fast_empty_block(ctx, true),

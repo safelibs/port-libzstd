@@ -2821,7 +2821,7 @@ fn compress_stream2_flush_prefix_with_raw_dictionary_roundtrips() {
 }
 
 #[test]
-fn compress_stream2_mt_overlap_log_roundtrips_job_boundaries() {
+fn compress_stream2_mt_overlap_log_changes_job_boundary_output() {
     fn overlap_probe_sample() -> Vec<u8> {
         let first = pooltest_sample(1024 * 1024, 0x1BAD_5EED);
         let repeated_tail = first[first.len() - (256 * 1024)..].to_vec();
@@ -2876,9 +2876,24 @@ fn compress_stream2_mt_overlap_log_roundtrips_job_boundaries() {
     decompress_exact(&overlap_9, &src);
     decompress_exact(&overlap_1, &src);
 
-    assert!(!reference.is_empty(), "default-overlap MT frame is empty");
-    assert!(!overlap_9.is_empty(), "full-overlap MT frame is empty");
-    assert!(!overlap_1.is_empty(), "no-overlap MT frame is empty");
+    assert!(
+        overlap_9.len() < overlap_1.len(),
+        "full MT overlap should compress the repeated boundary better than no overlap: full={} none={}",
+        overlap_9.len(),
+        overlap_1.len()
+    );
+    assert!(
+        reference.len() < overlap_1.len(),
+        "default MT overlap should preserve compression history across the job boundary: default={} none={}",
+        reference.len(),
+        overlap_1.len()
+    );
+    assert!(
+        overlap_9.len() <= reference.len(),
+        "full MT overlap should not be larger than default overlap on a boundary-repeat sample: full={} default={}",
+        overlap_9.len(),
+        reference.len()
+    );
 }
 
 #[cfg(libzstd_threading)]

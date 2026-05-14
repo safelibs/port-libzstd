@@ -151,7 +151,7 @@ host_triple() {
     rustc -vV | awk '/^host:/ { host = $2 } END { print host }'
 }
 
-prepare_static_rust_sysroot() {
+prepare_patched_rust_sysroot() {
     local original_sysroot
     local cache_base
     local cache_key
@@ -160,7 +160,7 @@ prepare_static_rust_sysroot() {
     local stamp_file
 
     original_sysroot=$(rustc --print sysroot)
-    cache_base="${XDG_CACHE_HOME:-$HOME/.cache}/safelibs/libzstd-static-rust-sysroot"
+    cache_base="${XDG_CACHE_HOME:-$HOME/.cache}/safelibs/libzstd-patched-rust-sysroot"
     cache_key=$(python3 - "$original_sysroot" <<'PY'
 from __future__ import annotations
 
@@ -176,7 +176,7 @@ paths = [
 ]
 
 h = hashlib.sha256()
-h.update(b"libzstd-static-rust-sysroot-v2\0")
+h.update(b"libzstd-patched-rust-sysroot-v3\0")
 for command in (["rustc", "-vV"], ["cargo", "-V"]):
     h.update(subprocess.check_output(command))
     h.update(b"\0")
@@ -219,7 +219,7 @@ thread_import = (
     "use crate::sys::weak::" + lookup + ";\n"
 )
 if thread_import not in thread_source:
-    raise SystemExit("static std patch could not find the thread import marker")
+    raise SystemExit("std patch could not find the thread import marker")
 thread_source = thread_source.replace(thread_import, "")
 
 start_marker = (
@@ -229,10 +229,10 @@ start_marker = (
 next_marker = "\n// No point in looking up __pthread_get_minstack() on non-glibc platforms."
 start = thread_source.find(start_marker)
 if start < 0:
-    raise SystemExit("static std patch could not find the stack-size helper")
+    raise SystemExit("std patch could not find the stack-size helper")
 end = thread_source.find(next_marker, start)
 if end < 0:
-    raise SystemExit("static std patch could not find the stack-size helper end")
+    raise SystemExit("std patch could not find the stack-size helper end")
 replacement = (
     '#[cfg(all(target_os = "linux", target_env = "gnu"))]\n'
     "unsafe fn min_stack_size(_: *const libc::pthread_attr_t) -> usize {\n"
@@ -252,7 +252,7 @@ module_block = (
     "pub(crate) use " + lookup + "::weak as " + lookup + ";\n\n"
 )
 if module_block not in weak_source:
-    raise SystemExit("static std patch could not find the weak module marker")
+    raise SystemExit("std patch could not find the weak module marker")
 weak.unlink()
 weak.write_text(weak_source.replace(module_block, ""))
 PY
@@ -271,6 +271,21 @@ assert_static_archive_clean() {
     }
     if LC_ALL=C strings -a "$archive" | LC_ALL=C grep -aE "${lookup}|${loader}" >/dev/null; then
         printf 'static archive still carries loader lookup token: %s\n' "$archive" >&2
+        exit 1
+    fi
+}
+
+assert_shared_library_clean() {
+    local library=$1
+    local lookup="dl""sym"
+    local loader="dl""open"
+
+    if nm -D -u "$library" | LC_ALL=C grep -aE "${lookup}|${loader}" >/dev/null; then
+        printf 'shared library still imports loader lookup token: %s\n' "$library" >&2
+        exit 1
+    fi
+    if LC_ALL=C strings -a "$library" | LC_ALL=C grep -aE "${lookup}|${loader}" >/dev/null; then
+        printf 'shared library still carries loader lookup token: %s\n' "$library" >&2
         exit 1
     fi
 }
@@ -394,31 +409,33 @@ if [[ $INSTALL_CMAKE -eq 1 ]]; then
     install -d "$DESTDIR$LIBDIR/cmake/zstd"
 fi
 
-CARGO_BASE=(cargo rustc --manifest-path "$SAFE_ROOT/Cargo.toml" --no-default-features)
-if [[ -n $PROFILE_FLAG ]]; then
-    CARGO_BASE+=("$PROFILE_FLAG")
-fi
-
-CARGO_TARGET_DIR="$SHARED_TARGET_DIR" \
-    "${CARGO_BASE[@]}" --features "$SHARED_FEATURES" -- --crate-type=cdylib
-
-STATIC_SYSROOT=$(prepare_static_rust_sysroot)
-STATIC_CARGO=(
-    "$STATIC_SYSROOT/bin/cargo" -Z build-std=std
+PATCHED_SYSROOT=$(prepare_patched_rust_sysroot)
+PATCHED_CARGO_BASE=(
+    "$PATCHED_SYSROOT/bin/cargo" -Z build-std=std
     rustc --manifest-path "$SAFE_ROOT/Cargo.toml" --no-default-features
 )
 if [[ -n $PROFILE_FLAG ]]; then
-    STATIC_CARGO+=("$PROFILE_FLAG")
+    PATCHED_CARGO_BASE+=("$PROFILE_FLAG")
 fi
+
+RUSTC_BOOTSTRAP=1 \
+RUSTC="$PATCHED_SYSROOT/bin/rustc" \
+CARGO_TARGET_DIR="$SHARED_TARGET_DIR" \
+    "${PATCHED_CARGO_BASE[@]}" \
+    --target "$STATIC_TARGET" --features "$SHARED_FEATURES" -- --crate-type=cdylib
+
+STATIC_CARGO=(
+    "${PATCHED_CARGO_BASE[@]}"
+)
 STATIC_CARGO+=(
     --target "$STATIC_TARGET" --features "$STATIC_FEATURES" -- --crate-type=staticlib
 )
 RUSTC_BOOTSTRAP=1 \
-RUSTC="$STATIC_SYSROOT/bin/rustc" \
+RUSTC="$PATCHED_SYSROOT/bin/rustc" \
 CARGO_TARGET_DIR="$STATIC_TARGET_DIR" \
     "${STATIC_CARGO[@]}"
 
-SHARED_OUT_DIR="$SHARED_TARGET_DIR/$PROFILE"
+SHARED_OUT_DIR="$SHARED_TARGET_DIR/$STATIC_TARGET/$PROFILE"
 SHARED_SRC="$SHARED_OUT_DIR/libzstd.so"
 SHARED_BASENAME="libzstd.so.$VERSION"
 STATIC_OUT_DIR="$STATIC_TARGET_DIR/$STATIC_TARGET/$PROFILE"
@@ -432,6 +449,7 @@ fi
 }
 
 install -m 755 "$SHARED_SRC" "$DESTDIR$LIBDIR/$SHARED_BASENAME"
+assert_shared_library_clean "$DESTDIR$LIBDIR/$SHARED_BASENAME"
 ln -sfn "$SHARED_BASENAME" "$DESTDIR$LIBDIR/libzstd.so.$SONAME"
 ln -sfn "$SHARED_BASENAME" "$DESTDIR$LIBDIR/libzstd.so"
 install -m 644 "$STATIC_SRC" "$OBJDIR/libzstd.a"
