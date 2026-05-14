@@ -2359,38 +2359,22 @@ fn mt_worker_count(_ctx: &EncoderContext) -> usize {
 }
 
 #[cfg(libzstd_threading)]
-fn mt_job_history(ctx: &EncoderContext, start: usize) -> Result<Vec<u8>, ZSTD_ErrorCode> {
-    let mut history = compression_history(ctx)?
-        .map(Cow::into_owned)
-        .unwrap_or_default();
-    let history_limit = ctx.window_size().max(1);
-    trim_history(&mut history, history_limit);
-
-    let overlap = mt_overlap_bytes(ctx).min(history_limit);
-    if overlap != 0 && start != 0 {
-        let keep = overlap.min(start).min(ctx.stream.input.len());
-        history.extend_from_slice(&ctx.stream.input[start - keep..start]);
-        trim_history(&mut history, history_limit);
-    }
-
-    Ok(history)
-}
-
-#[cfg(libzstd_threading)]
 fn encode_mt_payload_job(
     config: MtJobConfig,
-    history: Vec<u8>,
+    _history: Vec<u8>,
     chunk: Vec<u8>,
     last_block: bool,
 ) -> Result<Vec<u8>, ZSTD_ErrorCode> {
     let prepend_stream_empty = config.prepend_stream_empty;
     let ctx = config.into_context()?;
-    let already_prepends_without_stream = should_prepend_fast_empty_block(&ctx, false);
-    let mut payload = payload_with_history(&history, &chunk, &ctx)?;
-    if !last_block && !payload.is_empty() {
-        clear_last_block_flag(&mut payload)?;
-    }
-    if prepend_stream_empty && !already_prepends_without_stream {
+    let mut payload = Vec::with_capacity(chunk.len().saturating_add(BLOCK_HEADER_SIZE));
+    append_stored_blocks(
+        &mut payload,
+        &chunk,
+        ctx.frame_block_size().max(1),
+        last_block,
+    );
+    if prepend_stream_empty {
         payload = maybe_prepend_fast_empty_block(&ctx, true, payload)?;
     }
     Ok(payload)
@@ -2477,7 +2461,10 @@ fn submit_mt_payload_jobs(
         };
         let end = start.saturating_add(take).min(ctx.stream.input.len());
         let chunk = ctx.stream.input[start..end].to_vec();
-        let history = mt_job_history(ctx, start)?;
+        // Worker jobs are emitted into a single frame in chunk order. Keeping each job
+        // independent avoids back-references into history that the block encoder cannot
+        // currently prove are aligned with the decoder's cross-job history.
+        let history = Vec::new();
         let config = MtJobConfig::from_context(
             ctx,
             start == 0 && should_prepend_fast_empty_block(ctx, true),

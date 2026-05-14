@@ -221,6 +221,74 @@ static int roundtrip_with_pool(ZSTD_threadPool* pool,
     return 0;
 }
 
+static int check_mt_tar_like_roundtrip(void)
+{
+    size_t const bigSize = 120U * 1024U;
+    size_t const bigHeader = 0U;
+    size_t const bigData = bigHeader + 512U;
+    size_t const auxHeader = bigData + bigSize;
+    size_t const auxData = auxHeader + 512U;
+    size_t const srcSize = auxData + 512U + 1024U;
+    static const unsigned char row[] = "two-thread bsdtar payload row\n";
+    ZSTD_CCtx* const cctx = ZSTD_createCCtx();
+    unsigned char* const src = (unsigned char*)calloc(1, srcSize);
+    unsigned char* const compressed = (unsigned char*)malloc(ZSTD_compressBound(srcSize));
+    unsigned char* const decoded = (unsigned char*)malloc(srcSize);
+    size_t dstPos = 0;
+    size_t srcPos = 0;
+    size_t cSize;
+
+    CHECK(cctx != NULL && src != NULL && compressed != NULL && decoded != NULL,
+          "allocation failure\n");
+
+    memcpy(src + bigHeader, "big.bin", 7U);
+    for (size_t pos = 0; pos < bigSize; ++pos) {
+        src[bigData + pos] = row[pos % (sizeof(row) - 1U)];
+    }
+    memcpy(src + auxHeader, "aux.txt", 7U);
+    memcpy(src + auxData, "aux\n", 4U);
+
+    CHECK_ZSTD(ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, 4));
+    CHECK_ZSTD(ZSTD_CCtx_setParameter(cctx, ZSTD_c_nbWorkers, 2));
+    CHECK_ZSTD(ZSTD_CCtx_setParameter(cctx, ZSTD_c_jobSize, 1 << 16));
+
+    for (;;) {
+        size_t const remaining = ZSTD_compressStream2_simpleArgs(
+            cctx,
+            compressed,
+            ZSTD_compressBound(srcSize),
+            &dstPos,
+            src,
+            srcSize,
+            &srcPos,
+            ZSTD_e_end);
+        CHECK(!ZSTD_isError(remaining), "tar-like MT compression failed: %s\n",
+              ZSTD_getErrorName(remaining));
+        if (remaining == 0U) {
+            break;
+        }
+        CHECK(dstPos < ZSTD_compressBound(srcSize), "tar-like compression output overflow\n");
+    }
+
+    cSize = dstPos;
+    CHECK(srcPos == srcSize, "tar-like MT compression did not consume all input\n");
+
+    {
+        size_t const decodedSize = ZSTD_decompress(decoded, srcSize, compressed, cSize);
+        CHECK(!ZSTD_isError(decodedSize), "tar-like MT decompress failed: %s\n",
+              ZSTD_getErrorName(decodedSize));
+        CHECK(decodedSize == srcSize, "tar-like MT decoded size mismatch\n");
+        CHECK(memcmp(decoded, src, srcSize) == 0,
+              "tar-like MT decoded payload mismatch\n");
+    }
+
+    ZSTD_freeCCtx(cctx);
+    free(decoded);
+    free(compressed);
+    free(src);
+    return 0;
+}
+
 int main(void)
 {
     size_t const sizeA = 320U * 1024U;
@@ -238,6 +306,7 @@ int main(void)
 
     if (check_non_mt_progression_contract() ||
         check_mt_progression_contract() ||
+        check_mt_tar_like_roundtrip() ||
         roundtrip_with_pool(pool, sampleA, sizeA, 4, 2) ||
         roundtrip_with_pool(pool, sampleB, sizeB, 5, 2)) {
         ZSTD_freeThreadPool(pool);
