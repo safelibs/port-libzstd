@@ -176,9 +176,8 @@ fn compress_stream2_impl(
             ZSTD_EndDirective::ZSTD_e_end => finalize_stream(cctx)?,
             ZSTD_EndDirective::ZSTD_e_flush => flush_stream_data(cctx)?,
             ZSTD_EndDirective::ZSTD_e_continue => {
-                if consumed == 0 {
-                    let _ = emit_mt_continue_job(cctx)?;
-                }
+                let _ = consumed;
+                let _ = emit_mt_continue_job(cctx)?;
             }
         }
         flush_stream_output(cctx, output)?;

@@ -23,6 +23,8 @@ use core::{
     mem::size_of,
 };
 use oxiarc_zstd::{LevelConfig as OxiarcLevelConfig, MatchFinder as OxiarcMatchFinder};
+#[cfg(libzstd_threading)]
+use std::collections::VecDeque;
 use std::{borrow::Cow, vec::Vec};
 use structured_zstd::decoding::Dictionary as StructuredDictionary;
 use structured_zstd::encoding::{
@@ -275,6 +277,12 @@ pub(crate) struct StreamState {
     pub(crate) pending: Vec<u8>,
     pub(crate) pending_pos: usize,
     pub(crate) emitted_input: usize,
+    pub(crate) mt_submitted_input: usize,
+    pub(crate) mt_started_jobs: usize,
+    pub(crate) mt_completed_jobs: usize,
+    pub(crate) mt_active_jobs: usize,
+    #[cfg(libzstd_threading)]
+    mt_jobs: VecDeque<MtPendingJob>,
     pub(crate) produced_total: usize,
     pub(crate) flushed_total: usize,
     pub(crate) mt_handoff_pending: bool,
@@ -282,6 +290,12 @@ pub(crate) struct StreamState {
     pub(crate) frame_finished: bool,
     pub(crate) deferred_header: bool,
     structured_encoder: Option<StreamStructuredEncoder>,
+}
+
+#[cfg(libzstd_threading)]
+struct MtPendingJob {
+    end: usize,
+    handle: crate::threading::job_queue::JobHandle<Result<Vec<u8>, ZSTD_ErrorCode>>,
 }
 
 struct StreamStructuredEncoder {
@@ -313,7 +327,7 @@ impl StreamStructuredEncoder {
         }
         Ok(Self {
             encoder,
-            inter_job_overlap: (configured_mt_workers(ctx) > 0).then(|| mt_overlap_bytes(ctx)),
+            inter_job_overlap: (mt_worker_count(ctx) > 0).then(|| mt_overlap_bytes(ctx)),
             emitted_jobs: 0,
         })
     }
@@ -339,6 +353,12 @@ impl Default for StreamState {
             pending: Vec::new(),
             pending_pos: 0,
             emitted_input: 0,
+            mt_submitted_input: 0,
+            mt_started_jobs: 0,
+            mt_completed_jobs: 0,
+            mt_active_jobs: 0,
+            #[cfg(libzstd_threading)]
+            mt_jobs: VecDeque::new(),
             produced_total: 0,
             flushed_total: 0,
             mt_handoff_pending: false,
@@ -357,6 +377,12 @@ impl Clone for StreamState {
             pending: self.pending.clone(),
             pending_pos: self.pending_pos,
             emitted_input: self.emitted_input,
+            mt_submitted_input: self.emitted_input,
+            mt_started_jobs: 0,
+            mt_completed_jobs: 0,
+            mt_active_jobs: 0,
+            #[cfg(libzstd_threading)]
+            mt_jobs: VecDeque::new(),
             produced_total: self.produced_total,
             flushed_total: self.flushed_total,
             mt_handoff_pending: self.mt_handoff_pending,
@@ -375,6 +401,10 @@ impl core::fmt::Debug for StreamState {
             .field("pending_len", &self.pending.len())
             .field("pending_pos", &self.pending_pos)
             .field("emitted_input", &self.emitted_input)
+            .field("mt_submitted_input", &self.mt_submitted_input)
+            .field("mt_started_jobs", &self.mt_started_jobs)
+            .field("mt_completed_jobs", &self.mt_completed_jobs)
+            .field("mt_active_jobs", &self.mt_active_jobs)
             .field("produced_total", &self.produced_total)
             .field("flushed_total", &self.flushed_total)
             .field("mt_handoff_pending", &self.mt_handoff_pending)
@@ -392,6 +422,12 @@ impl StreamState {
         self.pending.clear();
         self.pending_pos = 0;
         self.emitted_input = 0;
+        self.mt_submitted_input = 0;
+        self.mt_started_jobs = 0;
+        self.mt_completed_jobs = 0;
+        self.mt_active_jobs = 0;
+        #[cfg(libzstd_threading)]
+        self.mt_jobs.clear();
         self.produced_total = 0;
         self.flushed_total = 0;
         self.mt_handoff_pending = false;
@@ -555,6 +591,8 @@ pub(crate) struct EncoderContext {
     pub sequence_producer_state: *mut c_void,
     pub sequence_producer: Option<ZSTD_sequenceProducer_F>,
     pub thread_pool: *mut ZSTD_threadPool,
+    #[cfg(libzstd_threading)]
+    pub(crate) owned_thread_pool: Option<crate::threading::pool::ThreadPoolState>,
     pub stream_mode: bool,
     pub legacy_mode: bool,
     pub(crate) block_history: Vec<u8>,
@@ -593,6 +631,8 @@ impl Default for EncoderContext {
             sequence_producer_state: core::ptr::null_mut(),
             sequence_producer: None,
             thread_pool: core::ptr::null_mut(),
+            #[cfg(libzstd_threading)]
+            owned_thread_pool: None,
             stream_mode: false,
             legacy_mode: false,
             block_history: Vec::new(),
@@ -655,6 +695,10 @@ impl EncoderContext {
         self.sequence_producer_state = core::ptr::null_mut();
         self.sequence_producer = None;
         self.thread_pool = core::ptr::null_mut();
+        #[cfg(libzstd_threading)]
+        {
+            self.owned_thread_pool = None;
+        }
     }
 
     pub(crate) fn reset(&mut self, reset: ZSTD_ResetDirective) {
@@ -2012,7 +2056,7 @@ fn stream_payload_history(ctx: &EncoderContext) -> Result<Vec<u8>, ZSTD_ErrorCod
     }
 
     let prior_input = &ctx.stream.input[..emitted_end];
-    let prior_limit = if configured_mt_workers(ctx) > 0 {
+    let prior_limit = if mt_worker_count(ctx) > 0 {
         mt_overlap_bytes(ctx)
     } else {
         history_limit
@@ -2041,8 +2085,6 @@ fn append_stream_payload(
     }
 
     if stream_uses_stateful_structured_encoder(ctx) {
-        let mt_workers = configured_mt_workers(ctx);
-        let job_size = (mt_workers > 0).then(|| mt_job_size(ctx));
         let mut encoded = {
             if ctx.stream.structured_encoder.is_none() {
                 ctx.stream.structured_encoder = Some(StreamStructuredEncoder::new(ctx)?);
@@ -2052,20 +2094,7 @@ fn append_stream_payload(
                 .structured_encoder
                 .as_mut()
                 .expect("stream structured encoder initialized");
-            if mt_workers == 0 {
-                encoder.encode_blocks(src, last_block)
-            } else {
-                let mut encoded = Vec::with_capacity(src.len().saturating_add(32));
-                let mut offset = 0usize;
-                while offset < src.len() {
-                    let end = (offset + job_size.expect("mt job size available")).min(src.len());
-                    encoded.extend_from_slice(
-                        &encoder.encode_blocks(&src[offset..end], last_block && end == src.len()),
-                    );
-                    offset = end;
-                }
-                encoded
-            }
+            encoder.encode_blocks(src, last_block)
         };
         if ctx.stream.emitted_input == 0 {
             encoded = maybe_prepend_fast_empty_block(ctx, true, encoded)?;
@@ -2086,7 +2115,7 @@ fn append_stream_payload(
 
 fn stream_uses_stateful_structured_encoder(ctx: &EncoderContext) -> bool {
     normalize_compression_level(ctx.compression_level) >= 0
-        && (ctx.dict.is_some() || ctx.prefix.is_some() || configured_mt_workers(ctx) > 0)
+        && (ctx.dict.is_some() || ctx.prefix.is_some() || mt_worker_count(ctx) > 0)
 }
 
 pub(crate) fn flush_stream_data(ctx: &mut EncoderContext) -> Result<(), ZSTD_ErrorCode> {
@@ -2095,6 +2124,10 @@ pub(crate) fn flush_stream_data(ctx: &mut EncoderContext) -> Result<(), ZSTD_Err
     }
     ensure_stream_header(ctx)?;
     finalize_deferred_stream_header(ctx)?;
+    if mt_async_jobs_supported(ctx) {
+        let _ = finish_mt_payload_jobs(ctx, false)?;
+        return Ok(());
+    }
     let segment = pending_stream_segment(ctx).to_vec();
     if segment.is_empty() {
         return Ok(());
@@ -2155,28 +2188,33 @@ pub(crate) fn mt_job_size(ctx: &EncoderContext) -> usize {
     }
 
     let block_size = ctx.frame_block_size().max(1);
-    let min_job_size = ZSTDMT_JOBSIZE_MIN
-        .max(block_size)
-        .max(mt_overlap_bytes(ctx));
     let configured = usize::try_from(ctx.job_size)
         .ok()
         .filter(|size| *size > 0)
         .unwrap_or_else(|| default_mt_job_size(ctx));
+    let min_job_size = if ctx.job_size > 0 {
+        1
+    } else {
+        ZSTDMT_JOBSIZE_MIN
+            .max(block_size)
+            .max(mt_overlap_bytes(ctx))
+    };
     configured.clamp(min_job_size, ZSTDMT_JOBSIZE_MAX)
 }
 
-fn configured_mt_workers(ctx: &EncoderContext) -> usize {
-    usize::try_from(ctx.nb_workers)
+fn mt_submission_job_size(ctx: &EncoderContext) -> usize {
+    usize::try_from(ctx.job_size)
         .ok()
-        .filter(|workers| *workers > 0)
-        .unwrap_or(0)
+        .filter(|size| *size > 0)
+        .unwrap_or_else(|| mt_job_size(ctx))
+        .clamp(1, ZSTDMT_JOBSIZE_MAX)
 }
 
 fn mt_buffer_limit(ctx: &EncoderContext) -> usize {
     let job_size = mt_job_size(ctx);
     let slack_buffers = 2usize.saturating_add(usize::from(mt_overlap_bytes(ctx) > 0));
     let slack_size = job_size.saturating_mul(slack_buffers);
-    let sections_size = job_size.saturating_mul(configured_mt_workers(ctx).max(1));
+    let sections_size = job_size.saturating_mul(mt_worker_count(ctx).max(1));
     let window_log = usize::try_from(ctx.cparams.windowLog)
         .unwrap_or(0)
         .min((usize::BITS - 1) as usize);
@@ -2195,6 +2233,294 @@ fn mt_buffered_bytes(ctx: &EncoderContext) -> usize {
         .saturating_sub(ctx.stream.emitted_input.min(ctx.stream.input.len()))
 }
 
+fn mt_async_jobs_supported(ctx: &EncoderContext) -> bool {
+    mt_worker_count(ctx) > 0
+        && ctx.dict.is_none()
+        && ctx.prefix.is_none()
+        && ctx.sequence_producer.is_none()
+}
+
+#[cfg(libzstd_threading)]
+#[derive(Clone)]
+struct MtJobConfig {
+    compression_level: c_int,
+    cparams: ZSTD_compressionParameters,
+    fparams: ZSTD_frameParameters,
+    dict: Option<(Vec<u8>, ZSTD_dictContentType_e)>,
+    prefix: Option<Vec<u8>>,
+    prefix_content_type: ZSTD_dictContentType_e,
+    block_delimiters: ZSTD_sequenceFormat_e,
+    enable_long_distance_matching: bool,
+    enable_dedicated_dict_search: bool,
+    ldm_hash_log: c_int,
+    ldm_min_match: c_int,
+    ldm_bucket_size_log: c_int,
+    ldm_hash_rate_log: c_int,
+    validate_sequences: bool,
+    rsyncable: c_int,
+    literal_compression_mode: c_int,
+    target_cblock_size: c_int,
+    src_size_hint: c_int,
+    use_row_match_finder: c_int,
+    enable_seq_producer_fallback: bool,
+    prepend_stream_empty: bool,
+}
+
+#[cfg(libzstd_threading)]
+impl MtJobConfig {
+    fn from_context(ctx: &EncoderContext, prepend_stream_empty: bool) -> Self {
+        Self {
+            compression_level: ctx.compression_level,
+            cparams: ctx.cparams,
+            fparams: ctx.fparams,
+            dict: ctx
+                .dict
+                .as_ref()
+                .map(|dict| (dict.bytes().to_vec(), dict.dict_content_type)),
+            prefix: ctx.prefix.clone(),
+            prefix_content_type: ctx.prefix_content_type,
+            block_delimiters: ctx.block_delimiters,
+            enable_long_distance_matching: ctx.enable_long_distance_matching,
+            enable_dedicated_dict_search: ctx.enable_dedicated_dict_search,
+            ldm_hash_log: ctx.ldm_hash_log,
+            ldm_min_match: ctx.ldm_min_match,
+            ldm_bucket_size_log: ctx.ldm_bucket_size_log,
+            ldm_hash_rate_log: ctx.ldm_hash_rate_log,
+            validate_sequences: ctx.validate_sequences,
+            rsyncable: ctx.rsyncable,
+            literal_compression_mode: ctx.literal_compression_mode,
+            target_cblock_size: ctx.target_cblock_size,
+            src_size_hint: ctx.src_size_hint,
+            use_row_match_finder: ctx.use_row_match_finder,
+            enable_seq_producer_fallback: ctx.enable_seq_producer_fallback,
+            prepend_stream_empty,
+        }
+    }
+
+    fn into_context(self) -> Result<EncoderContext, ZSTD_ErrorCode> {
+        let mut ctx = EncoderContext::default();
+        ctx.compression_level = self.compression_level;
+        ctx.cparams = self.cparams;
+        ctx.fparams = self.fparams;
+        ctx.block_delimiters = self.block_delimiters;
+        ctx.enable_long_distance_matching = self.enable_long_distance_matching;
+        ctx.enable_dedicated_dict_search = self.enable_dedicated_dict_search;
+        ctx.ldm_hash_log = self.ldm_hash_log;
+        ctx.ldm_min_match = self.ldm_min_match;
+        ctx.ldm_bucket_size_log = self.ldm_bucket_size_log;
+        ctx.ldm_hash_rate_log = self.ldm_hash_rate_log;
+        ctx.validate_sequences = self.validate_sequences;
+        ctx.rsyncable = self.rsyncable;
+        ctx.literal_compression_mode = self.literal_compression_mode;
+        ctx.target_cblock_size = self.target_cblock_size;
+        ctx.src_size_hint = self.src_size_hint;
+        ctx.use_row_match_finder = self.use_row_match_finder;
+        ctx.enable_seq_producer_fallback = self.enable_seq_producer_fallback;
+        if let Some((dict, dict_content_type)) = self.dict {
+            ctx.set_dict(Some(EncoderDictionary::from_settings(
+                &dict,
+                self.compression_level,
+                self.cparams,
+                self.enable_long_distance_matching,
+                self.enable_dedicated_dict_search,
+                self.ldm_hash_log,
+                self.ldm_min_match,
+                self.ldm_bucket_size_log,
+                self.ldm_hash_rate_log,
+                0,
+                0,
+                0,
+                self.rsyncable,
+                self.literal_compression_mode,
+                self.target_cblock_size,
+                self.src_size_hint,
+                self.block_delimiters,
+                self.validate_sequences,
+                self.use_row_match_finder,
+                self.enable_seq_producer_fallback,
+                ZSTD_dictLoadMethod_e::ZSTD_dlm_byCopy,
+                dict_content_type,
+            )?));
+        }
+        ctx.prefix = self.prefix;
+        ctx.prefix_content_type = self.prefix_content_type;
+        Ok(ctx)
+    }
+}
+
+#[cfg(libzstd_threading)]
+fn mt_worker_count(ctx: &EncoderContext) -> usize {
+    crate::threading::pool::configured_worker_count(ctx)
+}
+
+#[cfg(not(libzstd_threading))]
+fn mt_worker_count(_ctx: &EncoderContext) -> usize {
+    0
+}
+
+#[cfg(libzstd_threading)]
+fn mt_job_history(ctx: &EncoderContext, start: usize) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    let mut history = compression_history(ctx)?
+        .map(Cow::into_owned)
+        .unwrap_or_default();
+    let history_limit = ctx.window_size().max(1);
+    trim_history(&mut history, history_limit);
+
+    let overlap = mt_overlap_bytes(ctx).min(history_limit);
+    if overlap != 0 && start != 0 {
+        let keep = overlap.min(start).min(ctx.stream.input.len());
+        history.extend_from_slice(&ctx.stream.input[start - keep..start]);
+        trim_history(&mut history, history_limit);
+    }
+
+    Ok(history)
+}
+
+#[cfg(libzstd_threading)]
+fn encode_mt_payload_job(
+    config: MtJobConfig,
+    history: Vec<u8>,
+    chunk: Vec<u8>,
+    last_block: bool,
+) -> Result<Vec<u8>, ZSTD_ErrorCode> {
+    let prepend_stream_empty = config.prepend_stream_empty;
+    let ctx = config.into_context()?;
+    let already_prepends_without_stream = should_prepend_fast_empty_block(&ctx, false);
+    let mut payload = payload_with_history(&history, &chunk, &ctx)?;
+    if !last_block && !payload.is_empty() {
+        clear_last_block_flag(&mut payload)?;
+    }
+    if prepend_stream_empty && !already_prepends_without_stream {
+        payload = maybe_prepend_fast_empty_block(&ctx, true, payload)?;
+    }
+    Ok(payload)
+}
+
+#[cfg(libzstd_threading)]
+fn complete_mt_payload_jobs(
+    ctx: &mut EncoderContext,
+    wait_for_front: bool,
+) -> Result<bool, ZSTD_ErrorCode> {
+    let mut completed = false;
+    loop {
+        let Some(_) = ctx.stream.mt_jobs.front() else {
+            break;
+        };
+
+        let (end, result) = if wait_for_front {
+            let job = ctx.stream.mt_jobs.pop_front().expect("front job exists");
+            (job.end, job.handle.wait())
+        } else {
+            let ready = match ctx
+                .stream
+                .mt_jobs
+                .front_mut()
+                .and_then(|job| job.handle.try_wait())
+            {
+                Some(result) => result,
+                None => break,
+            };
+            let job = ctx.stream.mt_jobs.pop_front().expect("front job exists");
+            (job.end, ready)
+        };
+
+        let payload = result
+            .map_err(|_| ZSTD_ErrorCode::ZSTD_error_GENERIC)?
+            .map_err(|error| error)?;
+        append_pending(&mut ctx.stream, &payload);
+        ctx.stream.emitted_input = end.min(ctx.stream.input.len());
+        ctx.stream.mt_completed_jobs = ctx.stream.mt_completed_jobs.saturating_add(1);
+        completed = true;
+    }
+
+    ctx.stream.mt_active_jobs = ctx.stream.mt_jobs.len();
+    Ok(completed)
+}
+
+#[cfg(libzstd_threading)]
+fn submit_mt_payload_jobs(
+    ctx: &mut EncoderContext,
+    force_remaining: bool,
+    last_block: bool,
+) -> Result<bool, ZSTD_ErrorCode> {
+    let workers = mt_worker_count(ctx);
+    if workers == 0 {
+        return Ok(false);
+    }
+
+    if ctx.stream.mt_submitted_input < ctx.stream.emitted_input {
+        ctx.stream.mt_submitted_input = ctx.stream.emitted_input;
+    }
+
+    let mut submitted = false;
+    while ctx.stream.mt_jobs.len() < workers {
+        let start = ctx.stream.mt_submitted_input.min(ctx.stream.input.len());
+        let remaining = ctx.stream.input.len().saturating_sub(start);
+        if remaining == 0 {
+            break;
+        }
+
+        let open_slots = workers.saturating_sub(ctx.stream.mt_jobs.len()).max(1);
+        let configured_job_size = mt_submission_job_size(ctx);
+        let job_size = if open_slots > 1 {
+            configured_job_size.min(remaining.div_ceil(open_slots))
+        } else {
+            configured_job_size
+        }
+        .max(1);
+        let take = if remaining >= job_size {
+            job_size
+        } else if force_remaining {
+            remaining
+        } else {
+            break;
+        };
+        let end = start.saturating_add(take).min(ctx.stream.input.len());
+        let chunk = ctx.stream.input[start..end].to_vec();
+        let history = mt_job_history(ctx, start)?;
+        let config = MtJobConfig::from_context(
+            ctx,
+            start == 0 && should_prepend_fast_empty_block(ctx, true),
+        );
+        let job_last_block = last_block && end == ctx.stream.input.len();
+        let handle = crate::threading::pool::submit_job(ctx, move || {
+            encode_mt_payload_job(config, history, chunk, job_last_block)
+        })?;
+
+        ctx.stream.mt_jobs.push_back(MtPendingJob { end, handle });
+        ctx.stream.mt_submitted_input = end;
+        ctx.stream.mt_started_jobs = ctx.stream.mt_started_jobs.saturating_add(1);
+        submitted = true;
+    }
+
+    ctx.stream.mt_active_jobs = ctx.stream.mt_jobs.len();
+    if submitted {
+        ctx.stream.mt_handoff_pending = true;
+    }
+    Ok(submitted)
+}
+
+#[cfg(libzstd_threading)]
+fn finish_mt_payload_jobs(
+    ctx: &mut EncoderContext,
+    last_block: bool,
+) -> Result<bool, ZSTD_ErrorCode> {
+    let had_unsubmitted_input = ctx.stream.mt_submitted_input < ctx.stream.input.len();
+    while ctx.stream.mt_submitted_input < ctx.stream.input.len() || !ctx.stream.mt_jobs.is_empty() {
+        submit_mt_payload_jobs(ctx, true, last_block)?;
+        complete_mt_payload_jobs(ctx, true)?;
+    }
+    Ok(last_block && had_unsubmitted_input)
+}
+
+#[cfg(not(libzstd_threading))]
+fn finish_mt_payload_jobs(
+    _ctx: &mut EncoderContext,
+    _last_block: bool,
+) -> Result<bool, ZSTD_ErrorCode> {
+    Ok(false)
+}
+
 fn stage_mt_continue_input(
     ctx: &mut EncoderContext,
     input: &mut ZSTD_inBuffer,
@@ -2207,7 +2533,6 @@ fn stage_mt_continue_input(
 
     if ctx.stream.mt_handoff_pending {
         ctx.stream.mt_handoff_pending = false;
-        return Ok(0);
     }
 
     let limit = mt_buffer_limit(ctx);
@@ -2224,26 +2549,59 @@ fn stage_mt_continue_input(
 }
 
 pub(crate) fn emit_mt_continue_job(ctx: &mut EncoderContext) -> Result<bool, ZSTD_ErrorCode> {
-    if configured_mt_workers(ctx) == 0 || stream_pending_bytes(ctx) != 0 {
+    if mt_worker_count(ctx) == 0 {
         return Ok(false);
     }
 
-    let segment = pending_stream_segment(ctx);
-    if segment.is_empty() {
-        return Ok(false);
+    if !mt_async_jobs_supported(ctx) {
+        if stream_pending_bytes(ctx) != 0 {
+            return Ok(false);
+        }
+        let segment = pending_stream_segment(ctx);
+        if segment.is_empty() {
+            return Ok(false);
+        }
+        let take = segment.len().min(mt_submission_job_size(ctx));
+        let chunk = segment[..take].to_vec();
+        append_stream_payload(ctx, &chunk, false)?;
+        ctx.stream.emitted_input = ctx.stream.emitted_input.saturating_add(take);
+        ctx.stream.mt_submitted_input = ctx.stream.emitted_input;
+        ctx.stream.mt_handoff_pending = true;
+        return Ok(true);
     }
 
-    let take = segment.len().min(mt_job_size(ctx));
-    let chunk = segment[..take].to_vec();
-    if normalize_compression_level(ctx.compression_level) >= 19 && ctx.cparams.windowLog <= 10 {
-        // Upstream adaptive CLI tuning expects queued MT jobs to take long enough that
-        // frame progression and input backpressure are sampled across multiple refreshes.
-        std::thread::sleep(std::time::Duration::from_millis(1));
+    #[cfg(libzstd_threading)]
+    {
+        let completed = complete_mt_payload_jobs(ctx, false)?;
+        let submitted = submit_mt_payload_jobs(ctx, false, false)?;
+        if !completed
+            && !submitted
+            && stream_pending_bytes(ctx) == 0
+            && !ctx.stream.mt_jobs.is_empty()
+        {
+            let _ = complete_mt_payload_jobs(ctx, true)?;
+            return Ok(true);
+        }
+        return Ok(completed || submitted);
     }
-    append_stream_payload(ctx, &chunk, false)?;
-    ctx.stream.emitted_input = ctx.stream.emitted_input.saturating_add(take);
-    ctx.stream.mt_handoff_pending = true;
-    Ok(true)
+
+    #[cfg(not(libzstd_threading))]
+    {
+        if stream_pending_bytes(ctx) != 0 {
+            return Ok(false);
+        }
+        let segment = pending_stream_segment(ctx);
+        if segment.is_empty() {
+            return Ok(false);
+        }
+        let take = segment.len().min(mt_submission_job_size(ctx));
+        let chunk = segment[..take].to_vec();
+        append_stream_payload(ctx, &chunk, false)?;
+        ctx.stream.emitted_input = ctx.stream.emitted_input.saturating_add(take);
+        ctx.stream.mt_submitted_input = ctx.stream.emitted_input;
+        ctx.stream.mt_handoff_pending = true;
+        Ok(true)
+    }
 }
 
 pub(crate) fn next_input_size_hint(ctx: &EncoderContext) -> usize {
@@ -3573,7 +3931,7 @@ pub(crate) fn stage_stream_input(
     let input = unsafe { input.as_mut() }.ok_or(ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong)?;
     let src = optional_src_slice(input.src, input.size)
         .ok_or(ZSTD_ErrorCode::ZSTD_error_srcBuffer_wrong)?;
-    if allow_backpressure && configured_mt_workers(ctx) > 0 {
+    if allow_backpressure && mt_async_jobs_supported(ctx) {
         return stage_mt_continue_input(ctx, input, src);
     } else {
         let remaining = &src[input.pos.min(src.len())..];
@@ -3597,6 +3955,24 @@ pub(crate) fn finalize_stream(ctx: &mut EncoderContext) -> Result<(), ZSTD_Error
 
     ensure_stream_header(ctx)?;
     finalize_deferred_stream_header(ctx)?;
+    if mt_async_jobs_supported(ctx) {
+        let final_job_wrote_last_block = finish_mt_payload_jobs(ctx, true)?;
+        if !final_job_wrote_last_block {
+            let mut trailer = Vec::with_capacity(BLOCK_HEADER_SIZE + 4);
+            write_block_header(&mut trailer, true, 0, 0);
+            if ctx.fparams.checksumFlag != 0 {
+                trailer.extend_from_slice(&(xxh64(&ctx.stream.input) as u32).to_le_bytes());
+            }
+            append_pending(&mut ctx.stream, &trailer);
+        } else if ctx.fparams.checksumFlag != 0 {
+            let checksum = (xxh64(&ctx.stream.input) as u32).to_le_bytes();
+            append_pending(&mut ctx.stream, &checksum);
+        }
+        ctx.stream.emitted_input = ctx.stream.input.len();
+        ctx.stream.mt_submitted_input = ctx.stream.input.len();
+        ctx.stream.frame_finished = true;
+        return Ok(());
+    }
     let segment = pending_stream_segment(ctx).to_vec();
     if segment.is_empty() {
         let mut trailer = Vec::with_capacity(BLOCK_HEADER_SIZE + 4);
