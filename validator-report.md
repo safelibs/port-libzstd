@@ -586,40 +586,41 @@ jq -c '{cases,source_cases,usage_cases,regression_cases,passed,failed,casts}' \
     safe/out/validator/artifacts/port/results/libzstd/summary.json
 ```
 
-Phase 9 Validator Run: impl_safe_advanced_abi_completion
+Phase 9 Bounce Resolution: static archive and validator traceability
 
 **Validator Checkout**
 
 - Validator URL: https://github.com/safelibs/validator
 - Validator commit: d1c08d01cd50b34a7aeb62c5630e28df0eb6cd97
-- Code-bearing local port base commit used by the validator lock: 7a285528d3204bdd4797818e76dcc42d061cf7cf
-- Local port release tag used by the validator lock: build-7a285528d320
-- The package payloads were built from the working tree changes committed by this phase.
+- Code-bearing implementation commit validated: 8f7fcae349453f11e74a864f59003b478560a626
+- Local release tag used by that validator lock: build-8f7fcae34945
 - Mode: port
 - Invocation: `SAFELIBS_VALIDATOR_DIR="$PWD/validator" bash scripts/run-validation-tests.sh`
 
-The checkout already existed at `validator/`; `git -C validator pull --ff-only
-origin main` reported "Already up to date" before the final run.
+The validator suite was not modified by this phase. After this report is
+committed, the same validator command is rerun without source changes so the
+generated `.work/validation/port-deb-lock.json` records final `HEAD`; the
+report commit only updates this summary and does not alter build inputs.
 
 **Package Inventory**
 
-The local build produced these override packages in `dist/` and the validator
-port lock recorded all canonical libzstd packages as ported.
+The root build hook produced these canonical override packages in `dist/`:
 
 | package | filename | architecture | size | sha256 |
 | --- | --- | --- | --- | --- |
 | libzstd1 | libzstd1_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 376832 | 5e449739d929e5dc88bc52f33376d10347f7b0247ef88f210a9554ca9180e4f9 |
-| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 5601674 | 32cff4f481964270b3135a3d1ead89fa0dd6ad2e516c58af5c3f70fda0c48002 |
+| libzstd-dev | libzstd-dev_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 2015306 | 9d2cdd47935a4d7bec69d63846ccd3fb856128cc26a9b2f21017202bbabc42e9 |
 | zstd | zstd_1.5.5+dfsg2-2build1.1+safelibs1_amd64.deb | amd64 | 159324 | 8d19c5e52f1c186e34a425c112c6b6a98be85390dc233456bc3f40da9d919f91 |
 
-The regenerated port lock at `.work/validation/port-deb-lock.json` records
-`commit=7a285528d3204bdd4797818e76dcc42d061cf7cf`,
-`release_tag=build-7a285528d320`, and
-`tag_ref=refs/tags/build-7a285528d320`.
+The `libzstd-dev` package contains a real static archive at
+`usr/lib/x86_64-linux-gnu/libzstd.a`; `ar t` succeeds on it, a forced-static
+upstream-header smoke binary links and runs, and `strings` finds no loader
+lookup tokens in that archive.
 
 **Validator Summary**
 
 - Log root: `.work/validation/artifacts/port/logs/libzstd/`
+- Result summary: `.work/validation/artifacts/port/results/libzstd/summary.json`
 - Port lock path: `.work/validation/port-deb-lock.json`
 - Cases: 257
 - Source cases: 5
@@ -627,13 +628,34 @@ The regenerated port lock at `.work/validation/port-deb-lock.json` records
 - Regression cases: 2
 - Passed: 257
 - Failed: 0
-- Docker build logs: 1
+- Casts recorded: 0
 - Unported original packages: 0
 
-**Phase 9 ABI Checks**
+**Fixes Applied**
 
-The advanced ABI verifier commands required by
-`.plan/phases/03-safe-advanced-abi-completion.md` all passed:
+The previous bounce identified two implementation problems: the validator proof
+targeted an older code-bearing commit, and the static archive had been made to
+pass string scans by post-processing Rust output and adding a local C fallback.
+That approach has been removed.
+
+- `safe/build.rs` no longer compiles the local lookup fallback C file; the only
+  C bridge left in the shipping library is the bounded legacy frame shim.
+- `safe/src/ffi/runtime_lookup_stub.c` was deleted.
+- `safe/scripts/build-artifacts.sh` now builds static archives with Cargo
+  `-Z build-std=std` through a cached copy of the active Rust sysroot. The
+  copied standard-library source removes the GNU thread minimum-stack weak
+  loader path before compiling `std`, so the produced `libzstd.a` is not byte
+  rewritten and does not need a fallback symbol.
+- The installed `libzstd.a` remains a real `ar` archive, and the existing
+  forced-static upstream-header smoke test still links against that archive.
+- The static archive checks now reject both loader lookup tokens and still
+  require `ar t` readability.
+- `scripts/install-build-deps.sh` installs `rust-src`, which is required for
+  the static `build-std` artifact path.
+
+**Checks Executed**
+
+The phase verifier and static/package checks run for this bounce:
 
 ```bash
 bash safe/scripts/run-advanced-mt-tests.sh
@@ -641,66 +663,10 @@ bash safe/scripts/verify-link-compat.sh
 bash safe/scripts/verify-export-parity.sh
 cargo test --manifest-path safe/Cargo.toml --release --all-targets
 rg -n 'SAFE_UPSTREAM_LIB|load_upstream!|dlopen|dlsym|upstream-phase4' safe
-```
-
-The export parity check verified 185 symbols against `libzstd.so`. The
-link-compat check rebuilt upstream-header objects and ran the upstream
-`zstreamtest`, `poolTests`, dictionary builder, sequence API, thread-pool, and
-streaming examples against the safe shared object. It now also links and runs
-an upstream-header `pkg_make_ztest` object with `cc -static` against the
-installed `libzstd.a`.
-
-Additional static-artifact checks also passed:
-
-```bash
-bash scripts/build-debs.sh
-bash safe/scripts/build-original-cli-against-safe.sh
-bash safe/scripts/build-artifacts.sh --release --variant mt
-bash safe/scripts/build-artifacts.sh --release --variant nomt
 bash safe/scripts/run-build-variant-tests.sh
 bash safe/scripts/verify-install-layout.sh
+bash scripts/build-debs.sh
+SAFELIBS_VALIDATOR_DIR="$PWD/validator" bash scripts/run-validation-tests.sh
 ```
 
-The fixed `rg` command emitted no match text. Because the `load_upstream!`
-literal makes this ripgrep version return status 0 even with no output, the
-run also split the scan into `rg -n
-'SAFE_UPSTREAM_LIB|dlopen|dlsym|upstream-phase4' safe` and `grep -R -n
---exclude-dir=out --exclude-dir=target --exclude-dir=.git 'load_upstream!'
-safe`; both returned status 1. The package payload scan extracted every
-`dist/*.deb` and found no `SAFE_UPSTREAM_LIB`, `dlopen`, `dlsym`, or
-`upstream-phase4` strings.
-
-**Failures Found and Fixes Applied**
-
-No validator failures were found in this phase. The checker bounce identified
-two verifier failures instead: generated and packaged static artifacts still
-contained `dlsym` through Rust `staticlib` output, and replacing `libzstd.a`
-with a linker script broke forced-static consumers.
-
-Fixes applied by this bounce:
-
-- Restored `staticlib` to `safe/Cargo.toml` so the crate matrix again exposes
-  `cdylib`, `staticlib`, and `rlib`.
-- Changed `safe/scripts/build-artifacts.sh` to build both shared and static
-  Cargo artifacts, install a real `libzstd.a`, normalize the Rust
-  standard-library `dlsym` token in the installed archive, and fail if the
-  shipping archive still contains that token.
-- Added `safe/src/ffi/runtime_lookup_stub.c` and linked `error_private.c`
-  through `safe/build.rs` with hidden C symbol visibility so the normalized
-  static archive resolves cleanly without exporting extra ABI symbols.
-- Added `-lm` to static pkg-config metadata, with the `mt` variant preserving
-  `-pthread -lm`.
-- Updated link compatibility to force a `cc -static` upstream-header consumer
-  against the installed archive.
-- Updated install-layout and build-variant checks to require a readable static
-  archive, reject the loader token, and compile/run static smoke binaries.
-- Kept the original-CLI helper tree's local linker redirect only for building
-  `zstd` and `pzstd` dynamically against the safe shared object. That helper
-  file is not installed in `libzstd-dev`.
-
-The packaged `libzstd-dev` payload now contains a 25,930,922-byte static
-archive at `usr/lib/x86_64-linux-gnu/libzstd.a`; `ar t` succeeds on it, the
-package payload scan finds no `dlsym`, and a forced-static smoke binary prints
-`10505`.
-
-No validator checks were skipped, and the validator suite was not modified.
+All listed checks passed. No validator checks were skipped.
